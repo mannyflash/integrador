@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import { Waves, Microscope, ChevronLeft, ChevronRight } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import swal from 'sweetalert'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
@@ -41,59 +43,113 @@ export default function InterfazLaboratorio() {
   }, [message])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (activeTask === 'asistencia') {
-      try {
-        const alumnoRef = doc(db, 'Alumnos', matricula)
-        const alumnoSnap = await getDoc(alumnoRef)
-
-        if (alumnoSnap.exists()) {
-          const alumnoData = alumnoSnap.data()
-          const asistenciaRef = doc(collection(db, 'Asistencias'))
-          await setDoc(asistenciaRef, {
-            alumnoId: matricula,
-            nombre: alumnoData.nombre,
-            apellido: alumnoData.apellido,
-            equipo: equipo,
-            fecha: serverTimestamp()
-          })
-          setMessage('Asistencia registrada correctamente')
-          setMessageType('success')
-          setMatricula('')
-          setEquipo('')
+    e.preventDefault();
+    try {
+      const estadoClaseRef = doc(db, 'EstadoClase', 'actual');
+      const estadoClaseSnap = await getDoc(estadoClaseRef);
+  
+      if (estadoClaseSnap.exists() && estadoClaseSnap.data().iniciada) {
+        if (activeTask === 'asistencia') {
+          const alumnoRef = doc(db, 'Alumnos', matricula);
+          const alumnoSnap = await getDoc(alumnoRef);
+  
+          if (alumnoSnap.exists()) {
+            const alumnoData = alumnoSnap.data();
+            const asistenciaRef = doc(collection(db, 'Asistencias'));
+            await setDoc(asistenciaRef, {
+              alumnoId: matricula,
+              nombre: alumnoData.nombre,
+              apellido: alumnoData.apellido,
+              equipo: equipo,
+              fecha: serverTimestamp()
+            });
+  
+            swal({
+              title: "¡Buen trabajo!",
+              text: "La asistencia se registró correctamente.",
+              icon: "success",
+              buttons: {
+                confirm: {
+                  text: "OK",
+                  className: "btn btn-success",
+                }
+              }
+            });
+  
+            setMessageType('success');
+            setMatricula('');
+            setEquipo('');
+          } else {
+            setMessage('Matrícula no encontrada');
+            setMessageType('error');
+          }
         } else {
-          setMessage('Matrícula no encontrada')
-          setMessageType('error')
+          // Login for teachers
+          const maestroRef = doc(db, 'Docentes', maestroMatricula);
+          const maestroSnap = await getDoc(maestroRef);
+  
+          if (maestroSnap.exists()) {
+            const maestroData = maestroSnap.data();
+            if (maestroData.contraseña === password) {
+              swal({
+                title: "¡Inicio de sesión exitoso!",
+                text: "Bienvenido al sistema de docentes.",
+                icon: "success",
+                buttons: {
+                  confirm: {
+                    text: "Continuar",
+                    className: "btn btn-success",
+                  }
+                }
+              });
+  
+              window.location.href = '/lista-asistencias';
+            } else {
+              setMessage('Contraseña incorrecta');
+              setMessageType('error');
+            }
+          } else {
+            setMessage('Matrícula no encontrada');
+            setMessageType('error');
+          }
         }
-      } catch (error) {
-        console.error('Error al registrar asistencia:', error)
-        setMessage('Error al registrar asistencia')
-        setMessageType('error')
+      } else {
+        setMessage('La clase no está iniciada');
+        setMessageType('error');
       }
-    } else {
-      // Lógica para inicio de sesión de maestros (no implementada en este ejemplo)
-      console.log('Inicio de sesión de maestros')
+    } catch (error) {
+      console.error('Error al registrar asistencia:', error);
+      setMessage('Error al registrar asistencia');
+      setMessageType('error');
     }
-  }
+  };
+  
 
   const toggleTask = () => {
     setActiveTask(activeTask === 'asistencia' ? 'login' : 'asistencia')
     setMessage('')
   }
 
+  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
+    const value = e.target.value.replace(/\D/g, '')
+    setter(value)
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Fondo del mar */}
+    <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-700 flex items-center justify-center p-4 relative overflow-hidden wave-animation">
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 z-0 bg-blue-400/30 w-full h-full"></div>
-        <div className="absolute inset-0 z-0 bg-blue-300/20 w-full h-full"></div>
+        <div className="wave wave1"></div>
+        <div className="wave wave2"></div>
+        <div className="wave wave3"></div>
       </div>
 
-      <Card className="w-full max-w-md relative z-20">
-        <CardHeader className="bg-blue-800 text-white">
-          <CardTitle className="text-3xl font-bold">Laboratorio Marino</CardTitle>
+      <Card className="w-full max-w-md relative z-20 shadow-xl">
+        <CardHeader className="bg-blue-800 text-white rounded-t-lg">
+          <CardTitle className="text-3xl font-bold flex items-center">
+            <Microscope className="w-8 h-8 mr-2" />
+            Laboratorio Marino
+          </CardTitle>
           <CardDescription className="text-blue-100">Sistema de Registro de Asistencia</CardDescription>
-          <Microscope className="absolute top-4 right-4 w-12 h-12" />
         </CardHeader>
         
         <CardContent className="p-6">
@@ -107,20 +163,26 @@ export default function InterfazLaboratorio() {
                   type="text"
                   placeholder="Ingrese su matrícula"
                   value={matricula}
-                  onChange={(e) => setMatricula(e.target.value)}
+                  onChange={(e) => handleNumberInput(e, setMatricula)}
+                  className="border-blue-300 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="equipo">Número de Equipo</Label>
-                <Input
-                  id="equipo"
-                  type="text"
-                  placeholder="Ingrese el número de equipo"
-                  value={equipo}
-                  onChange={(e) => setEquipo(e.target.value)}
-                />
+                <Select onValueChange={setEquipo} value={equipo}>
+                  <SelectTrigger className="border-blue-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Seleccione el equipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...Array(30)].map((_, i) => (
+                      <SelectItem key={i} value={(i + 1).toString()}>
+                        Equipo {i + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
                 Registrar Asistencia
               </Button>
             </form>
@@ -134,7 +196,8 @@ export default function InterfazLaboratorio() {
                   type="text"
                   placeholder="Ingrese su matrícula"
                   value={maestroMatricula}
-                  onChange={(e) => setMaestroMatricula(e.target.value)}
+                  onChange={(e) => handleNumberInput(e, setMaestroMatricula)}
+                  className="border-blue-300 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
               <div className="space-y-2">
@@ -145,15 +208,16 @@ export default function InterfazLaboratorio() {
                   placeholder="Ingrese su contraseña"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="border-blue-300 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
                 Iniciar Sesión
               </Button>
             </form>
           )}
           {message && (
-            <Alert className={`mt-4 ${messageType === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+            <Alert className={`mt-4 ${messageType === 'success' ? 'bg-green-100 border-green-400' : 'bg-red-100 border-red-400'}`}>
               <AlertTitle>{messageType === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
               <AlertDescription>{message}</AlertDescription>
             </Alert>
@@ -164,7 +228,7 @@ export default function InterfazLaboratorio() {
           <Button
             onClick={toggleTask}
             variant="outline"
-            className="w-full flex items-center justify-center space-x-2"
+            className="w-full flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-500"
           >
             {activeTask === 'asistencia' ? (
               <>
