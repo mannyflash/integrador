@@ -1,5 +1,3 @@
-'use client'
-
 import { useState, useEffect } from 'react'
 import { Waves, Microscope, ChevronLeft, ChevronRight } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
@@ -33,8 +31,22 @@ export default function InterfazLaboratorio() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [isClassStarted, setIsClassStarted] = useState(false) // Nueva variable de estado para el estado de la clase
 
   useEffect(() => {
+    const checkClassStatus = async () => {
+      const estadoClaseRef = doc(db, 'EstadoClase', 'actual')
+      const estadoClaseSnap = await getDoc(estadoClaseRef)
+
+      if (estadoClaseSnap.exists() && estadoClaseSnap.data().iniciada) {
+        setIsClassStarted(true)
+      } else {
+        setIsClassStarted(false)
+      }
+    }
+
+    checkClassStatus()
+
     const timer = setTimeout(() => {
       setMessage('')
     }, 5000)
@@ -45,14 +57,11 @@ export default function InterfazLaboratorio() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const estadoClaseRef = doc(db, 'EstadoClase', 'actual');
-      const estadoClaseSnap = await getDoc(estadoClaseRef);
-  
-      if (estadoClaseSnap.exists() && estadoClaseSnap.data().iniciada) {
+      if (isClassStarted) {
         if (activeTask === 'asistencia') {
           const alumnoRef = doc(db, 'Alumnos', matricula);
           const alumnoSnap = await getDoc(alumnoRef);
-  
+
           if (alumnoSnap.exists()) {
             const alumnoData = alumnoSnap.data();
             const asistenciaRef = doc(collection(db, 'Asistencias'));
@@ -63,7 +72,7 @@ export default function InterfazLaboratorio() {
               equipo: equipo,
               fecha: serverTimestamp()
             });
-  
+
             swal({
               title: "¡Buen trabajo!",
               text: "La asistencia se registró correctamente.",
@@ -75,7 +84,7 @@ export default function InterfazLaboratorio() {
                 }
               }
             });
-  
+
             setMessageType('success');
             setMatricula('');
             setEquipo('');
@@ -84,10 +93,10 @@ export default function InterfazLaboratorio() {
             setMessageType('error');
           }
         } else {
-          // Login for teachers
+          // Inicio de sesión de maestros
           const maestroRef = doc(db, 'Docentes', maestroMatricula);
           const maestroSnap = await getDoc(maestroRef);
-  
+
           if (maestroSnap.exists()) {
             const maestroData = maestroSnap.data();
             if (maestroData.contraseña === password) {
@@ -101,9 +110,9 @@ export default function InterfazLaboratorio() {
                     className: "btn btn-success",
                   }
                 }
+              }).then(() => {
+                window.location.href = '/lista-asistencias';
               });
-  
-              window.location.href = '/lista-asistencias';
             } else {
               setMessage('Contraseña incorrecta');
               setMessageType('error');
@@ -122,8 +131,7 @@ export default function InterfazLaboratorio() {
       setMessage('Error al registrar asistencia');
       setMessageType('error');
     }
-  };
-  
+  }
 
   const toggleTask = () => {
     setActiveTask(activeTask === 'asistencia' ? 'login' : 'asistencia')
@@ -182,7 +190,11 @@ export default function InterfazLaboratorio() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
+              <Button 
+                type="submit" 
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                disabled={!isClassStarted} // Solo deshabilita cuando la clase no está iniciada
+              >
                 Registrar Asistencia
               </Button>
             </form>
@@ -216,32 +228,20 @@ export default function InterfazLaboratorio() {
               </Button>
             </form>
           )}
-          {message && (
-            <Alert className={`mt-4 ${messageType === 'success' ? 'bg-green-100 border-green-400' : 'bg-red-100 border-red-400'}`}>
-              <AlertTitle>{messageType === 'success' ? 'Éxito' : 'Error'}</AlertTitle>
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
-          )}
         </CardContent>
-        
-        <CardFooter>
-          <Button
-            onClick={toggleTask}
-            variant="outline"
-            className="w-full flex items-center justify-center space-x-2 text-blue-600 hover:text-blue-700 border-blue-300 hover:border-blue-500"
-          >
+
+        <CardFooter className="p-4 border-t bg-gray-100 rounded-b-lg flex justify-center space-x-4">
+          <button onClick={toggleTask} className="text-blue-700 font-semibold hover:underline flex items-center">
             {activeTask === 'asistencia' ? (
               <>
-                <span>Ir a Inicio de Sesión Maestros</span>
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="mr-1" /> Iniciar Sesión Maestros
               </>
             ) : (
               <>
-                <ChevronLeft className="w-5 h-5" />
-                <span>Volver a Registro de Asistencia</span>
+                <ChevronLeft className="mr-1" /> Volver a Asistencia
               </>
             )}
-          </Button>
+          </button>
         </CardFooter>
       </Card>
     </div>
