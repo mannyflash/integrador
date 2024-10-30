@@ -42,7 +42,8 @@ export default function InterfazLaboratorio() {
       if (doc.exists()) {
         const newStatus = doc.data().iniciada
         setIsClassStarted(newStatus)
-
+        
+        // Show notification when class status changes
         if (newStatus) {
           toast.success('¡La clase ha iniciado!', {
             description: 'Ya puedes registrar tu asistencia.'
@@ -68,78 +69,71 @@ export default function InterfazLaboratorio() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (isClassStarted) {
-        if (activeTask === 'asistencia') {
-          const alumnoRef = doc(db, 'Alumnos', matricula);
-          const alumnoSnap = await getDoc(alumnoRef);
-
-          if (alumnoSnap.exists()) {
-            const alumnoData = alumnoSnap.data();
-            const asistenciaRef = doc(collection(db, 'Asistencias'));
-            await setDoc(asistenciaRef, {
-              alumnoId: matricula,
-              nombre: alumnoData.nombre,
-              apellido: alumnoData.apellido,
-              equipo: equipo,
-              fecha: serverTimestamp()
-            });
-
-            toast.success('¡Asistencia registrada!', {
-              description: 'Tu asistencia se ha registrado correctamente.'
-            })
-
-            setMessageType('success');
-            setMatricula('');
-            setEquipo('');
-          } else {
-            toast.error('Error', {
-              description: 'Matrícula no encontrada'
-            })
-            setMessage('Matrícula no encontrada');
-            setMessageType('error');
-          }
-        } else {
-          const maestroRef = doc(db, 'Docentes', maestroMatricula);
-          const maestroSnap = await getDoc(maestroRef);
-
-          if (maestroSnap.exists()) {
-            const maestroData = maestroSnap.data();
-            if (maestroData.contraseña === password) {
-              toast.success('¡Bienvenido!', {
-                description: 'Inicio de sesión exitoso'
-              })
-              window.location.href = '/lista-asistencias';
-            } else {
-              toast.error('Error', {
-                description: 'Contraseña incorrecta'
-              })
-              setMessage('Contraseña incorrecta');
-              setMessageType('error');
-            }
-          } else {
-            toast.error('Error', {
-              description: 'Matrícula no encontrada'
-            })
-            setMessage('Matrícula no encontrada');
-            setMessageType('error');
-          }
-        }
-      } else {
+      if (activeTask === 'asistencia' && !isClassStarted) {
         toast.error('Error', {
           description: 'La clase no está iniciada'
-        })
-        setMessage('La clase no está iniciada');
-        setMessageType('error');
+        });
+        return;
+      }
+  
+      if (activeTask === 'asistencia') {
+        const alumnoRef = doc(db, 'Alumnos', matricula);
+        const alumnoSnap = await getDoc(alumnoRef);
+  
+        if (alumnoSnap.exists()) {
+          const alumnoData = alumnoSnap.data();
+          const asistenciaRef = doc(collection(db, 'Asistencias'));
+          await setDoc(asistenciaRef, {
+            alumnoId: matricula,
+            nombre: alumnoData.nombre,
+            apellido: alumnoData.apellido,
+            equipo: equipo,
+            fecha: serverTimestamp()
+          });
+  
+          toast.success('¡Asistencia registrada!', {
+            description: 'Tu asistencia se ha registrado correctamente.'
+          });
+  
+          setMatricula('');
+          setEquipo('');
+        } else {
+          toast.error('Error', {
+            description: 'Matrícula no encontrada'
+          });
+        }
+      } else {
+        const maestroRef = doc(db, 'Docentes', maestroMatricula);
+        const maestroSnap = await getDoc(maestroRef);
+  
+        if (maestroSnap.exists()) {
+          const maestroData = maestroSnap.data();
+          if (maestroData.contraseña === password) {
+            toast.success('¡Bienvenido!', {
+              description: 'Inicio de sesión exitoso'
+            });
+            window.location.href = '/lista-asistencias';
+          } else {
+            toast.error('Error', {
+              description: 'Contraseña incorrecta'
+            });
+          }
+        } else {
+          toast.error('Error', {
+            description: 'Matrícula no encontrada'
+          });
+        }
       }
     } catch (error) {
-      console.error('Error al registrar asistencia:', error);
+      console.error('Error al procesar la solicitud:', error);
       toast.error('Error', {
-        description: 'Error al registrar asistencia'
-      })
-      setMessage('Error al registrar asistencia');
-      setMessageType('error');
+        description: 'Ha ocurrido un error. Por favor, intenta de nuevo.'
+      });
     }
-  }
+  };
+  
+ 
+  
 
   const toggleTask = () => {
     setActiveTask(activeTask === 'asistencia' ? 'login' : 'asistencia')
