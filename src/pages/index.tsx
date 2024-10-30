@@ -1,13 +1,16 @@
+'use client'
+
 import { useState, useEffect } from 'react'
 import { Waves, Microscope, ChevronLeft, ChevronRight } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
 import swal from 'sweetalert'
 
 const firebaseConfig = {
@@ -31,28 +34,36 @@ export default function InterfazLaboratorio() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
-  const [isClassStarted, setIsClassStarted] = useState(false) // Nueva variable de estado para el estado de la clase
+  const [isClassStarted, setIsClassStarted] = useState(false)
 
   useEffect(() => {
-    const checkClassStatus = async () => {
-      const estadoClaseRef = doc(db, 'EstadoClase', 'actual')
-      const estadoClaseSnap = await getDoc(estadoClaseRef)
+    // Real-time listener for class status
+    const unsubscribe = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
+      if (doc.exists()) {
+        const newStatus = doc.data().iniciada
+        setIsClassStarted(newStatus)
 
-      if (estadoClaseSnap.exists() && estadoClaseSnap.data().iniciada) {
-        setIsClassStarted(true)
-      } else {
-        setIsClassStarted(false)
+        if (newStatus) {
+          toast.success('¡La clase ha iniciado!', {
+            description: 'Ya puedes registrar tu asistencia.'
+          })
+        } else {
+          toast.info('La clase ha finalizado', {
+            description: 'El registro de asistencia está cerrado.'
+          })
+        }
       }
-    }
-
-    checkClassStatus()
+    })
 
     const timer = setTimeout(() => {
       setMessage('')
     }, 5000)
 
-    return () => clearTimeout(timer)
-  }, [message])
+    return () => {
+      unsubscribe()
+      clearTimeout(timer)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,61 +84,58 @@ export default function InterfazLaboratorio() {
               fecha: serverTimestamp()
             });
 
-            swal({
-              title: "¡Buen trabajo!",
-              text: "La asistencia se registró correctamente.",
-              icon: "success",
-              buttons: {
-                confirm: {
-                  text: "OK",
-                  className: "btn btn-success",
-                }
-              }
-            });
+            toast.success('¡Asistencia registrada!', {
+              description: 'Tu asistencia se ha registrado correctamente.'
+            })
 
             setMessageType('success');
             setMatricula('');
             setEquipo('');
           } else {
+            toast.error('Error', {
+              description: 'Matrícula no encontrada'
+            })
             setMessage('Matrícula no encontrada');
             setMessageType('error');
           }
         } else {
-          // Inicio de sesión de maestros
           const maestroRef = doc(db, 'Docentes', maestroMatricula);
           const maestroSnap = await getDoc(maestroRef);
 
           if (maestroSnap.exists()) {
             const maestroData = maestroSnap.data();
             if (maestroData.contraseña === password) {
-              swal({
-                title: "¡Inicio de sesión exitoso!",
-                text: "Bienvenido al sistema de docentes.",
-                icon: "success",
-                buttons: {
-                  confirm: {
-                    text: "Continuar",
-                    className: "btn btn-success",
-                  }
-                }
-              }).then(() => {
-                window.location.href = '/lista-asistencias';
-              });
+              toast.success('¡Bienvenido!', {
+                description: 'Inicio de sesión exitoso'
+              })
+              window.location.href = '/lista-asistencias';
             } else {
+              toast.error('Error', {
+                description: 'Contraseña incorrecta'
+              })
               setMessage('Contraseña incorrecta');
               setMessageType('error');
             }
           } else {
+            toast.error('Error', {
+              description: 'Matrícula no encontrada'
+            })
             setMessage('Matrícula no encontrada');
             setMessageType('error');
           }
         }
       } else {
+        toast.error('Error', {
+          description: 'La clase no está iniciada'
+        })
         setMessage('La clase no está iniciada');
         setMessageType('error');
       }
     } catch (error) {
       console.error('Error al registrar asistencia:', error);
+      toast.error('Error', {
+        description: 'Error al registrar asistencia'
+      })
       setMessage('Error al registrar asistencia');
       setMessageType('error');
     }
@@ -192,10 +200,10 @@ export default function InterfazLaboratorio() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={!isClassStarted} // Solo deshabilita cuando la clase no está iniciada
+                className={`w-full ${isClassStarted ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'}`}
+                disabled={!isClassStarted}
               >
-                Registrar Asistencia
+                {isClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
               </Button>
             </form>
           ) : (
