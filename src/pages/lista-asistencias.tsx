@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, query, onSnapshot, doc, deleteDoc, setDoc, getDocs, addDoc, where, serverTimestamp, writeBatch, getDoc } from 'firebase/firestore'
@@ -9,10 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Trash2, LogOut, X, Upload, FileUp, Plus, Moon, Sun } from 'lucide-react'
+import { Trash2, LogOut, X, FileUp, Plus, Moon, Sun } from 'lucide-react'
 import swal from 'sweetalert'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -66,9 +66,7 @@ export default function ListaAsistencias() {
   const [maestroId, setMaestroId] = useState('')
   const [maestroInfo, setMaestroInfo] = useState<Docente | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const [showAddPracticaModal, setShowAddPracticaModal] = useState(false)
   const [newPractica, setNewPractica] = useState({
@@ -101,8 +99,6 @@ export default function ListaAsistencias() {
     } else {
       router.push('/')
     }
-
-    setBackgroundImage('/Imagenes Proyecto/Currículum-Vitae-Cv-de-Ventas-Moderno-Negro.jpeg')
 
     return () => {
       unsubscribeAsistencias()
@@ -272,17 +268,6 @@ export default function ListaAsistencias() {
     setShowModal(false)
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setBackgroundImage(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
   const exportarPDF = () => {
     const doc = new jsPDF()
     const pageWidth = doc.internal.pageSize.width
@@ -290,14 +275,11 @@ export default function ListaAsistencias() {
     const margin = 10
     
     // Add background image
-    if (backgroundImage) {
-      doc.addImage(backgroundImage, 'JPEG', 0, 0, pageWidth, pageHeight)
-    }
-    
-    doc.addImage('/Currículum Vitae Cv de Ventas Moderno Negro.jpg', 'JPEG', margin, margin, 20, 20)
+    doc.addImage('/Currículum Vitae Cv de Ventas Moderno Negro.jpg', 'JPEG', 0, 0, pageWidth, pageHeight)
     
     // Header
     doc.setFontSize(16)
+    doc.setTextColor(255, 255, 255) // White text color
     doc.text('TALLER DE PROGRAMACION', pageWidth / 2, margin + 10, { align: 'center' })
     doc.setFontSize(14)
     doc.text('HOJA DE REGISTRO', pageWidth / 2, margin + 20, { align: 'center' })
@@ -350,8 +332,8 @@ export default function ListaAsistencias() {
       body: tableData,
       startY: currentY,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1 },
-      headStyles: { fillColor: [200, 200, 200], textColor: 0 },
+      styles: { fontSize: 8, cellPadding: 1, textColor: [255, 255, 255] },
+      headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
       columnStyles: {
         0: { cellWidth: 10 },
         1: { cellWidth: 'auto' },
@@ -362,6 +344,7 @@ export default function ListaAsistencias() {
 
     // Signature lines
     const signatureY = currentY + tableHeight + 20
+    doc.setDrawColor(255, 255, 255) // White line color
     doc.line(margin, signatureY, margin + 70, signatureY)
     doc.text('FIRMA DOCENTE', margin + 35, signatureY + 5, { align: 'center' })
 
@@ -412,14 +395,14 @@ export default function ListaAsistencias() {
   return (
     <div className={`min-h-screen w-screen ${isDarkMode ? 'bg-gray-900' : 'bg-green-50'}`}>
       <Card className={`w-full h-full m-0 rounded-none flex flex-col overflow-hidden ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-        <CardHeader className={`${isDarkMode ? 'bg-gray-700' : 'bg-green-100'} flex justify-between items-center`}>
-          <div>
-            <CardTitle className={`text-3xl ${isDarkMode ? 'text-white' : 'text-green-800'}`}>Asistencias en Tiempo Real</CardTitle>
-            <CardDescription className={isDarkMode ? 'text-gray-300' : 'text-green-700'}>
-              Docente: {maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'Cargando...'}
-            </CardDescription>
-          </div>
-          <div className="flex items-center space-x-2">
+        <CardHeader className={`${isDarkMode ? 'bg-gray-700' : 'bg-green-100'} flex flex-col items-center justify-center text-center p-6`}>
+          <CardTitle className={`text-4xl mb-2 ${isDarkMode ? 'text-white' : 'text-green-800'}`}>
+            Asistencias en Tiempo Real
+          </CardTitle>
+          <CardDescription className={`text-2xl font-bold ${isDarkMode ? 'text-gray-300' : 'text-green-700'}`}>
+            Docente: {maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'Cargando...'}
+          </CardDescription>
+          <div className="flex items-center space-x-2 mt-4">
             <Sun className={`h-4 w-4 ${isDarkMode ? 'text-gray-400' : 'text-yellow-500'}`} />
             <Switch
               checked={isDarkMode}
@@ -515,21 +498,6 @@ export default function ListaAsistencias() {
             </Button>
 
             <Button 
-              onClick={() => fileInputRef.current?.click()} 
-              className={`flex-grow ${isDarkMode ? 'bg-purple-700 hover:bg-purple-600' : 'bg-purple-600 hover:bg-purple-700'}`}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Cambiar Fondo
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              className="hidden"
-            />
-
-            <Button 
               onClick={exportarPDF} 
               className={`flex-grow ${isDarkMode ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
@@ -537,12 +505,6 @@ export default function ListaAsistencias() {
               Exportar PDF
             </Button>
           </div>
-
-          {backgroundImage && (
-            <div className="mt-2 mb-4">
-              <p className={`text-sm ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>Fondo cargado correctamente</p>
-            </div>
-          )}
 
           <Table className="w-full">
             <TableHeader>

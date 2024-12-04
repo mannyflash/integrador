@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Microscope, User, UserCog, Beaker, Moon, Sun, Settings } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Microscope, User, UserCog, Beaker, Moon, Sun, Computer } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
 import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { Button } from "@/components/ui/button"
@@ -11,11 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Slider } from "@/components/ui/slider"
-import { motion, AnimatePresence } from 'framer-motion'
-import swal from 'sweetalert'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { ImageCarousel } from './ImageCarousel'
+import { Sidebar } from './Sidebar'
+
 import Image from 'next/image'
+import swal from 'sweetalert'
+import { motion, AnimatePresence } from 'framer-motion'
+import bcrypt from 'bcryptjs'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
@@ -30,9 +34,79 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 
-type UserType = 'estudiante' | 'maestro' | 'laboratorista'
+type UserType = 'estudiante' | 'maestro'
+
+interface Equipment {
+  id: string;
+  fueraDeServicio: boolean;
+}
+
+const colors = {
+  light: {
+    background: 'bg-green-50',
+    cardBackground: 'bg-white',
+    headerBackground: 'bg-green-100',
+    titleText: 'text-green-800',
+    descriptionText: 'text-green-700',
+    hoverBackground: 'hover:bg-green-50',
+    buttonGreen: 'bg-green-500 hover:bg-green-600',
+    buttonBlue: 'bg-blue-500 hover:bg-blue-600',
+    countBackground: 'bg-green-100',
+    countText: 'text-green-800',
+    inputBackground: 'bg-green-50',
+    inputBorder: 'border-green-300',
+    inputText: 'text-green-800',
+    switchBackground: 'bg-green-200',
+    switchToggle: 'bg-white',
+  },
+  dark: {
+    background: 'bg-gray-900',
+    cardBackground: 'bg-gray-800',
+    headerBackground: 'bg-gray-700',
+    titleText: 'text-white',
+    descriptionText: 'text-gray-300',
+    hoverBackground: 'hover:bg-gray-700',
+    buttonGreen: 'bg-green-700 hover:bg-green-600',
+    buttonBlue: 'bg-blue-700 hover:bg-blue-600',
+    countBackground: 'bg-green-900',
+    countText: 'text-green-100',
+    inputBackground: 'bg-gray-700',
+    inputBorder: 'border-gray-600',
+    inputText: 'text-gray-200',
+    switchBackground: 'bg-gray-600',
+    switchToggle: 'bg-gray-300',
+  },
+};
+
+const TabAnimation = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 },
+  transition: { duration: 0.2 }
+};
+
+const SlideAnimation = {
+  initial: (isReversed: boolean) => ({
+    x: isReversed ? "100%" : "-100%",
+    opacity: 0
+  }),
+  animate: {
+    x: 0,
+    opacity: 1
+  },
+  exit: (isReversed: boolean) => ({
+    x: isReversed ? "-100%" : "100%",
+    opacity: 0
+  }),
+  transition: {
+    type: "spring",
+    stiffness: 300,
+    damping: 30
+  }
+};
 
 export default function InterfazLaboratorio() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<UserType>('estudiante')
   const [matricula, setMatricula] = useState('')
   const [equipo, setEquipo] = useState('')
@@ -40,14 +114,20 @@ export default function InterfazLaboratorio() {
   const [labTechMatricula, setLabTechMatricula] = useState('')
   const [password, setPassword] = useState('')
   const [isClassStarted, setIsClassStarted] = useState(false)
-  const [welcomeMessageIndex, setWelcomeMessageIndex] = useState(0)
-  const [isDarkMode, setIsDarkMode] = useState(true)
-  const [backgroundSize, setBackgroundSize] = useState(4)
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false)
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
+  const [isReversed, setIsReversed] = useState(false)
+  const [userType, setUserType] = useState<'maestro' | 'laboratorista'>('maestro')
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
 
   const welcomeMessages = [
-    "Bienvenido, Estudiante",
-    "Bienvenido, Maestro",
-    "Bienvenido, Laboratorista"
+    '"Hombres y Mujeres"',
+    '"Del Mar y Desierto"',
+    '"Unidos Por La Educación"',
+    '"Tecnológica De Calidad"',
   ]
 
   useEffect(() => {
@@ -59,7 +139,7 @@ export default function InterfazLaboratorio() {
             if (newStatus) {
               swal({
                 title: "¡La clase ha iniciado!",
-                text: `Ya puedes registrar tu asistencia`,
+                text: "Ya puedes registrar tu asistencia",
                 icon: "success",
               })
             } else {
@@ -79,16 +159,40 @@ export default function InterfazLaboratorio() {
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setWelcomeMessageIndex((prevIndex) => (prevIndex + 1) % welcomeMessages.length)
-    }, 3000)
+    const unsubscribe = onSnapshot(doc(db, 'Numero de equipos', 'equipos'), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data()
+        const dbEquipment = data.Equipos || []
+        setEquipmentList([
+          { id: 'personal', fueraDeServicio: false },
+          ...dbEquipment
+        ])
+      }
+    })
 
-    return () => clearInterval(interval)
+    return () => unsubscribe()
   }, [])
 
   useEffect(() => {
-    document.body.classList.toggle('dark', isDarkMode)
+    // Load dark mode preference from cookie
+    const savedMode = localStorage.getItem('darkMode')
+    if (savedMode !== null) { // Update 2: Check if savedMode is not null
+      setIsDarkMode(savedMode === 'true')
+    }
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode) // Update 3: Use document.documentElement
+    localStorage.setItem('darkMode', isDarkMode.toString())
   }, [isDarkMode])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => (prevIndex + 1) % welcomeMessages.length);
+    }, 5000); // Change message every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -130,7 +234,7 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        if (!equipoSnapshot.empty) {
+        if (!equipoSnapshot.empty && equipo !== 'personal') {
           await swal({
             title: "Error",
             text: "Este equipo ya ha sido registrado.",
@@ -178,60 +282,23 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        const maestroRef = doc(db, 'Docentes', maestroMatricula)
-        const maestroSnap = await getDoc(maestroRef)
+        const collectionName = userType === 'maestro' ? 'Docentes' : 'Laboratoristas'
+        const userRef = doc(db, collectionName, userType === 'maestro' ? maestroMatricula : labTechMatricula)
+        const userSnap = await getDoc(userRef)
 
-        if (maestroSnap.exists()) {
-          const maestroData = maestroSnap.data()
-          if (maestroData.Contraseña === password) {
+        if (userSnap.exists()) {
+          const userData = userSnap.data()
+          const passwordMatch = await bcrypt.compare(password, userData.Contraseña)
+          if (passwordMatch) {
             await swal({
               title: "¡Bienvenido!",
               text: "Inicio de sesión exitoso",
               icon: "success",
             })
             
-            localStorage.setItem('maestroId', maestroMatricula);
+            localStorage.setItem(userType === 'maestro' ? 'maestroId' : 'labTechId', userType === 'maestro' ? maestroMatricula : labTechMatricula);
             
-            window.location.href = '/lista-asistencias'
-          } else {
-            await swal({
-              title: "Error",
-              text: "Contraseña incorrecta",
-              icon: "error",
-            })
-          }
-        } else {
-          await swal({
-            title: "Error",
-            text: "Matrícula no encontrada",
-            icon: "error",
-          })
-        }
-      } else if (activeTab === 'laboratorista') {
-        if (!labTechMatricula || !password) {
-          await swal({
-            title: "Error",
-            text: "Por favor, completa todos los campos.",
-            icon: "error",
-          })
-          return
-        }
-
-        const labTechRef = doc(db, 'Laboratoristas', labTechMatricula)
-        const labTechSnap = await getDoc(labTechRef)
-
-        if (labTechSnap.exists()) {
-          const labTechData = labTechSnap.data()
-          if (labTechData.Contraseña === password) {
-            await swal({
-              title: "¡Bienvenido!",
-              text: "Inicio de sesión exitoso",
-              icon: "success",
-            })
-            
-            localStorage.setItem('labTechId', labTechMatricula);
-            
-            window.location.href = '/panel-laboratorista'
+            router.push(userType === 'maestro' ? '/lista-asistencias' : '/panel-laboratorista')
           } else {
             await swal({
               title: "Error",
@@ -262,225 +329,383 @@ export default function InterfazLaboratorio() {
     setter(value)
   }
 
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const adminQuery = query(collection(db, 'Administrador'), where("email", "==", adminEmail))
+      const adminSnapshot = await getDocs(adminQuery)
+
+      if (!adminSnapshot.empty) {
+        const adminDoc = adminSnapshot.docs[0]
+        const adminData = adminDoc.data()
+        const passwordMatch = await bcrypt.compare(adminPassword, adminData.contraseña)
+        if (passwordMatch) {
+          await swal({
+            title: "¡Bienvenido Administrador!",
+            text: "Inicio de sesión exitoso",
+            icon: "success",
+          })
+          setIsAdminLoginOpen(false)
+          router.push('/AdminPanel')
+        } else {
+          await swal({
+            title: "Error",
+            text: "Contraseña incorrecta",
+            icon: "error",
+          })
+        }
+      } else {
+        await swal({
+          title: "Error",
+          text: "Email de administrador no encontrado",
+          icon: "error",
+        })
+      }
+    } catch (error) {
+      console.error('Error al procesar la solicitud:', error)
+      await swal({
+        title: "Error",
+        text: "Ha ocurrido un error. Por favor, intenta de nuevo.",
+        icon: "error",
+      })
+    }
+  }
+
+  const carouselImages = [
+    "/fondozugey.jpg",
+    "/fondo_de_pantalla_de_salon.jpeg",
+    "/fondoitspp.jpg",
+    "/tecnm imagen.jpg",
+    "/Diseño sin título (2).png",
+    "/Diseño sin título (1).png",
+  ]
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-100 dark:bg-gray-900">
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${isDarkMode ? colors.dark.background : colors.light.background} transition-all duration-300`}>
+      <div className="fixed top-4 left-4 z-50">
+        <Sidebar isDarkMode={isDarkMode} onAdminLogin={() => setIsAdminLoginOpen(true)} adminLoginText="Administrador"/>
+      </div>
+
       <AnimatePresence mode="wait">
-        <motion.h2
-          key={welcomeMessageIndex}
+        <motion.div
+          key={currentMessageIndex}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className="text-4xl md:text-7xl font-semibold text-green-800 dark:text-white bg-white/80 dark:bg-gray-800/80 mb-8 text-center z-10 p-4 rounded-lg shadow-lg max-w-[90rem] mx-auto"
+          className={`text-2xl md:text-4xl font-semibold ${isDarkMode ? 'text-white' : 'text-green-800'} mb-6 text-center z-10 p-4 rounded-xl max-w-[90%] mx-auto overflow-hidden`}
         >
-          {welcomeMessages[welcomeMessageIndex]}
-        </motion.h2>
+          {welcomeMessages[currentMessageIndex]}
+        </motion.div>
       </AnimatePresence>
 
-      <Card className="w-full max-w-[90rem] mx-auto my-1 overflow-hidden shadow-xl relative z-10 bg-white dark:bg-gray-800">
-        <div className="flex flex-col md:flex-row">
-          <div className="md:w-1/2 relative h-64 md:h-auto">
-            <Image
-              src="/fondozugey.jpg"
-              layout="fill"
-              objectFit="cover"
-              quality={100}
-              alt="Background"
-              className="object-cover object-center"
-              style={{ objectPosition: `center ${100 - backgroundSize}%` }}
-            />
-          </div>
-          
-          <div className="md:w-1/2">
-            <CardHeader className="relative z-10 bg-white dark:bg-gray-800">
-              <div className="flex justify-center mb-4">
-                <div className="rounded-full overflow-hidden w-24 h-24 bg-white flex items-center justify-center">
+      <Card className={`w-full max-w-[90%] mx-auto overflow-hidden ${
+        isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground
+      } border-none relative z-10 shadow-[0_10px_20px_rgba(0,0,0,0.1)] transition-all duration-300 rounded-[2rem]`}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div 
+            key={activeTab}
+            className="flex flex-col md:flex-row h-[calc(100vh-12rem)] max-h-[800px] relative overflow-hidden rounded-[2rem]"
+            {...TabAnimation}
+          >
+            <motion.div 
+              className={`md:w-2/5 relative h-full ${isReversed ? 'order-last rounded-[2rem]' : 'order-first rounded-[2rem]'} overflow-hidden`}
+              custom={isReversed}
+              variants={SlideAnimation}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <ImageCarousel images={carouselImages} />
+            </motion.div>
+
+            <motion.div 
+              className={`md:w-3/5 relative flex flex-col h-full ${isReversed ? 'order-first rounded-[2rem]' : 'order-last rounded-[2rem]'} overflow-hidden`}
+              custom={!isReversed}
+              variants={SlideAnimation}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <div className="absolute top-0 left-0 right-0 h-20 flex justify-center items-center z-10 bg-white bg-opacity-75 dark:bg-gray-800 dark:bg-opacity-75">
+                <div className="w-40 h-20 relative">
                   <Image
-                    src="/logo isc.jpeg.png"
-                    width={96}
-                    height={96}
-                    alt="Logo de la carrera"
+                    src="/logo itspp.jpeg"
+                    alt="Logos institucionales"
+                    layout="fill"
+                    objectFit="contain"
                     className="object-contain"
+                    priority
                   />
                 </div>
               </div>
-              <div className="text-center">
-                <CardTitle className="text-2xl md:text-4xl font-bold flex items-center justify-center text-green-800 dark:text-white">
-                  <Microscope className="w-8 h-8 md:w-10 md:h-10 mr-3" />
-                  Laboratorio Sistemas
-                </CardTitle>
-                <CardDescription className="text-green-700 dark:text-gray-300 text-lg md:text-xl">
-                  Sistema de Gestión de Laboratorio
-                </CardDescription>
-              </div>
-              <div className="mt-4 flex items-center justify-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Sun className={`h-5 w-5 md:h-6 md:w-6 ${isDarkMode ? 'text-gray-400' : 'text-yellow-500'}`} />
-                  <Switch
-                    checked={isDarkMode}
-                    onCheckedChange={setIsDarkMode}
-                    aria-label="Toggle dark mode"
-                  />
-                  <Moon className={`h-5 w-5 md:h-6 md:w-6 ${isDarkMode ? 'text-blue-400' : 'text-gray-400'}`} />
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="icon">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Ajuste de fondo</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Ajusta el tamaño de la imagen de fondo
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4">
-                          <Label htmlFor="width">Tamaño</Label>
-                          <Slider
-                            id="width"
-                            max={100}
-                            defaultValue={[backgroundSize]}
-                            step={1}
-                            className="col-span-2"
-                            onValueChange={([value]) => setBackgroundSize(value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="p-4 md:p-8 bg-white dark:bg-gray-800">
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as UserType)} className="mt-4">
-                <TabsList className="grid w-full grid-cols-3 mb-6">
-                  <TabsTrigger 
-                    value="estudiante" 
-                    className="text-base md:text-xl data-[state=active]:bg-green-600 data-[state=active]:text-white dark:data-[state=active]:bg-green-700 transition-all duration-300 ease-in-out"
-                  >
-                    <User className="w-5 h-5 md:w-6 md:h-6 mr-2" />
-                    Estudiante
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="maestro"
-                    className="text-base md:text-xl data-[state=active]:bg-green-600 data-[state=active]:text-white dark:data-[state=active]:bg-green-700 transition-all duration-300 ease-in-out"
-                  >
-                    <UserCog className="w-5 h-5 md:w-6 md:h-6 mr-2" />
-                    Maestro
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="laboratorista"
-                    className="text-base md:text-xl data-[state=active]:bg-green-600 data-[state=active]:text-white dark:data-[state=active]:bg-green-700 transition-all duration-300 ease-in-out"
-                  >
-                    <Beaker className="w-5 h-5 md:w-6 md:h-6 mr-2" />
-                    Laboratorista
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="estudiante">
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="matricula" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Matrícula</Label>
-                      <Input
-                        id="matricula"
-                        type="text"
-                        placeholder="Ingrese su matrícula"
-                        value={matricula}
-                        onChange={(e) => handleNumberInput(e, setMatricula)}
-                        className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="equipo" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Número de Equipo</Label>
-                      <Select onValueChange={setEquipo} value={equipo}>
-                        <SelectTrigger id="equipo" className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6">
-                          <SelectValue placeholder="Seleccione el equipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[...Array(30)].map((_, i) => (
-                            <SelectItem key={i} value={(i + 1).toString()} className="text-lg md:text-xl">
-                              Equipo {i + 1}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button 
-                      type="submit" 
-                      className={`w-full ${isClassStarted ? 'bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600' : 'bg-gray-400'} transition-colors duration-300 text-lg md:text-xl py-4 md:py-6`}
-                      disabled={!isClassStarted}
+              <CardHeader className={`relative z-10 ${isDarkMode ? colors.dark.headerBackground : colors.light.headerBackground} p-6 pt-12 shadow-[0_4px_6px_rgba(0,0,0,0.1)] rounded-t-[2rem]`}>
+                <div className="text-center">
+                  <CardTitle className={`text-4xl md:text-5xl lg:text-6xl font-bold flex flex-col items-center justify-center ${isDarkMode ? colors.dark.titleText : colors.light.titleText} mb-4`}>
+                    <Computer className="w-16 h-16 md:w-20 md:h-20 mb-2" />
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{
+                        duration: 0.8,
+                        delay: 0.5,
+                        ease: [0, 0.71, 0.2, 1.01]
+                      }}
                     >
-                      {isClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
-                    </Button>
-                  </form>
-                </TabsContent>
-                <TabsContent value="maestro">
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="maestroMatricula" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Matrícula del Maestro</Label>
-                      <Input
-                        id="maestroMatricula"
-                        type="text"
-                        placeholder="Ingrese su matrícula"
-                        value={maestroMatricula}
-                        onChange={(e) => handleNumberInput(e, setMaestroMatricula)}
-                        className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="password" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Contraseña</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Ingrese su contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6"
-                      />
-                    </div>
-                    <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 transition-colors duration-300 text-lg md:text-xl py-4 md:py-6">
-                      Iniciar Sesión
-                    </Button>
-                  </form>
-                </TabsContent>
-                <TabsContent value="laboratorista">
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="labTechMatricula" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Matrícula del Laboratorista</Label>
-                      <Input
-                        id="labTechMatricula"
-                        type="text"
-                        placeholder="Ingrese su matrícula"
-                        value={labTechMatricula}
-                        onChange={(e) => handleNumberInput(e, setLabTechMatricula)}
-                        className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label htmlFor="password" className="text-green-700 dark:text-gray-300 text-lg md:text-xl">Contraseña</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Ingrese su contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="bg-white dark:bg-gray-700 text-green-800 dark:text-white border-green-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500 text-lg md:text-xl py-4 md:py-6"
-                      />
-                    </div>
-                    <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 transition-colors duration-300 text-lg md:text-xl py-4 md:py-6">
-                      Iniciar Sesión
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </div>
-        </div>
+                      Laboratorio Sistemas
+                    </motion.span>
+                  </CardTitle>
+                </div>
+                <div className="mt-4 flex items-center justify-center space-x-4">
+                  <div className={`flex items-center space-x-2 ${
+                    isDarkMode
+                      ? 'bg-gray-700 border border-gray-600'
+                      : 'bg-green-100 border border-green-200'
+                  } p-1 rounded-full transition-all duration-200`}>
+                    <Sun className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-yellow-500'}`} />
+                    <Switch // Update 4: Use setIsDarkMode directly
+                      checked={isDarkMode}
+                      onCheckedChange={setIsDarkMode}
+                      className={`${isDarkMode ? colors.dark.switchBackground : colors.light.switchBackground} 
+                                  data-[state=checked]:bg-green-600`}
+                    />
+                    <Moon className={`h-5 w-5 ${isDarkMode ? 'text-blue-400' : 'text-gray-400'}`} />
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent className={`p-6 pt-4 ${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_4px_6px_rgba(0,0,0,0.1)] rounded-b-[2rem]`}>
+                <Tabs 
+                  value={activeTab} 
+                  onValueChange={(value) => {
+                    setIsReversed(value === 'estudiante' ? false : true);
+                    setActiveTab(value as UserType);
+                    setUserType('maestro');
+                    // Clear all input fields
+                    setPassword('');
+                    setMatricula('');
+                    setMaestroMatricula('');
+                    setLabTechMatricula('');
+                    setEquipo('');
+                  }} 
+                  className="h-full flex flex-col"
+                >
+                  <TabsList className="grid w-full grid-cols-2 h-14 mb-8 rounded-2xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800 shadow-inner">
+                    {['estudiante', 'maestro'].map((tab) => (
+                      <TabsTrigger
+                        key={tab}
+                        value={tab}
+                        className={`
+                          relative flex items-center justify-center text-base md:text-xl
+                          ${isDarkMode
+                            ? 'text-gray-400 data-[state=active]:text-white'
+                            : 'text-green-700 data-[state=active]:text-gray-900'
+                          } 
+                          transition-all duration-300 z-10 h-full rounded-xl
+                          data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700
+                          data-[state=active]:shadow-[inset_0_1px_1px_rgba(0,0,0,0.075),0_0_8px_rgba(102,175,233,0.6)]
+                        `}
+                      >
+                        <motion.div
+                          className="flex items-center justify-center w-full h-full"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {tab === 'estudiante' && <User className="w-5 h-5 md:w-6 md:h-6 mr-2" />}
+                          {tab === 'maestro' && <UserCog className="w-5 h-5 md:w-6 md:h-6 mr-2" />}
+                          {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </motion.div>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  
+                  <div className="flex-grow overflow-y-auto">
+                    <AnimatePresence mode="wait">
+                      <TabsContent value="estudiante" className="flex-grow">
+                        <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
+                          <div className="space-y-6">
+                            <div className="space-y-3">
+                              <Label htmlFor="matricula" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Matrícula</Label>
+                              <Input
+                                id="matricula"
+                                type="text"
+                                placeholder="Ingrese su matrícula"
+                                value={matricula}
+                                onChange={(e) => handleNumberInput(e, setMatricula)}
+                                className={`${
+                                  isDarkMode
+                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                              />
+                            </div>
+                            <div className="space-y-3">
+                              <Label htmlFor="equipo" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Número de Equipo</Label>
+                              <Select onValueChange={setEquipo} value={equipo}>
+                                <SelectTrigger id="equipo" className={`${
+                                  isDarkMode
+                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}>
+                                  <SelectValue placeholder="Seleccione el equipo" />
+                                </SelectTrigger>
+                                <SelectContent className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${isDarkMode ? 'border-gray-600' : 'border-green-300'}`}>
+                                  {equipmentList.map((equipment) => (
+                                    <SelectItem 
+                                      key={equipment.id} 
+                                      value={equipment.id}
+                                      disabled={equipment.fueraDeServicio}
+                                      className={`text-lg md:text-xl ${equipment.fueraDeServicio ? 'text-gray-400' : ''}`}
+                                    >
+                                      {equipment.id === 'personal' ? 'Equipo Personal' : `Equipo ${equipment.id}`} {equipment.fueraDeServicio ? '(Fuera de servicio)' : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <Button 
+                            type="submit" 
+                            className={`w-full ${
+                              isClassStarted ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
+                            } transition-all duration-200 text-lg md:text-xl py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                            disabled={!isClassStarted}
+                          >
+                            {isClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
+                          </Button>
+                        </form>
+                      </TabsContent>
+                      <TabsContent value="maestro" className="flex-grow">
+                        <div className="space-y-6 mb-6">
+                          <Label className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccione su rol</Label>
+                          <div className="flex space-x-4">
+                            <Button
+                              onClick={() => {
+                                setUserType('maestro');
+                                setMaestroMatricula('');
+                                setLabTechMatricula('');
+                                setPassword('');
+                              }}
+                              className={`flex-1 ${userType === 'maestro' ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                            >
+                              Maestro
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setUserType('laboratorista');
+                                setMaestroMatricula('');
+                                setLabTechMatricula('');
+                                setPassword('');
+                              }}
+                              className={`flex-1 ${userType === 'laboratorista' ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                            >
+                              Laboratorista
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
+                          <div className="space-y-6">
+                            <div className="space-y-3">
+                              <Label htmlFor={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"} className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>
+                                Matrícula del {userType === 'maestro' ? 'Maestro' : 'Laboratorista'}
+                              </Label>
+                              <Input
+                                id={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"}
+                                type="text"
+                                placeholder={`Ingrese su matrícula de ${userType === 'maestro' ? 'maestro' : 'laboratorista'}`}
+                                value={userType === 'maestro' ? maestroMatricula : labTechMatricula}
+                                onChange={(e) => userType === 'maestro' ? handleNumberInput(e, setMaestroMatricula) : handleNumberInput(e, setLabTechMatricula)}
+                                className={`${
+                                  isDarkMode
+                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                              />
+                            </div>
+                            <div className="space-y-3">
+                              <Label htmlFor="password" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Contraseña</Label>
+                              <Input
+                                id="password"
+                                type="password"
+                                placeholder="Ingrese su contraseña"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className={`${
+                                  isDarkMode
+                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                              />
+                            </div>
+                          </div>
+                          <Button type="submit" className={`w-full ${
+                            isDarkMode
+                              ? colors.dark.buttonGreen
+                              : colors.light.buttonGreen
+                          } transition-all duration-200 text-lg md:text-xl py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+                            Iniciar Sesión
+                          </Button>
+                        </form>
+                      </TabsContent>
+                    </AnimatePresence>
+                  </div>
+                </Tabs>
+              </CardContent>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </Card>
+
+      {isAdminLoginOpen && (
+        <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
+          <DialogContent className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)]`}>
+            <DialogHeader>
+              <DialogTitle className={`text-2xl font-bold ${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
+              <DialogDescription className={`${isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}`}>
+                Ingrese sus credenciales de administrador
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="adminEmail" className={`${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>
+                  Email
+                </Label>
+                <Input
+                  id="adminEmail"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className={`${
+                    isDarkMode
+                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                  } border rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adminPassword" className={`${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>
+                  Contraseña
+                </Label>
+                <Input
+                  id="adminPassword"
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className={`${
+                    isDarkMode
+                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                  } border rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                />
+              </div>
+              <Button type="submit" className={`w-full ${isDarkMode ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+                Iniciar Sesión
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
+

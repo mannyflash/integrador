@@ -1,0 +1,51 @@
+.title-reveal {
+  --duration: 2s;
+  --delay: 0s;
+  display: block;
+  position: relative;
+  overflow: hidden;
+  margin-block: 4px;
+  color: transparent;
+  animation: reveal 1s calc(var(--delay) + var(--duration)) forwards;
+}
+
+.title-reveal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #1d59ac;
+  transform-origin: left;
+  animation: 
+    slideIn var(--duration) var(--delay) forwards,
+    slideOut 1s calc(var(--delay) + var(--duration)) forwards;
+}
+
+@keyframes reveal {
+  to {
+    color: inherit;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+  to {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
