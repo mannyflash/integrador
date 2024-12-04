@@ -2,19 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Microscope, User, UserCog, Beaker, Moon, Sun, Computer } from 'lucide-react'
+import { User, UserCog, Moon, Sun, Computer } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
 import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ImageCarousel } from './ImageCarousel'
 import { Sidebar } from './Sidebar'
+import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
 
 import Image from 'next/image'
 import swal from 'sweetalert'
@@ -114,21 +115,27 @@ export default function InterfazLaboratorio() {
   const [labTechMatricula, setLabTechMatricula] = useState('')
   const [password, setPassword] = useState('')
   const [isClassStarted, setIsClassStarted] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [theme, setThemeState] = useState<Theme>('light')
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false)
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
   const [isReversed, setIsReversed] = useState(false)
   const [userType, setUserType] = useState<'maestro' | 'laboratorista'>('maestro')
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
 
   const welcomeMessages = [
     '"Hombres y Mujeres"',
     '"Del Mar y Desierto"',
     '"Unidos Por La Educación"',
-    '"Tecnológica De Calidad"',
+    '"Tecnológica De Calidad."',
   ]
+
+  useEffect(() => {
+    const currentTheme = getTheme();
+    setThemeState(currentTheme);
+    applyTheme(currentTheme);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
@@ -174,25 +181,18 @@ export default function InterfazLaboratorio() {
   }, [])
 
   useEffect(() => {
-    // Load dark mode preference from cookie
-    const savedMode = localStorage.getItem('darkMode')
-    if (savedMode !== null) { // Update 2: Check if savedMode is not null
-      setIsDarkMode(savedMode === 'true')
-    }
-  }, [])
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDarkMode) // Update 3: Use document.documentElement
-    localStorage.setItem('darkMode', isDarkMode.toString())
-  }, [isDarkMode])
-
-  useEffect(() => {
     const interval = setInterval(() => {
       setCurrentMessageIndex((prevIndex) => (prevIndex + 1) % welcomeMessages.length);
-    }, 5000); // Change message every 5 seconds
+    }, 2500);
 
     return () => clearInterval(interval);
   }, []);
+
+  const handleThemeToggle = () => {
+    const newTheme = toggleTheme();
+    setThemeState(newTheme);
+    applyTheme(newTheme);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -381,9 +381,9 @@ export default function InterfazLaboratorio() {
   ]
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${isDarkMode ? colors.dark.background : colors.light.background} transition-all duration-300`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-green-50'} transition-colors duration-300`}>
       <div className="fixed top-4 left-4 z-50">
-        <Sidebar isDarkMode={isDarkMode} onAdminLogin={() => setIsAdminLoginOpen(true)} adminLoginText="Administrador"/>
+        <Sidebar isDarkMode={theme === 'dark'} onAdminLogin={() => setIsAdminLoginOpen(true)} adminLoginText="Administrador"/>
       </div>
 
       <AnimatePresence mode="wait">
@@ -393,15 +393,13 @@ export default function InterfazLaboratorio() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className={`text-2xl md:text-4xl font-semibold ${isDarkMode ? 'text-white' : 'text-green-800'} mb-6 text-center z-10 p-4 rounded-xl max-w-[90%] mx-auto overflow-hidden`}
+          className={`text-2xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-green-800'} mb-6 text-center z-10 p-4 rounded-xl max-w-[90%] mx-auto overflow-hidden`}
         >
           {welcomeMessages[currentMessageIndex]}
         </motion.div>
       </AnimatePresence>
 
-      <Card className={`w-full max-w-[90%] mx-auto overflow-hidden ${
-        isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground
-      } border-none relative z-10 shadow-[0_10px_20px_rgba(0,0,0,0.1)] transition-all duration-300 rounded-[2rem]`}>
+      <Card className={`w-full max-w-[90%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-[0_10px_20px_rgba(0,0,0,0.1)] transition-colors duration-300 rounded-[2rem]`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div 
             key={activeTab}
@@ -439,9 +437,9 @@ export default function InterfazLaboratorio() {
                   />
                 </div>
               </div>
-              <CardHeader className={`relative z-10 ${isDarkMode ? colors.dark.headerBackground : colors.light.headerBackground} p-6 pt-12 shadow-[0_4px_6px_rgba(0,0,0,0.1)] rounded-t-[2rem]`}>
+              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-6 pt-12 shadow-[0_4px_6px_rgba(0,0,0,0.1)] rounded-t-[2rem]`}>
                 <div className="text-center">
-                  <CardTitle className={`text-4xl md:text-5xl lg:text-6xl font-bold flex flex-col items-center justify-center ${isDarkMode ? colors.dark.titleText : colors.light.titleText} mb-4`}>
+                  <CardTitle className={`text-4xl md:text-5xl lg:text-6xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-4`}>
                     <Computer className="w-16 h-16 md:w-20 md:h-20 mb-2" />
                     <motion.span
                       initial={{ opacity: 0, scale: 0.5 }}
@@ -457,24 +455,19 @@ export default function InterfazLaboratorio() {
                   </CardTitle>
                 </div>
                 <div className="mt-4 flex items-center justify-center space-x-4">
-                  <div className={`flex items-center space-x-2 ${
-                    isDarkMode
-                      ? 'bg-gray-700 border border-gray-600'
-                      : 'bg-green-100 border border-green-200'
-                  } p-1 rounded-full transition-all duration-200`}>
-                    <Sun className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-yellow-500'}`} />
-                    <Switch // Update 4: Use setIsDarkMode directly
-                      checked={isDarkMode}
-                      onCheckedChange={setIsDarkMode}
-                      className={`${isDarkMode ? colors.dark.switchBackground : colors.light.switchBackground} 
-                                  data-[state=checked]:bg-green-600`}
+                  <div className={`flex items-center space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200`}>
+                    <Sun className={`h-5 w-5 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
+                    <Switch
+                      checked={theme === 'dark'}
+                      onCheckedChange={handleThemeToggle}
+                      className={`${theme === 'dark' ? colors.dark.switchBackground : colors.light.switchBackground} data-[state=checked]:bg-green-600`}
                     />
-                    <Moon className={`h-5 w-5 ${isDarkMode ? 'text-blue-400' : 'text-gray-400'}`} />
+                    <Moon className={`h-5 w-5 ${theme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
                   </div>
                 </div>
               </CardHeader>
               
-              <CardContent className={`p-6 pt-4 ${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_4px_6px_rgba(0,0,0,0.1)] rounded-b-[2rem]`}>
+              <CardContent className={`p-6 pt-4 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_4px_6px_rgba(0,0,0,0.1)] rounded-b-[2rem]`}>
                 <Tabs 
                   value={activeTab} 
                   onValueChange={(value) => {
@@ -497,13 +490,14 @@ export default function InterfazLaboratorio() {
                         value={tab}
                         className={`
                           relative flex items-center justify-center text-base md:text-xl
-                          ${isDarkMode
+                          ${theme === 'dark'
                             ? 'text-gray-400 data-[state=active]:text-white'
                             : 'text-green-700 data-[state=active]:text-gray-900'
                           } 
                           transition-all duration-300 z-10 h-full rounded-xl
                           data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700
                           data-[state=active]:shadow-[inset_0_1px_1px_rgba(0,0,0,0.075),0_0_8px_rgba(102,175,233,0.6)]
+                          hover:bg-opacity-80 hover:scale-105 hover:shadow-lg
                         `}
                       >
                         <motion.div
@@ -525,7 +519,7 @@ export default function InterfazLaboratorio() {
                         <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
                           <div className="space-y-6">
                             <div className="space-y-3">
-                              <Label htmlFor="matricula" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Matrícula</Label>
+                              <Label htmlFor="matricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Matrícula</Label>
                               <Input
                                 id="matricula"
                                 type="text"
@@ -533,23 +527,23 @@ export default function InterfazLaboratorio() {
                                 value={matricula}
                                 onChange={(e) => handleNumberInput(e, setMatricula)}
                                 className={`${
-                                  isDarkMode
+                                  theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
                               />
                             </div>
                             <div className="space-y-3">
-                              <Label htmlFor="equipo" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Número de Equipo</Label>
+                              <Label htmlFor="equipo" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Número de Equipo</Label>
                               <Select onValueChange={setEquipo} value={equipo}>
                                 <SelectTrigger id="equipo" className={`${
-                                  isDarkMode
+                                  theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}>
                                   <SelectValue placeholder="Seleccione el equipo" />
                                 </SelectTrigger>
-                                <SelectContent className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${isDarkMode ? 'border-gray-600' : 'border-green-300'}`}>
+                                <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
                                   {equipmentList.map((equipment) => (
                                     <SelectItem 
                                       key={equipment.id} 
@@ -567,7 +561,7 @@ export default function InterfazLaboratorio() {
                           <Button 
                             type="submit" 
                             className={`w-full ${
-                              isClassStarted ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
+                              isClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
                             } transition-all duration-200 text-lg md:text-xl py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
                             disabled={!isClassStarted}
                           >
@@ -577,7 +571,7 @@ export default function InterfazLaboratorio() {
                       </TabsContent>
                       <TabsContent value="maestro" className="flex-grow">
                         <div className="space-y-6 mb-6">
-                          <Label className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccione su rol</Label>
+                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccione su rol</Label>
                           <div className="flex space-x-4">
                             <Button
                               onClick={() => {
@@ -586,7 +580,7 @@ export default function InterfazLaboratorio() {
                                 setLabTechMatricula('');
                                 setPassword('');
                               }}
-                              className={`flex-1 ${userType === 'maestro' ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === 'maestro' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
                             >
                               Maestro
                             </Button>
@@ -597,7 +591,7 @@ export default function InterfazLaboratorio() {
                                 setLabTechMatricula('');
                                 setPassword('');
                               }}
-                              className={`flex-1 ${userType === 'laboratorista' ? (isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === 'laboratorista' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
                             >
                               Laboratorista
                             </Button>
@@ -607,7 +601,7 @@ export default function InterfazLaboratorio() {
                         <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
                           <div className="space-y-6">
                             <div className="space-y-3">
-                              <Label htmlFor={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"} className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>
+                              <Label htmlFor={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"} className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>
                                 Matrícula del {userType === 'maestro' ? 'Maestro' : 'Laboratorista'}
                               </Label>
                               <Input
@@ -617,14 +611,14 @@ export default function InterfazLaboratorio() {
                                 value={userType === 'maestro' ? maestroMatricula : labTechMatricula}
                                 onChange={(e) => userType === 'maestro' ? handleNumberInput(e, setMaestroMatricula) : handleNumberInput(e, setLabTechMatricula)}
                                 className={`${
-                                  isDarkMode
+                                  theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
                               />
                             </div>
                             <div className="space-y-3">
-                              <Label htmlFor="password" className={`${isDarkMode ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Contraseña</Label>
+                              <Label htmlFor="password" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Contraseña</Label>
                               <Input
                                 id="password"
                                 type="password"
@@ -632,18 +626,14 @@ export default function InterfazLaboratorio() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className={`${
-                                  isDarkMode
+                                  theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-lg md:text-xl py-6 rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
                               />
                             </div>
                           </div>
-                          <Button type="submit" className={`w-full ${
-                            isDarkMode
-                              ? colors.dark.buttonGreen
-                              : colors.light.buttonGreen
-                          } transition-all duration-200 text-lg md:text-xl py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-lg md:text-xl py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
                             Iniciar Sesión
                           </Button>
                         </form>
@@ -659,16 +649,16 @@ export default function InterfazLaboratorio() {
 
       {isAdminLoginOpen && (
         <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-          <DialogContent className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)]`}>
+          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)]`}>
             <DialogHeader>
-              <DialogTitle className={`text-2xl font-bold ${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
-              <DialogDescription className={`${isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}`}>
+              <DialogTitle className={`text-2xl font-bold ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
+              <DialogDescription className={`${theme === 'dark' ? colors.dark.descriptionText : colors.light.descriptionText}`}>
                 Ingrese sus credenciales de administrador
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="adminEmail" className={`${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>
+                <Label htmlFor="adminEmail" className={`${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>
                   Email
                 </Label>
                 <Input
@@ -676,14 +666,14 @@ export default function InterfazLaboratorio() {
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
                   className={`${
-                    isDarkMode
+                    theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                   } border rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="adminPassword" className={`${isDarkMode ? colors.dark.titleText : colors.light.titleText}`}>
+                <Label htmlFor="adminPassword" className={`${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>
                   Contraseña
                 </Label>
                 <Input
@@ -692,13 +682,13 @@ export default function InterfazLaboratorio() {
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   className={`${
-                    isDarkMode
+                    theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                   } border rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
                 />
               </div>
-              <Button type="submit" className={`w-full ${isDarkMode ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+              <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
                 Iniciar Sesión
               </Button>
             </form>

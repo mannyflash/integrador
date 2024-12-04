@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sun, Moon, BookOpen, GraduationCap, UserSquare2, BookOpenCheck, Pencil, Trash2, X } from 'lucide-react'
 import { initializeApp } from 'firebase/app'
 import { getFirestore, collection, setDoc, doc, getDoc, updateDoc, getDocs, query, deleteDoc } from 'firebase/firestore'
-import swal from 'sweetalert'
+import Swal from 'sweetalert2'
 import bcrypt from 'bcryptjs'
 import { useTheme } from "next-themes"
 import { Switch } from "@/components/ui/switch"
@@ -159,7 +159,7 @@ export default function PanelAdministrador() {
       setDocentes(docentesData)
     } catch (error) {
       console.error('Error al cargar docentes:', error)
-      await swal({
+      await Swal.fire({
         title: "Error",
         text: "No se pudieron cargar los docentes. Por favor, intenta de nuevo.",
         icon: "error",
@@ -178,7 +178,7 @@ export default function PanelAdministrador() {
       setAlumnos(alumnosData)
     } catch (error) {
       console.error('Error al cargar alumnos:', error)
-      await swal({
+      await Swal.fire({
         title: "Error",
         text: "No se pudieron cargar los alumnos. Por favor, intenta de nuevo.",
         icon: "error",
@@ -197,7 +197,7 @@ export default function PanelAdministrador() {
       setMaterias(materiasData)
     } catch (error) {
       console.error('Error al cargar materias:', error)
-      await swal({
+      await Swal.fire({
         title: "Error",
         text: "No se pudieron cargar las materias. Por favor, intenta de nuevo.",
         icon: "error",
@@ -216,7 +216,7 @@ export default function PanelAdministrador() {
       setLaboratoristas(laboratoristasData)
     } catch (error) {
       console.error('Error al cargar laboratoristas:', error)
-      await swal({
+      await Swal.fire({
         title: "Error",
         text: "No se pudieron cargar los laboratoristas. Por favor, intenta de nuevo.",
         icon: "error",
@@ -289,7 +289,7 @@ export default function PanelAdministrador() {
           throw new Error('Pestaña inválida')
       }
 
-      await swal({
+      await Swal.fire({
         title: "¡Éxito!",
         text: `${activeTab === 'alumnos' ? 'Alumno' : activeTab === 'docentes' ? 'Docente' : activeTab === 'materias' ? 'Materia' : 'Laboratorista'} agregado correctamente`,
         icon: "success",
@@ -312,7 +312,7 @@ export default function PanelAdministrador() {
       fetchStats()
     } catch (error) {
       console.error('Error al procesar la solicitud:', error)
-      await swal({
+      await Swal.fire({
         title: "Error",
         text: "Ha ocurrido un error. Por favor, intenta de nuevo.",
         icon: "error",
@@ -321,124 +321,136 @@ export default function PanelAdministrador() {
   }
 
   const eliminarAlumno = async (matricula: string) => {
-     const result = await swal({
-       title: "¿Estás seguro?",
-       text: "Una vez eliminado, no podrás recuperar este alumno!",
-       icon: "warning",
-       buttons: ["Cancelar", "Sí, eliminar"],
-       dangerMode: true,
-     });
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminar!',
+      cancelButtonText: 'Cancelar'
+    });
 
-     if (result) {
-       try {
-         await deleteDoc(doc(db, 'Alumnos', matricula))
-         await swal({
-           title: "¡Eliminado!",
-           text: "El alumno ha sido eliminado correctamente.",
-           icon: "success",
-         })
-         cargarAlumnos()
-         fetchStats()
-       } catch (error) {
-         console.error('Error al eliminar alumno:', error)
-         await swal({
-           title: "Error",
-           text: "Ha ocurrido un error al eliminar el alumno.",
-           icon: "error",
-         })
-       }
-     }
-   }
+    if (result.isConfirmed) {
+      try {
+        await deleteDoc(doc(db, 'Alumnos', matricula));
+        Swal.fire(
+          'Eliminado!',
+          'El alumno ha sido eliminado.',
+          'success'
+        );
+        cargarAlumnos();
+        fetchStats();
+      } catch (error) {
+        console.error('Error al eliminar alumno:', error);
+        Swal.fire(
+          'Error!',
+          'Ha ocurrido un error al eliminar el alumno.',
+          'error'
+        );
+      }
+    }
+  };
 
   const eliminarDocente = async (matricula: string) => {
-     const result = await swal({
-       title: "¿Estás seguro?",
-       text: "Una vez eliminado, no podrás recuperar este docente!",
-       icon: "warning",
-       buttons: ["Cancelar", "Sí, eliminar"],
-       dangerMode: true,
-     });
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminar!',
+      cancelButtonText: 'Cancelar'
+    });
 
-     if (result) {
-       try {
-         await deleteDoc(doc(db, 'Docentes', matricula))
-         await swal({
-           title: "¡Eliminado!",
-           text: "El docente ha sido eliminado correctamente.",
-           icon: "success",
-         })
-         cargarDocentes()
-         fetchStats()
-       } catch (error) {
-         console.error('Error al eliminar docente:', error)
-         await swal({
-           title: "Error",
-           text: "Ha ocurrido un error al eliminar el docente.",
-           icon: "error",
-         })
-       }
-     }
-   }
+    if (result.isConfirmed) {
+      try {
+        await deleteDoc(doc(db, 'Docentes', matricula));
+        Swal.fire(
+          'Eliminado!',
+          'El docente ha sido eliminado.',
+          'success'
+        );
+        cargarDocentes();
+        fetchStats();
+      } catch (error) {
+        console.error('Error al eliminar docente:', error);
+        Swal.fire(
+          'Error!',
+          'Ha ocurrido un error al eliminar el docente.',
+          'error'
+        );
+      }
+    }
+  };
 
   const eliminarMateria = async (id: string) => {
-     const result = await swal({
-       title: "¿Estás seguro?",
-       text: "Una vez eliminada, no podrás recuperar esta materia!",
-       icon: "warning",
-       buttons: ["Cancelar", "Sí, eliminar"],
-       dangerMode: true,
-     });
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminar!',
+      cancelButtonText: 'Cancelar'
+    });
 
-     if (result) {
-       try {
-         await deleteDoc(doc(db, 'Materias', id))
-         await swal({
-           title: "¡Eliminado!",
-           text: "La materia ha sido eliminada correctamente.",
-           icon: "success",
-         })
-         cargarMaterias()
-         fetchStats()
-       } catch (error) {
-         console.error('Error al eliminar materia:', error)
-         await swal({
-           title: "Error",
-           text: "Ha ocurrido un error al eliminar la materia.",
-           icon: "error",
-         })
-       }
-     }
-   }
+    if (result.isConfirmed) {
+      try {
+        await deleteDoc(doc(db, 'Materias', id));
+        Swal.fire(
+          'Eliminado!',
+          'La materia ha sido eliminada.',
+          'success'
+        );
+        cargarMaterias();
+        fetchStats();
+      } catch (error) {
+        console.error('Error al eliminar materia:', error);
+        Swal.fire(
+          'Error!',
+          'Ha ocurrido un error al eliminar la materia.',
+          'error'
+        );
+      }
+    }
+  };
 
   const eliminarLaboratorista = async (id: string) => {
-     const result = await swal({
-       title: "¿Estás seguro?",
-       text: "Una vez eliminado, no podrás recuperar este laboratorista!",
-       icon: "warning",
-       buttons: ["Cancelar", "Sí, eliminar"],
-       dangerMode: true,
-     });
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, eliminar!',
+      cancelButtonText: 'Cancelar'
+    });
 
-     if (result) {
-       try {
-         await deleteDoc(doc(db, 'Laboratoristas', id))
-         await swal({
-           title: "¡Eliminado!",
-           text: "El laboratorista ha sido eliminado correctamente.",
-           icon: "success",
-         })
-         cargarLaboratoristas()
-         fetchStats()
-       } catch (error) {
-         console.error('Error al eliminar laboratorista:', error)
-         await swal({
-           title: "Error",
-           text: "Ha ocurrido un error al eliminar el laboratorista.",
-           icon: "error",
-         })
-       }
-     }
-   }
+    if (result.isConfirmed) {
+      try {
+        await deleteDoc(doc(db, 'Laboratoristas', id));
+        Swal.fire(
+          'Eliminado!',
+          'El laboratorista ha sido eliminado.',
+          'success'
+        );
+        cargarLaboratoristas();
+        fetchStats();
+      } catch (error) {
+        console.error('Error al eliminar laboratorista:', error);
+        Swal.fire(
+          'Error!',
+          'Ha ocurrido un error al eliminar el laboratorista.',
+          'error'
+        );
+      }
+    }
+  };
 
   const modificarAlumno = async (matricula: string) => {
     console.log('Modificar alumno:', matricula)
@@ -457,107 +469,90 @@ export default function PanelAdministrador() {
   }
 
   const handleEdit = async (type: 'alumno' | 'docente' | 'materia' | 'laboratorista', id: string) => {
-     const result = await swal({
-       title: "¿Estás seguro?",
-       text: `¿Quieres modificar este ${type}?`,
-       icon: "warning",
-       buttons: ["Cancelar", "Sí, modificar"],
-       dangerMode: true,
-     });
-
-     if (result) {
-       let data;
-       switch (type) {
-         case 'alumno':
-           data = alumnos.find(a => a.Matricula === id);
-           break;
-         case 'docente':
-           data = docentes.find(d => d.Matricula === id);
-           break;
-         case 'materia':
-           data = materias.find(m => m.id === id);
-           break;
-         case 'laboratorista':
-           data = laboratoristas.find(l => l.ID === id);
-           break;
-       }
-       setEditingItem({ type, id });
-       setEditingData(data);
-     }
-   }
+    let data;
+    switch (type) {
+      case 'alumno':
+        data = alumnos.find(a => a.Matricula === id);
+        break;
+      case 'docente':
+        data = docentes.find(d => d.Matricula === id);
+        break;
+      case 'materia':
+        data = materias.find(m => m.id === id);
+        break;
+      case 'laboratorista':
+        data = laboratoristas.find(l => l.ID === id);
+        break;
+    }
+    setEditingItem({ type, id });
+    setEditingData(data);
+  }
 
   const handleUpdate = async () => {
-     if (!editingItem || !editingData) return;
+    if (!editingItem || !editingData) return;
 
-     try {
-       let collectionName;
-       switch (editingItem.type) {
-         case 'alumno':
-           collectionName = 'Alumnos';
-           break;
-         case 'docente':
-           collectionName = 'Docentes';
-           if (editingData.Contraseña) {
-             editingData.Contraseña = await bcrypt.hash(editingData.Contraseña, 10);
-           }
-           break;
-         case 'materia':
-           collectionName = 'Materias';
-           const materiaActual = materias.find(m => m.id === editingItem.id);
-           if (materiaActual) {
-             if (materiaActual.MaestroID === editingData.MaestroID) {
-               await swal({
-                 title: "Sin cambios",
-                 text: "El maestro seleccionado es el mismo que ya está asignado.",
-                 icon: "info",
-               });
-               return;
-             } else {
-               const confirmar = await swal({
-                 title: "Confirmar cambio",
-                 text: "¿Desea reemplazar el maestro actual y asignar el nuevo?",
-                 icon: "warning",
-                 buttons: ["Cancelar", "Confirmar"],
-                 dangerMode: true,
-               });
-               if (!confirmar) return;
-             }
-           }
-           break;
-         case 'laboratorista':
-           collectionName = 'Laboratoristas';
-           if (editingData.Contraseña) {
-             editingData.Contraseña = await bcrypt.hash(editingData.Contraseña, 10);
-           }
-           break;
-       }
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "¿Quieres guardar los cambios?",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, guardar!',
+      cancelButtonText: 'Cancelar'
+    });
 
-       const docRef = doc(db, collectionName, editingItem.id);
-       await updateDoc(docRef, editingData);
+    if (result.isConfirmed) {
+      try {
+        let collectionName;
+        switch (editingItem.type) {
+          case 'alumno':
+            collectionName = 'Alumnos';
+            break;
+          case 'docente':
+            collectionName = 'Docentes';
+            if (editingData.Contraseña) {
+              editingData.Contraseña = await bcrypt.hash(editingData.Contraseña, 10);
+            }
+            break;
+          case 'materia':
+            collectionName = 'Materias';
+            break;
+          case 'laboratorista':
+            collectionName = 'Laboratoristas';
+            if (editingData.Contraseña) {
+              editingData.Contraseña = await bcrypt.hash(editingData.Contraseña, 10);
+            }
+            break;
+        }
 
-       await swal({
-         title: "¡Actualizado!",
-         text: `${editingItem.type.charAt(0).toUpperCase() + editingItem.type.slice(1)} actualizado correctamente`,
-         icon: "success",
-       });
+        const docRef = doc(db, collectionName, editingItem.id);
+        await updateDoc(docRef, editingData);
 
-       // Recargar los datos
-       if (editingItem.type === 'alumno') cargarAlumnos();
-       else if (editingItem.type === 'docente') cargarDocentes();
-       else if (editingItem.type === 'materia') cargarMaterias();
-       else if (editingItem.type === 'laboratorista') cargarLaboratoristas();
+        Swal.fire(
+          '¡Actualizado!',
+          `${editingItem.type.charAt(0).toUpperCase() + editingItem.type.slice(1)} actualizado correctamente`,
+          'success'
+        );
 
-       setEditingItem(null);
-       setEditingData(null);
-     } catch (error) {
-       console.error('Error al actualizar:', error);
-       await swal({
-         title: "Error",
-         text: "Ha ocurrido un error al actualizar. Por favor, intenta de nuevo.",
-         icon: "error",
-       });
-     }
-   }
+        // Recargar los datos
+        if (editingItem.type === 'alumno') cargarAlumnos();
+        else if (editingItem.type === 'docente') cargarDocentes();
+        else if (editingItem.type === 'materia') cargarMaterias();
+        else if (editingItem.type === 'laboratorista') cargarLaboratoristas();
+
+        setEditingItem(null);
+        setEditingData(null);
+      } catch (error) {
+        console.error('Error al actualizar:', error);
+        Swal.fire(
+          'Error!',
+          'Ha ocurrido un error al actualizar. Por favor, intenta de nuevo.',
+          'error'
+        );
+      }
+    }
+  };
 
   return (
     <div className={`min-h-screen ${isDarkMode ? colors.dark.background : colors.light.background} transition-all duration-300`}>
@@ -584,7 +579,7 @@ export default function PanelAdministrador() {
 
       <div className="flex">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDarkMode={isDarkMode} />
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-auto h-[calc(100vh-64px)]">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} p-2`}>
               <CardHeader className="flex flex-row items-center justify-between py-2">
@@ -633,8 +628,8 @@ export default function PanelAdministrador() {
           </div>
 
           {activeTab === 'alumnos' && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-[600px] overflow-auto`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full`}>
                 <CardHeader>
                   <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Agregar Alumno</CardTitle>
                 </CardHeader>
@@ -731,7 +726,7 @@ export default function PanelAdministrador() {
                   </form>
                 </CardContent>
               </Card>
-              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-[600px] overflow-auto`}>
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full overflow-auto`}>
                 <CardHeader>
                   <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Lista de Alumnos</CardTitle>
                 </CardHeader>
@@ -768,7 +763,7 @@ export default function PanelAdministrador() {
                               onClick={() => eliminarAlumno(alumno.Matricula)}
                               size="sm"
                               variant="destructive"
-                                                        >
+                            >
                               <Trash2 className="h-4 w-4" />
                               <span className="sr-only">Eliminar alumno</span>
                             </Button>
@@ -783,8 +778,8 @@ export default function PanelAdministrador() {
           )}
           
           {activeTab === 'docentes' && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-[600px] overflow-auto`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full`}>
                 <CardHeader>
                   <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Agregar Docente</CardTitle>
                 </CardHeader>
@@ -803,4 +798,580 @@ export default function PanelAdministrador() {
                     <div className="space-y-2">
                       <Label htmlFor="nombreDocente" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</Label>
                       <Input
+                        id="nombreDocente"
+                        value={datosDocente.Nombre}
+                        onChange={(e) => setDatosDocente({...datosDocente, Nombre: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="apellidoDocente" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</Label>
+                      <Input
+                        id="apellidoDocente"
+                        value={datosDocente.Apellido}
+                        onChange={(e) => setDatosDocente({...datosDocente, Apellido: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="emailDocente" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Email</Label>
+                      <Input
+                        id="emailDocente"
+                        type="email"
+                        value={datosDocente.Email}
+                        onChange={(e) => setDatosDocente({...datosDocente, Email: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contraseñaDocente" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Contraseña</Label>
+                      <Input
+                        id="contraseñaDocente"
+                        type="password"
+                        value={datosDocente.Contraseña}
+                        onChange={(e) => setDatosDocente({...datosDocente, Contraseña: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className={`w-full h-8 px-1 py-0 text-xs font-tall transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                        isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen
+                      }`}
+                    >
+                      Agregar Docente
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full overflow-auto`}>
+                <CardHeader>
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Lista de Docentes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Matrícula</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {docentes.map((docente) => (
+                        <TableRow key={docente.Matricula}>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{docente.Matricula}</TableCell>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{docente.Nombre}</TableCell>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{docente.Apellido}</TableCell>
+                          <TableCell>
+                            <Button
+                              onClick={() => handleEdit('docente', docente.Matricula)}
+                              className="mr-2"
+                              size="sm"
+                              variant="outline"
+                              style={{ color: currentColors.buttonBlue, borderColor: currentColors.buttonBlue }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => eliminarDocente(docente.Matricula)}
+                              size="sm"
+                              variant="destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          
+          {activeTab === 'materias' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full`}>
+                <CardHeader>
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Agregar Materia</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={manejarEnvio} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nombreMateria" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre de la Materia</Label>
+                      <Input
+                        id="nombreMateria"
+                        value={datosMateria.NombreMateria}
+                        onChange={(e) => setDatosMateria({...datosMateria, NombreMateria: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="maestroID" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Maestro</Label>
+                      <Select
+                        value={datosMateria.MaestroID}
+                        onValueChange={(value) => setDatosMateria({...datosMateria, MaestroID: value})}
+                      >
+                        <SelectTrigger id="maestroID" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                          <SelectValue placeholder="Selecciona un maestro" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {docentes.map((docente) => (
+                            <SelectItem key={docente.Matricula} value={docente.Matricula}>
+                              {`${docente.Nombre} ${docente.Apellido}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="semestreMateria" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Semestre</Label>
+                      <Select
+                        value={datosMateria.Semestre}
+                        onValueChange={(value) => setDatosMateria({...datosMateria, Semestre: value})}
+                      >
+                        <SelectTrigger id="semestreMateria" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                          <SelectValue placeholder="Selecciona un semestre" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5, 6, 7].map((semestre) => (
+                            <SelectItem key={semestre} value={semestre.toString()}>
+                              {semestre}º Semestre
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className={`w-full h-8 px-1 py0 text-xs font-tall transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                        isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen
+                      }`}
+                    >
+                      Agregar Materia
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full overflow-auto`}>
+                <CardHeader>
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Lista de Materias</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>ID</TableHead><TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Maestro</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {materias.map((materia) => {
+                        const docenteAsignado = docentes.find(d => d.Matricula === materia.MaestroID);
+                        return (
+                          <TableRow key={materia.id}>
+                            <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{materia.id}</TableCell>
+                            <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{materia.NombreMateria}</TableCell>
+                            <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>
+                              {docenteAsignado ? `${docenteAsignado.Nombre} ${docenteAsignado.Apellido}` : 'No asignado'}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                onClick={() => handleEdit('materia', materia.id)}
+                                className="mr-2"
+                                size="sm"
+                                variant="outline"
+                                style={{ color: currentColors.buttonBlue, borderColor: currentColors.buttonBlue }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                onClick={() => eliminarMateria(materia.id)}
+                                size="sm"
+                                variant="destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          {activeTab === 'laboratoristas' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full`}>
+                <CardHeader>
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Agregar Laboratorista</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={manejarEnvio} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="idLaboratorista" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>ID</Label>
+                      <Input
+                        id="idLaboratorista"
+                        value={datosLaboratorista.ID}
+                        onChange={(e) => setDatosLaboratorista({...datosLaboratorista, ID: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nombreLaboratorista" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</Label>
+                      <Input
+                        id="nombreLaboratorista"
+                        value={datosLaboratorista.Nombre}
+                        onChange={(e) => setDatosLaboratorista({...datosLaboratorista, Nombre: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="apellidoLaboratorista" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</Label>
+                      <Input
+                        id="apellidoLaboratorista"
+                        value={datosLaboratorista.Apellido}
+                        onChange={(e) => setDatosLaboratorista({...datosLaboratorista, Apellido: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="emailLaboratorista" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Email</Label>
+                      <Input
+                        id="emailLaboratorista"
+                        type="email"
+                        value={datosLaboratorista.Email}
+                        onChange={(e) => setDatosLaboratorista({...datosLaboratorista, Email: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contraseñaLaboratorista" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Contraseña</Label>
+                      <Input
+                        id="contraseñaLaboratorista"
+                        type="password"
+                        value={datosLaboratorista.Contraseña}
+                        onChange={(e) => setDatosLaboratorista({...datosLaboratorista, Contraseña: e.target.value})}
+                        required
+                        className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className={`w-full h-8 px-1 py-0 text-xs font-tall transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                        isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen
+                      }`}
+                    >
+                      Agregar Laboratorista
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+              <Card className={`${isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground} h-full overflow-auto`}>
+                <CardHeader>
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Lista de Laboratoristas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>ID</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Email</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {laboratoristas.map((laboratorista) => (
+                        <TableRow key={laboratorista.ID}>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{laboratorista.ID}</TableCell>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{laboratorista.Nombre}</TableCell>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{laboratorista.Apellido}</TableCell>
+                          <TableCell className={isDarkMode ? colors.dark.descriptionText : colors.light.descriptionText}>{laboratorista.Email}</TableCell>
+                          <TableCell>
+                            <Button
+                              onClick={() => handleEdit('laboratorista', laboratorista.ID)}
+                              className="mr-2"
+                              size="sm"
+                              variant="outline"
+                              style={{ color: currentColors.buttonBlue, borderColor: currentColors.buttonBlue }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => eliminarLaboratorista(laboratorista.ID)}
+                              size="sm"
+                              variant="destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          {editingItem && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <Card className={isDarkMode ? colors.dark.cardBackground : colors.light.cardBackground}>
+                <CardHeader className="flex justify-between items-center">
+                  <CardTitle className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>
+                    Editar {editingItem.type.charAt(0).toUpperCase() + editingItem.type.slice(1)}
+                  </CardTitle>
+                  <Button variant="ghost" onClick={() => setEditingItem(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={(e) => { e.preventDefault(); handleUpdate(); }} className="space-y-4">
+                    {editingItem.type === 'alumno' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="editNombre" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</Label>
+                          <Input
+                            id="editNombre"
+                            value={editingData.Nombre}
+                            onChange={(e) => setEditingData({...editingData, Nombre: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editApellido" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</Label>
+                          <Input
+                            id="editApellido"
+                            value={editingData.Apellido}
+                            onChange={(e) => setEditingData({...editingData, Apellido: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editCarrera" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Carrera</Label>
+                          <Select
+                            value={editingData.Carrera}
+                            onValueChange={(value) => setEditingData({...editingData, Carrera: value})}
+                          >
+                            <SelectTrigger id="editCarrera" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                              <SelectValue placeholder="Selecciona una carrera" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Ingenieria en sistemas computacionales">Ingeniería en Sistemas Computacionales</SelectItem>
+                              <SelectItem value="Ingenieria industrial">Ingeniería Industrial</SelectItem>
+                              <SelectItem value="Licenciatura en administracion de empresas">Licenciatura en Administración de Empresas</SelectItem>
+                              <SelectItem value="Ingenieria civil">Ingeniería Civil</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editSemestre" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Semestre</Label>
+                          <Select
+                            value={editingData.Semestre}
+                            onValueChange={(value) => setEditingData({...editingData, Semestre: value})}
+                          >
+                            <SelectTrigger id="editSemestre" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                              <SelectValue placeholder="Selecciona un semestre" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6, 7].map((semestre) => (
+                                <SelectItem key={semestre} value={semestre.toString()}>
+                                  {semestre}º Semestre
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editTurno" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Turno</Label>
+                          <Select
+                            value={editingData.Turno}
+                            onValueChange={(value) => setEditingData({...editingData, Turno: value})}
+                          >
+                            <SelectTrigger id="editTurno" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                              <SelectValue placeholder="Selecciona un turno" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="matutino">Matutino</SelectItem>
+                              <SelectItem value="vespertino">Vespertino</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    )}
+                    {editingItem.type === 'docente' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="editNombre" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</Label>
+                          <Input
+                            id="editNombre"
+                            value={editingData.Nombre}
+                            onChange={(e) => setEditingData({...editingData, Nombre: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editApellido" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</Label>
+                          <Input
+                            id="editApellido"
+                            value={editingData.Apellido}
+                            onChange={(e) => setEditingData({...editingData, Apellido: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editEmail" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Email</Label>
+                          <Input
+                            id="editEmail"
+                            type="email"
+                            value={editingData.Email}
+                            onChange={(e) => setEditingData({...editingData, Email: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editContraseña" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nueva Contraseña (dejar en blanco para no cambiar)</Label>
+                          <Input
+                            id="editContraseña"
+                            type="password"
+                            value={editingData.Contraseña || ''}
+                            onChange={(e) => setEditingData({...editingData, Contraseña: e.target.value})}
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {editingItem.type === 'materia' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="editNombreMateria" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre de la Materia</Label>
+                          <Input
+                            id="editNombreMateria"
+                            value={editingData.NombreMateria}
+                            onChange={(e) => setEditingData({...editingData, NombreMateria: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editMaestroID" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Maestro</Label>
+                          <Select
+                            value={editingData.MaestroID}
+                            onValueChange={(value) => setEditingData({...editingData, MaestroID: value})}
+                          >
+                            <SelectTrigger id="editMaestroID" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                              <SelectValue placeholder="Selecciona un maestro" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {docentes.map((docente) => (
+                                <SelectItem key={docente.Matricula} value={docente.Matricula}>
+                                  {`${docente.Nombre} ${docente.Apellido}`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editSemestreMateria" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Semestre</Label>
+                          <Select
+                            value={editingData.Semestre}
+                            onValueChange={(value) => setEditingData({...editingData, Semestre: value})}
+                          >
+                            <SelectTrigger id="editSemestreMateria" className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}>
+                              <SelectValue placeholder="Selecciona un semestre" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6, 7].map((semestre) => (
+                                <SelectItem key={semestre} value={semestre.toString()}>
+                                  {semestre}º Semestre
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    )}
+                    {editingItem.type === 'laboratorista' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="editNombre" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</Label>
+                          <Input
+                            id="editNombre"
+                            value={editingData.Nombre}
+                            onChange={(e) => setEditingData({...editingData, Nombre: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editApellido" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</Label>
+                          <Input
+                            id="editApellido"
+                            value={editingData.Apellido}
+                            onChange={(e) => setEditingData({...editingData, Apellido: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editEmail" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Email</Label>
+                          <Input
+                            id="editEmail"
+                            type="email"
+                            value={editingData.Email}
+                            onChange={(e) => setEditingData({...editingData, Email: e.target.value})}
+                            required
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="editContraseña" className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nueva Contraseña (dejar en blanco para no cambiar)</Label>
+                          <Input
+                            id="editContraseña"
+                            type="password"
+                            value={editingData.Contraseña || ''}
+                            onChange={(e) => setEditingData({...editingData, Contraseña: e.target.value})}
+                            className={`${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} border-gray-300`}
+                          />
+                        </div>
+                      </>
+                    )}
+                    <Button 
+                      type="submit" 
+                      className={`w-full h-8 px-1 py-0 text-xs font-tall transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                        isDarkMode ? colors.dark.buttonGreen : colors.light.buttonGreen
+                      }`}
+                    >
+                      Actualizar
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
 
