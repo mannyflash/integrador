@@ -13,8 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { ImageCarousel } from './ImageCarousel'
-import { Sidebar } from './Sidebar'
+import { ImageCarousel } from '../components/ImageCarousel'
+import { Sidebar } from '../components/Sidebar'
 import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
 
 import Image from 'next/image'

@@ -15,7 +15,7 @@ import Swal from 'sweetalert2'
 import bcrypt from 'bcryptjs'
 import { useTheme } from "next-themes"
 import { Switch } from "@/components/ui/switch"
-import { Sidebar } from './sidebarAdmin'
+import { Sidebar } from '../components/sidebarAdmin'
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
