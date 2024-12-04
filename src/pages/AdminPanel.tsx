@@ -732,13 +732,17 @@ export default function PanelAdministrador() {
                 </CardHeader>
                 <CardContent>
                   <Table>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Matrícula</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Carrera</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Semestre</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Turno</TableHead>
-                    <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Acciones</TableHead>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Matrícula</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Nombre</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Apellido</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Carrera</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Semestre</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Turno</TableHead>
+                        <TableHead className={isDarkMode ? colors.dark.titleText : colors.light.titleText}>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {alumnos.map((alumno) => (
                         <TableRow key={alumno.Matricula}>
