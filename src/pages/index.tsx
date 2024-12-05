@@ -647,7 +647,7 @@ export default function InterfazLaboratorio() {
 
       {isAdminLoginOpen && (
         <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)]`}>
+          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-2xl sm:rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)] p-4 sm:p-6`}>
             <DialogHeader>
               <DialogTitle className={`text-2xl font-bold ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
               <DialogDescription className={`${theme === 'dark' ? colors.dark.descriptionText : colors.light.descriptionText}`}>
