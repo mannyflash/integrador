@@ -87,7 +87,6 @@ export default function ListaAsistencias() {
   const [asistencias, setAsistencias] = useState<Asistencia[]>([])
   const [contador, setContador] = useState(0)
   const [claseIniciada, setClaseIniciada] = useState(false)
-  const [maestroId, setMaestroId] = useState('')
   const [maestroInfo, setMaestroInfo] = useState<Docente | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [theme, setThemeState] = useState<Theme>(getTheme())
@@ -97,20 +96,18 @@ export default function ListaAsistencias() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const storedMaestroId = localStorage.getItem('maestroId')
       const storedClaseInfo = localStorage.getItem('claseInfo')
       
-      if (!storedMaestroId || !storedClaseInfo) {
+      if (!storedClaseInfo) {
         await swal({
-          title: "Sesión expirada o información faltante",
+          title: "Información de clase faltante",
           text: "Por favor, inicie una clase nuevamente.",
           icon: "warning",
         })
-        router.push('/vista-maestro-invitado')
+        router.push('/panel-laboratorista')
         return
       }
 
-      setMaestroId(storedMaestroId)
       const parsedClaseInfo = JSON.parse(storedClaseInfo)
       setClaseInfo(parsedClaseInfo)
       
@@ -172,7 +169,6 @@ export default function ListaAsistencias() {
     document.body.classList.toggle('dark', theme === 'dark')
     applyTheme(theme)
   }, [theme])
-
 
   const limpiarCampos = () => {
     setAsistencias([])
@@ -380,7 +376,6 @@ export default function ListaAsistencias() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('maestroId');
     localStorage.removeItem('claseInfo');
     router.push('/');
   };

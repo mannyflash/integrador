@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,9 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { addDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../pages/panel-laboratorista'
-import { toast } from 'react-hot-toast'
-import { Toaster } from 'react-hot-toast'
-import { useRouter } from 'next/navigation'
+import { toast, Toaster } from 'react-hot-toast'
 
 interface VistaMaestroInvitadoProps {
   esModoOscuro: boolean;
@@ -135,7 +134,7 @@ export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvit
       }))
 
       toast.success('Clase iniciada con éxito')
-      router.push('/lista-asistencias')
+      router.push('/lista-asistencias-invitado')
     } catch (error) {
       console.error('Error al iniciar la clase:', error)
       toast.error('Error al iniciar la clase')
