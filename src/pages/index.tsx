@@ -106,13 +106,29 @@ const SlideAnimation = {
   }
 };
 
+const Loader = () => {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900"
+    >
+      <div className="w-32 aspect-square rounded-full relative flex justify-center items-center animate-spin-slow z-40 bg-[conic-gradient(white_0deg,white_300deg,transparent_270deg,transparent_360deg)]">
+        <div className="absolute w-[60%] aspect-square rounded-full z-[80] animate-spin-medium bg-[conic-gradient(white_0deg,white_270deg,transparent_180deg,transparent_360deg)]" />
+        <div className="absolute w-3/4 aspect-square rounded-full z-[60] animate-spin-slow bg-[conic-gradient(#065f46_0deg,#065f46_180deg,transparent_180deg,transparent_360deg)]" />
+        <div className="absolute w-[85%] aspect-square rounded-full z-[60] animate-spin-extra-slow bg-[conic-gradient(#34d399_0deg,#34d399_180deg,transparent_180deg,transparent_360deg)]" />
+      </div>
+    </motion.div>
+  )
+}
+
 export default function InterfazLaboratorio() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<UserType>('estudiante')
   const [matricula, setMatricula] = useState('')
   const [equipo, setEquipo] = useState('')
-  const [maestroMatricula, setMaestroMatricula] = useState('')
-  const [labTechMatricula, setLabTechMatricula] = useState('')
+  const [userMatricula, setUserMatricula] = useState('')
   const [password, setPassword] = useState('')
   const [isClassStarted, setIsClassStarted] = useState(false)
   const [theme, setThemeState] = useState<Theme>('light')
@@ -123,6 +139,11 @@ export default function InterfazLaboratorio() {
   const [isReversed, setIsReversed] = useState(false)
   const [userType, setUserType] = useState<'maestro' | 'laboratorista'>('maestro')
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRegularClassStarted, setIsRegularClassStarted] = useState(false)
+  const [isGuestClassStarted, setIsGuestClassStarted] = useState(false)
+  const [classChoice, setClassChoice] = useState<'regular' | 'guest' | null>(null)
+  const [guestClassInfo, setGuestClassInfo] = useState<any>(null)
 
   const welcomeMessages = [
     '"Hombres y Mujeres Del Mar y Desierto',
@@ -133,23 +154,31 @@ export default function InterfazLaboratorio() {
     const currentTheme = getTheme();
     setThemeState(currentTheme);
     applyTheme(currentTheme);
+
+    // Simulate loading time
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
+    const unsubscribeRegularClass = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
       if (doc.exists()) {
         const newStatus = doc.data().iniciada
+        setIsRegularClassStarted(newStatus)
         setIsClassStarted(prevStatus => {
           if (prevStatus !== newStatus) {
             if (newStatus) {
               swal({
-                title: "¡La clase ha iniciado!",
+                title: "¡La clase regular ha iniciado!",
                 text: "Ya puedes registrar tu asistencia",
                 icon: "success",
               })
             } else {
               swal({
-                title: "La clase ha finalizado",
+                title: "La clase regular ha finalizado",
                 text: "El registro de asistencia está cerrado.",
                 icon: "info",
               })
@@ -160,7 +189,31 @@ export default function InterfazLaboratorio() {
       }
     })
 
-    return () => unsubscribe()
+    const unsubscribeGuestClass = onSnapshot(doc(db, 'EstadoClaseInvitado', 'actual'), (doc) => {
+      if (doc.exists()) {
+        const newStatus = doc.data().iniciada
+        setIsGuestClassStarted(newStatus)
+        if (newStatus) {
+          setGuestClassInfo(doc.data())
+          swal({
+            title: "¡La clase invitada ha iniciado!",
+            text: "Ya puedes registrar tu asistencia para la clase invitada",
+            icon: "success",
+          })
+        } else {
+          swal({
+            title: "La clase invitada ha finalizado",
+            text: "El registro de asistencia para la clase invitada está cerrado.",
+            icon: "info",
+          })
+        }
+      }
+    })
+
+    return () => {
+      unsubscribeRegularClass()
+      unsubscribeGuestClass()
+    }
   }, [])
 
   useEffect(() => {
@@ -205,64 +258,104 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        if (!isClassStarted) {
+        if (isRegularClassStarted && isGuestClassStarted && !classChoice) {
+          const result = await swal({
+            title: "Selecciona una clase",
+            text: "Hay dos clases disponibles. ¿A cuál deseas asistir?",
+            icon: "info",
+            buttons: {
+              regular: {
+                text: "Clase Regular",
+                value: "regular",
+              },
+              guest: {
+                text: "Clase Invitado",
+                value: "guest",
+              },
+            },
+          });
+
+          if (result) {
+            setClassChoice(result as 'regular' | 'guest')
+          } else {
+            return
+          }
+        }
+
+        if (!isRegularClassStarted && !isGuestClassStarted) {
           await swal({
             title: "Error",
-            text: "La clase no está iniciada",
+            text: "No hay clases iniciadas en este momento.",
             icon: "error",
           })
           return
         }
 
-        const asistenciasRef = collection(db, 'Asistencias')
-        const matriculaQuery = query(asistenciasRef, where("alumnoId", "==", matricula))
-        const equipoQuery = query(asistenciasRef, where("equipo", "==", equipo))
+        const selectedClass = classChoice || (isRegularClassStarted ? 'regular' : 'guest')
 
-        const [matriculaSnapshot, equipoSnapshot] = await Promise.all([
-          getDocs(matriculaQuery),
-          getDocs(equipoQuery)
-        ])
+        // Check for duplicate matricula
+        const asistenciasRef = collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias')
+        const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
+        const matriculaSnapshot = await getDocs(matriculaQuery)
 
         if (!matriculaSnapshot.empty) {
           await swal({
-            title: "Error",
+            title: "Atención",
             text: "Ya has registrado tu asistencia.",
-            icon: "error",
-          })
+            icon: "warning",
+          });
           return
         }
 
-        if (!equipoSnapshot.empty && equipo !== 'personal') {
-          await swal({
-            title: "Error",
-            text: "Este equipo ya ha sido registrado.",
-            icon: "error",
-          })
-          return
+        // Check for duplicate equipo, except for personal equipment
+        if (equipo !== 'personal') {
+          const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
+          const equipoSnapshot = await getDocs(equipoQuery)
+
+          if (!equipoSnapshot.empty) {
+            await swal({
+              title: "Atención",
+              text: "Este equipo ya ha sido registrado.",
+              icon: "warning",
+            });
+            return
+          }
         }
 
+        // Get all student data
         const alumnoRef = doc(db, 'Alumnos', matricula)
         const alumnoSnap = await getDoc(alumnoRef)
 
         if (alumnoSnap.exists()) {
           const alumnoData = alumnoSnap.data()
-          const asistenciaRef = doc(collection(db, 'Asistencias'))
+          const asistenciaRef = doc(collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias'))
+
+          // Copy all fields from Alumnos to Asistencias
           await setDoc(asistenciaRef, {
-            alumnoId: matricula,
-            nombre: alumnoData.Nombre,
-            apellido: alumnoData.Apellido,
-            equipo: equipo,
-            fecha: serverTimestamp()
+            AlumnoId: matricula,
+            Nombre: alumnoData.Nombre ?? '',
+            Apellido: alumnoData.Apellido ?? '',
+            Carrera: alumnoData.Carrera ?? '',
+            Grupo: alumnoData.Grupo ?? '',
+            Semestre: alumnoData.Semestre ?? '',
+            Turno: alumnoData.Turno ?? '',
+            Equipo: equipo,
+            Fecha: serverTimestamp(),
+            ...(selectedClass === 'guest' ? {
+              MaestroInvitado: guestClassInfo.MaestroInvitado,
+              Materia: guestClassInfo.Materia
+            } : {})
           })
 
           await swal({
             title: "¡Asistencia registrada!",
-            text: "Tu asistencia se ha registrado correctamente.",
+            text: `Tu asistencia se ha registrado correctamente para la ${selectedClass === 'guest' ? 'clase invitada' : 'clase regular'}.`,
             icon: "success",
           })
 
           setMatricula('')
           setEquipo('')
+          setClassChoice(null)
         } else {
           await swal({
             title: "Error",
@@ -271,7 +364,7 @@ export default function InterfazLaboratorio() {
           })
         }
       } else if (activeTab === 'maestro') {
-        if (!maestroMatricula || !password) {
+        if (!userMatricula || !password) {
           await swal({
             title: "Error",
             text: "Por favor, completa todos los campos.",
@@ -280,37 +373,46 @@ export default function InterfazLaboratorio() {
           return
         }
 
+        console.log('Intentando iniciar sesión:', { userType, userMatricula, password })
+
         const collectionName = userType === 'maestro' ? 'Docentes' : 'Laboratoristas'
-        const userRef = doc(db, collectionName, userType === 'maestro' ? maestroMatricula : labTechMatricula)
+        const userRef = doc(db, collectionName, userMatricula)
         const userSnap = await getDoc(userRef)
 
-        if (userSnap.exists()) {
-          const userData = userSnap.data()
-          const passwordMatch = await bcrypt.compare(password, userData.Contraseña)
-          if (passwordMatch) {
-            await swal({
-              title: "¡Bienvenido!",
-              text: "Inicio de sesión exitoso",
-              icon: "success",
-            })
-            
-            localStorage.setItem(userType === 'maestro' ? 'maestroId' : 'labTechId', userType === 'maestro' ? maestroMatricula : labTechMatricula);
-            
-            router.push(userType === 'maestro' ? '/lista-asistencias' : '/panel-laboratorista')
-          } else {
-            await swal({
-              title: "Error",
-              text: "Contraseña incorrecta",
-              icon: "error",
-            })
-          }
-        } else {
+        if (!userSnap.exists()) {
+          console.log('Usuario no encontrado')
           await swal({
             title: "Error",
-            text: "Matrícula no encontrada",
+            text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
             icon: "error",
           })
+          return
         }
+
+        const userData = userSnap.data()
+        console.log('Datos del usuario:', userData)
+        const passwordMatch = await bcrypt.compare(password, userData.Contraseña)
+
+        if (!passwordMatch) {
+          console.log('Contraseña incorrecta')
+          await swal({
+            title: "Error",
+            text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
+            icon: "error",
+          })
+          return
+        }
+
+        console.log('Inicio de sesión exitoso')
+        await swal({
+          title: "¡Bienvenido!",
+          text: "Inicio de sesión exitoso",
+          icon: "success",
+        })
+
+        localStorage.setItem(userType === 'maestro' ? 'maestroId' : 'labTechId', userMatricula);
+
+        router.push(userType === 'maestro' ? '/lista-asistencias' : '/panel-laboratorista')
       }
     } catch (error) {
       console.error('Error al procesar la solicitud:', error)
@@ -330,40 +432,64 @@ export default function InterfazLaboratorio() {
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const adminQuery = query(collection(db, 'Administrador'), where("email", "==", adminEmail))
-      const adminSnapshot = await getDocs(adminQuery)
-
-      if (!adminSnapshot.empty) {
-        const adminDoc = adminSnapshot.docs[0]
-        const adminData = adminDoc.data()
-        const passwordMatch = await bcrypt.compare(adminPassword, adminData.contraseña)
-        if (passwordMatch) {
-          await swal({
-            title: "¡Bienvenido Administrador!",
-            text: "Inicio de sesión exitoso",
-            icon: "success",
-          })
-          setIsAdminLoginOpen(false)
-          router.push('/AdminPanel')
-        } else {
-          await swal({
-            title: "Error",
-            text: "Contraseña incorrecta",
-            icon: "error",
-          })
-        }
-      } else {
+      if (!adminEmail || !adminPassword) {
         await swal({
           title: "Error",
-          text: "Email de administrador no encontrado",
+          text: "Por favor, completa todos los campos.",
           icon: "error",
-        })
+        });
+        return;
       }
+
+      const adminRef = doc(db, 'Administrador', adminEmail)
+      const adminSnap = await getDoc(adminRef)
+
+      if (!adminSnap.exists()) {
+        await swal({
+          title: "Error",
+          text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
+          icon: "error",
+        });
+        return;
+      }
+
+      const adminData = adminSnap.data()
+      if (!adminData || !adminData.Contraseña) {
+        await swal({
+          title: "Error",
+          text: "Error en los datos del administrador. Por favor, contacte al soporte técnico.",
+          icon: "error",
+        });
+        return;
+      }
+
+      const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
+
+      if (!passwordMatch) {
+        await swal({
+          title: "Error",
+          text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
+          icon: "error",
+        });
+        return;
+      }
+
+      await swal({
+        title: "¡Bienvenido Administrador!",
+        text: "Inicio de sesión exitoso",
+        icon: "success",
+      })
+      setIsAdminLoginOpen(false)
+      router.push('/AdminPanel')
     } catch (error) {
       console.error('Error al procesar la solicitud:', error)
+      let errorMessage = "Ha ocurrido un error. Por favor, intenta de nuevo."
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       await swal({
         title: "Error",
-        text: "Ha ocurrido un error. Por favor, intenta de nuevo.",
+        text: errorMessage,
         icon: "error",
       })
     }
@@ -372,11 +498,15 @@ export default function InterfazLaboratorio() {
   const carouselImages = [
     "/fondozugey.jpg",
     "/fondo_de_pantalla_de_salon.jpeg",
-    "/fondoitspp.jpg",
-    "/tecnm imagen.jpg",
-    "/Diseño sin título (2).png",
-    "/Diseño sin título (1).png",
+    "/FondoItspp.png",
+    "/tecnmImagen.png",
+    "/LogoSistemas.png",
+    "/momos.png",
   ]
+
+  if (isLoading) {
+    return <Loader />
+  }
 
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8 ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-green-50'} transition-colors duration-300`}>
@@ -397,7 +527,7 @@ export default function InterfazLaboratorio() {
         </motion.div>
       </AnimatePresence>
 
-      <Card className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-[0_10px_20px_rgba(0,0,0,0.1)] transition-colors duration-300 rounded-[1rem] sm:rounded-[1.5rem] md:rounded-[2rem]`}>
+      <Card className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-[20px_20px_60px_#bebebe,-20px_-20px_60px_#ffffff] dark:shadow-[20px_20px_60px_#1c1c1c,-20px_-20px_60px_#262626] transition-colors duration-300 rounded-[2rem]`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div 
             key={activeTab}
@@ -435,7 +565,7 @@ export default function InterfazLaboratorio() {
                   />
                 </div>
               </div>
-              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-4 sm:p-5 md:p-6 pt-10 sm:pt-12 shadow-[0_4px_6px_rgba(0,0,0,0.1)] rounded-t-[1rem] sm:rounded-t-[1.5rem] md:rounded-t-[2rem]`}>
+              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-4 sm:p-5 md:p-6 pt-10 sm:pt-12 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] rounded-t-[2rem]`}>
                 <div className="text-center">
                   <CardTitle className={`text-4xl md:text-5xl lg:text-6xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-4`}>
                     <Computer className="w-16 h-16 md:w-20 md:h-20 mb-2" />
@@ -452,8 +582,8 @@ export default function InterfazLaboratorio() {
                     </motion.span>
                   </CardTitle>
                 </div>
-                <div className="mt-4 flex items-center justify-center space-x-4">
-                  <div className={`flex items-center space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200`}>
+                <div className={`mt-4 flex items-center justify-center space-x-4`}>
+                  <div className={`flex items-center space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626]`}>
                     <Sun className={`h-5 w-5 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
                     <Switch
                       checked={theme === 'dark'}
@@ -475,13 +605,12 @@ export default function InterfazLaboratorio() {
                     // Clear all input fields
                     setPassword('');
                     setMatricula('');
-                    setMaestroMatricula('');
-                    setLabTechMatricula('');
+                    setUserMatricula('');
                     setEquipo('');
                   }} 
                   className="h-full flex flex-col"
                 >
-                  <TabsList className="grid w-full grid-cols-2 h-12 sm:h-14 mb-4 sm:mb-6 md:mb-8 rounded-xl sm:rounded-2xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800 shadow-inner">
+                  <TabsList className="grid w-full grid-cols-2 h-12 sm:h-14 mb-4 sm:mb-6 md:mb-8 rounded-xl sm:rounded-2xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626]">
                     {['estudiante', 'maestro'].map((tab) => (
                       <TabsTrigger
                         key={tab}
@@ -494,8 +623,8 @@ export default function InterfazLaboratorio() {
                           } 
                           transition-all duration-300 z-10 h-full rounded-xl
                           data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700
-                          data-[state=active]:shadow-[inset_0_1px_1px_rgba(0,0,0,0.075),0_0_8px_rgba(102,175,233,0.6)]
-                          hover:bg-opacity-80 hover:scale-105 hover:shadow-lg
+                          data-[state=active]:shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:data-[state=active]:shadow-[5px_5px_10px_#1c1c1c,-5px_-5px_10px_#262626]
+                          hover:bg-opacity-80 hover:scale-105 hover:shadow-[10px_10px_20px_#bebebe,-10px_-10px_20px_#ffffff] dark:hover:shadow-[10px_10px_20px_#151515,-10px_-10px_20px_#292929]
                         `}
                       >
                         <motion.div
@@ -528,7 +657,7 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
                               />
                             </div>
                             <div className="space-y-3">
@@ -538,7 +667,7 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}>
+                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}>
                                   <SelectValue placeholder="Seleccione el equipo" />
                                 </SelectTrigger>
                                 <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
@@ -555,27 +684,44 @@ export default function InterfazLaboratorio() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            {isRegularClassStarted && isGuestClassStarted && (
+                              <div className="space-y-3">
+                                <Label htmlFor="class-choice" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccionar Clase</Label>
+                                <Select onValueChange={(value) => setClassChoice(value as 'regular' | 'guest')} value={classChoice || ''}>
+                                  <SelectTrigger id="class-choice" className={`${
+                                    theme === 'dark'
+                                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                  } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}>
+                                    <SelectValue placeholder="Seleccione la clase" />
+                                  </SelectTrigger>
+                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
+                                    <SelectItem value="regular" className="text-lg md:text-xl">Clase Regular</SelectItem>
+                                    <SelectItem value="guest" className="text-lg md:text-xl">Clase Invitado</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                           </div>
                           <Button 
                             type="submit" 
                             className={`w-full ${
-                              isClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
-                            } transition-all duration-200 text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
-                            disabled={!isClassStarted}
+                              isRegularClassStarted || isGuestClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
+                            } transition-all duration-200 text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:shadow-[5px_5px_10px_#1c1c1c,-5px_-5px_10px_#262626] hover:shadow-[10px_10px_20px_#bebebe,-10px_-10px_20px_#ffffff] dark:hover:shadow-[10px_10px_20px_#151515,-10px_-10px_20px_#292929]`}
+                            disabled={!isRegularClassStarted && !isGuestClassStarted}
                           >
-                            {isClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
+                            {isRegularClassStarted || isGuestClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
                           </Button>
                         </form>
                       </TabsContent>
                       <TabsContent value="maestro" className="flex-grow">
                         <div className="space-y-6 mb-6">
-                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccione su rol</Label>
+                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:textxl`}>Seleccione su rol</Label>
                           <div className="flex space-x-4">
                             <Button
                               onClick={() => {
                                 setUserType('maestro');
-                                setMaestroMatricula('');
-                                setLabTechMatricula('');
+                                setUserMatricula('');
                                 setPassword('');
                               }}
                               className={`flex-1 ${userType === 'maestro' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
@@ -585,8 +731,7 @@ export default function InterfazLaboratorio() {
                             <Button
                               onClick={() => {
                                 setUserType('laboratorista');
-                                setMaestroMatricula('');
-                                setLabTechMatricula('');
+                                setUserMatricula('');
                                 setPassword('');
                               }}
                               className={`flex-1 ${userType === 'laboratorista' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
@@ -599,20 +744,20 @@ export default function InterfazLaboratorio() {
                         <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
                           <div className="space-y-6">
                             <div className="space-y-3">
-                              <Label htmlFor={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"} className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>
+                              <Label htmlFor="userMatricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} textlg md:text-xl`}>
                                 Matrícula del {userType === 'maestro' ? 'Maestro' : 'Laboratorista'}
                               </Label>
                               <Input
-                                id={userType === 'maestro' ? "maestroMatricula" : "labTechMatricula"}
+                                id="userMatricula"
                                 type="text"
                                 placeholder={`Ingrese su matrícula de ${userType === 'maestro' ? 'maestro' : 'laboratorista'}`}
-                                value={userType === 'maestro' ? maestroMatricula : labTechMatricula}
-                                onChange={(e) => userType === 'maestro' ? handleNumberInput(e, setMaestroMatricula) : handleNumberInput(e, setLabTechMatricula)}
+                                value={userMatricula}
+                                onChange={(e) => handleNumberInput(e, setUserMatricula)}
                                 className={`${
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
                               />
                             </div>
                             <div className="space-y-3">
@@ -627,11 +772,12 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                                } border text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
                               />
                             </div>
                           </div>
-                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-base sm:text-lg md:text-xl py-4 sm:py-5 md:py-6 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:shadow-[5px_5px_10px_#1c1c1c,-5px_-5px_10px_#262626] hover:shadow-[10px_10px_20px_#bebebe,-10px_-10px_20px_#ffffff] dark:hover:shadow-[10px_10px_20px_#151515,-10px_-10px_20px_#292929]`}
+                          >
                             Iniciar Sesión
                           </Button>
                         </form>
@@ -657,17 +803,18 @@ export default function InterfazLaboratorio() {
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="adminEmail" className={`${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>
-                  Email
+                  ID de Administrador
                 </Label>
                 <Input
                   id="adminEmail"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="Ingrese el ID de administrador"
                   className={`${
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
                 />
               </div>
               <div className="space-y-2">
@@ -683,7 +830,7 @@ export default function InterfazLaboratorio() {
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] focus:shadow-[0_0_0_3px_rgba(66,153,225,0.5)]`}
+                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
                 />
               </div>
               <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-lg sm:rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
