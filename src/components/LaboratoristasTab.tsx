@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Pencil, Trash2 } from 'lucide-react'
-import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore } from 'firebase/firestore'
+import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore, getDoc } from 'firebase/firestore'
 import Swal from 'sweetalert2'
 import bcrypt from 'bcryptjs'
 import React from 'react'
@@ -63,16 +63,32 @@ export function LaboratoristasTab({ db, isDarkMode, currentColors }: { db: Fires
     e.preventDefault()
     try {
       const { Matricula, Contraseña, ...restoDatosLaboratorista } = datosLaboratorista
-      let hashedPassword = Contraseña
       
-      if (!editando || (editando && Contraseña !== '')) {
-        hashedPassword = await bcrypt.hash(Contraseña, 10)
-      }
-      
-      if (editando) {
+      if (!editando) {
+        // Check if the matricula already exists when adding a new laboratory technician
+        const laboratoristaDoc = doc(db, 'Laboratoristas', Matricula)
+        const laboratoristaSnapshot = await getDoc(laboratoristaDoc)
+
+        if (laboratoristaSnapshot.exists()) {
+          await Swal.fire({
+            title: "Error",
+            text: "Esta matrícula ya existe. Por favor, use una matrícula diferente.",
+            icon: "error",
+          })
+          return
+        }
+
+        const hashedPassword = await bcrypt.hash(Contraseña, 10)
+        await setDoc(laboratoristaDoc, { ...restoDatosLaboratorista, Contraseña: hashedPassword })
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: "Laboratorista agregado correctamente",
+          icon: "success",
+        })
+      } else {
         const updateData = { ...restoDatosLaboratorista }
-        if (hashedPassword !== '') {
-          updateData.Contraseña = hashedPassword
+        if (Contraseña !== '') {
+          updateData.Contraseña = await bcrypt.hash(Contraseña, 10)
         }
         await updateDoc(doc(db, 'Laboratoristas', Matricula), updateData)
         await Swal.fire({
@@ -81,13 +97,6 @@ export function LaboratoristasTab({ db, isDarkMode, currentColors }: { db: Fires
           icon: "success",
         })
         setEditando(false)
-      } else {
-        await setDoc(doc(db, 'Laboratoristas', Matricula), { ...restoDatosLaboratorista, Contraseña: hashedPassword })
-        await Swal.fire({
-          title: "¡Éxito!",
-          text: "Laboratorista agregado correctamente",
-          icon: "success",
-        })
       }
       setDatosLaboratorista({ Matricula: '', Nombre: '', Apellido: '', Email: '', Contraseña: '' })
       cargarLaboratoristas()

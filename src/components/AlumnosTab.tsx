@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, Trash2 } from 'lucide-react'
-import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore } from 'firebase/firestore'
+import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore, getDoc, where } from 'firebase/firestore'
 import Swal from 'sweetalert2'
 import React from 'react';
 
@@ -85,7 +85,30 @@ export function AlumnosTab({ db, isDarkMode, currentColors }: { db: Firestore; i
     e.preventDefault()
     try {
       const { Matricula, ...restoDatosAlumno } = datosAlumno
-      if (editando) {
+
+      if (!editando) {
+        // Check if the matricula already exists only when adding a new student
+        const alumnoDoc = doc(db, 'Alumnos', Matricula)
+        const alumnoSnapshot = await getDoc(alumnoDoc)
+
+        if (alumnoSnapshot.exists()) {
+          await Swal.fire({
+            title: "Error",
+            text: "Esta matrícula ya existe. Por favor, use una matrícula diferente.",
+            icon: "error",
+          })
+          return
+        }
+
+        // Add new student
+        await setDoc(alumnoDoc, restoDatosAlumno)
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: "Alumno agregado correctamente",
+          icon: "success",
+        })
+      } else {
+        // Update existing student
         await updateDoc(doc(db, 'Alumnos', Matricula), restoDatosAlumno)
         await Swal.fire({
           title: "¡Éxito!",
@@ -93,13 +116,6 @@ export function AlumnosTab({ db, isDarkMode, currentColors }: { db: Firestore; i
           icon: "success",
         })
         setEditando(false)
-      } else {
-        await setDoc(doc(db, 'Alumnos', Matricula), restoDatosAlumno)
-        await Swal.fire({
-          title: "¡Éxito!",
-          text: "Alumno agregado correctamente",
-          icon: "success",
-        })
       }
       setDatosAlumno({ Matricula: '', Nombre: '', Apellido: '', Carrera: '', Semestre: '', Turno: '', Grupo: '' })
       cargarAlumnos()

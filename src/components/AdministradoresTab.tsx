@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Pencil, Trash2 } from 'lucide-react'
-import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore } from 'firebase/firestore'
+import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore, getDoc } from 'firebase/firestore'
 import Swal from 'sweetalert2'
 import bcrypt from 'bcryptjs'
 import React from 'react'
@@ -61,29 +61,26 @@ export function AdministradoresTab({ db, isDarkMode, currentColors }: { db: Fire
     e.preventDefault()
     try {
       const { Matricula, Contraseña, ...restoDatosAdministrador } = datosAdministrador as { Matricula: string; Contraseña?: string; [key: string]: any }
-      let hashedPassword: string | undefined = undefined
       
-      if (!editando || (editando && Contraseña && Contraseña !== '')) {
-        hashedPassword = await bcrypt.hash(Contraseña!, 10)
-      }
-      
-      if (editando) {
-        const updateData: Partial<Administrador> = { ...restoDatosAdministrador };
-        if (hashedPassword) {
-          updateData.Contraseña = hashedPassword;
+      if (!editando) {
+        // Check if the matricula already exists when adding a new administrator
+        const administradorDoc = doc(db, 'Administrador', Matricula)
+        const administradorSnapshot = await getDoc(administradorDoc)
+
+        if (administradorSnapshot.exists()) {
+          await Swal.fire({
+            title: "Error",
+            text: "Esta matrícula ya existe. Por favor, use una matrícula diferente.",
+            icon: "error",
+          })
+          return
         }
-        await updateDoc(doc(db, 'Administrador', Matricula), updateData);
-        await Swal.fire({
-          title: "¡Éxito!",
-          text: "Administrador actualizado correctamente",
-          icon: "success",
-        })
-        setEditando(false)
-      } else {
-        if (!hashedPassword) {
+
+        if (!Contraseña) {
           throw new Error("La contraseña es requerida para crear un nuevo administrador");
         }
-        await setDoc(doc(db, 'Administrador', Matricula), {
+        const hashedPassword = await bcrypt.hash(Contraseña, 10)
+        await setDoc(administradorDoc, {
           ...restoDatosAdministrador,
           Contraseña: hashedPassword
         } as Administrador);
@@ -92,6 +89,18 @@ export function AdministradoresTab({ db, isDarkMode, currentColors }: { db: Fire
           text: "Administrador agregado correctamente",
           icon: "success",
         })
+      } else {
+        const updateData: Partial<Administrador> = { ...restoDatosAdministrador };
+        if (Contraseña) {
+          updateData.Contraseña = await bcrypt.hash(Contraseña, 10);
+        }
+        await updateDoc(doc(db, 'Administrador', Matricula), updateData);
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: "Administrador actualizado correctamente",
+          icon: "success",
+        })
+        setEditando(false)
       }
       setDatosAdministrador({ Matricula: '', Nombre: '', Apellido: '', Email: '', Contraseña: '' })
       cargarAdministradores()

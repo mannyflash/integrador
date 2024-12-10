@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Pencil, Trash2 } from 'lucide-react'
-import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore } from 'firebase/firestore'
+import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore, getDoc } from 'firebase/firestore'
 import Swal from 'sweetalert2'
 import bcrypt from 'bcryptjs'
 import React from 'react'
@@ -66,12 +66,36 @@ export function DocentesTab({ db, isDarkMode, currentColors }: { db: Firestore; 
     e.preventDefault()
     try {
       const { Matricula, Contraseña, ...restoDatosDocente } = datosDocente
-      const hashedPassword = Contraseña ? await bcrypt.hash(Contraseña, 10) : undefined
       
-      if (editando) {
-        const updateData = hashedPassword 
-          ? { ...restoDatosDocente, Contraseña: hashedPassword }
-          : restoDatosDocente
+      if (!editando) {
+        // Check if the matricula already exists when adding a new teacher
+        const docenteDoc = doc(db, 'Docentes', Matricula)
+        const docenteSnapshot = await getDoc(docenteDoc)
+
+        if (docenteSnapshot.exists()) {
+          await Swal.fire({
+            title: "Error",
+            text: "Esta matrícula ya existe. Por favor, use una matrícula diferente.",
+            icon: "error",
+          })
+          return
+        }
+
+        if (!Contraseña) {
+          throw new Error("La contraseña es requerida para nuevos docentes")
+        }
+        const hashedPassword = await bcrypt.hash(Contraseña, 10)
+        await setDoc(docenteDoc, { ...restoDatosDocente, Contraseña: hashedPassword })
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: "Docente agregado correctamente",
+          icon: "success",
+        })
+      } else {
+        const updateData = { ...restoDatosDocente }
+        if (Contraseña) {
+          updateData.Contraseña = await bcrypt.hash(Contraseña, 10)
+        }
         await updateDoc(doc(db, 'Docentes', Matricula), updateData)
         await Swal.fire({
           title: "¡Éxito!",
@@ -79,16 +103,6 @@ export function DocentesTab({ db, isDarkMode, currentColors }: { db: Firestore; 
           icon: "success",
         })
         setEditando(false)
-      } else {
-        if (!hashedPassword) {
-          throw new Error("La contraseña es requerida para nuevos docentes")
-        }
-        await setDoc(doc(db, 'Docentes', Matricula), { ...restoDatosDocente, Contraseña: hashedPassword })
-        await Swal.fire({
-          title: "¡Éxito!",
-          text: "Docente agregado correctamente",
-          icon: "success",
-        })
       }
       setDatosDocente({ Matricula: '', Nombre: '', Apellido: '', Email: '', Contraseña: '', Departamento: '' })
       cargarDocentes()

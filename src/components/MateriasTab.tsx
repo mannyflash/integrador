@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Pencil, Trash2 } from 'lucide-react'
-import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore } from 'firebase/firestore'
+import { collection, setDoc, doc, getDocs, query, deleteDoc, updateDoc, Firestore, where, getDoc } from 'firebase/firestore'
 import Swal from 'sweetalert2'
 import React from 'react'
 
@@ -85,24 +85,38 @@ export function MateriasTab({ db, isDarkMode, currentColors }: { db: Firestore; 
   const manejarEnvio = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     try {
-      const { ID, ...restoDatosMateria } = datosMateria
-      
-      if (editando) {
-        await updateDoc(doc(db, 'Materias', ID), restoDatosMateria)
+      const { ID, NombreMateria, ...restoDatosMateria } = datosMateria
+    
+      if (!editando) {
+        // Check if the subject name already exists when adding a new subject
+        const materiasRef = collection(db, 'Materias')
+        const nombreMateriaQuery = query(materiasRef, where("NombreMateria", "==", NombreMateria))
+        const nombreMateriaQuerySnapshot = await getDocs(nombreMateriaQuery)
+
+        if (!nombreMateriaQuerySnapshot.empty) {
+          await Swal.fire({
+            title: "Error",
+            text: "Ya existe una materia con este nombre. Por favor, use un nombre diferente.",
+            icon: "error",
+          })
+          return
+        }
+
+        const nuevoID = doc(collection(db, 'Materias')).id
+        await setDoc(doc(db, 'Materias', nuevoID), { NombreMateria, ...restoDatosMateria })
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: "Materia agregada correctamente",
+          icon: "success",
+        })
+      } else {
+        await updateDoc(doc(db, 'Materias', ID), { NombreMateria, ...restoDatosMateria })
         await Swal.fire({
           title: "¡Éxito!",
           text: "Materia actualizada correctamente",
           icon: "success",
         })
         setEditando(false)
-      } else {
-        const nuevoID = doc(collection(db, 'Materias')).id
-        await setDoc(doc(db, 'Materias', nuevoID), restoDatosMateria)
-        await Swal.fire({
-          title: "¡Éxito!",
-          text: "Materia agregada correctamente",
-          icon: "success",
-        })
       }
       setDatosMateria({ ID: '', NombreMateria: '', MaestroID: '', Semestre: '' })
       cargarMaterias()
