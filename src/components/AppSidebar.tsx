@@ -305,7 +305,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
     const margin = 10
 
     // Add ITSPP logo in the upper left corner
-    doc.addImage('/itspp-logo.png', 'PNG', margin, margin, 25, 25)
+    doc.addImage('/FondoItspp.png', 'PNG', margin, margin, 25, 25)
 
     // Add header text centered
     doc.setFontSize(16)
