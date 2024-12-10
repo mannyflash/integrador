@@ -509,7 +509,7 @@ export default function InterfazLaboratorio() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-green-50'} transition-colors duration-300`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-green-50'} transition-colors duration-300`}>
       <div className="fixed top-4 left-4 z-50">
         <Sidebar isDarkMode={theme === 'dark'} onAdminLogin={() => setIsAdminLoginOpen(true)} adminLoginText="Administrador"/>
       </div>
@@ -521,21 +521,21 @@ export default function InterfazLaboratorio() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-green-800'} mb-4 sm:mb-6 text-center z-10 p-2 sm:p-4 rounded-xl max-w-[90%] sm:max-w-[80%] mx-auto overflow-hidden`}
+          className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-green-800'} mb-4 text-center z-10 p-2 rounded-xl max-w-[90%] mx-auto overflow-hidden`}
         >
           {welcomeMessages[currentMessageIndex]}
         </motion.div>
       </AnimatePresence>
 
-      <Card className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-lg rounded-2xl`}>
+      <Card className={`w-[95vw] h-[90vh] max-w-[1600px] max-h-[900px] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-lg rounded-2xl`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div 
             key={activeTab}
-            className="flex flex-col lg:flex-row min-h-[600px] relative overflow-hidden rounded-2xl"
+            className="flex flex-col lg:flex-row h-full relative overflow-hidden rounded-2xl"
             {...TabAnimation}
           >
             <motion.div 
-              className={`lg:w-2/5 relative h-64 lg:h-auto ${isReversed ? 'order-last' : 'order-first'}`}
+              className={`lg:w-2/5 relative h-1/3 lg:h-full ${isReversed ? 'order-last' : 'order-first'}`}
               custom={isReversed}
               variants={SlideAnimation}
               initial="initial"
@@ -546,15 +546,15 @@ export default function InterfazLaboratorio() {
             </motion.div>
 
             <motion.div 
-              className={`lg:w-3/5 relative flex flex-col ${isReversed ? 'order-first' : 'order-last'}`}
+              className={`lg:w-3/5 relative flex flex-col h-2/3 lg:h-full ${isReversed ? 'order-first' : 'order-last'}`}
               custom={!isReversed}
               variants={SlideAnimation}
               initial="initial"
               animate="animate"
               exit="exit"
             >
-              <div className="absolute top-0 left-0 right-0 h-16 sm:h-20 flex justify-center items-center z-10 bg-white bg-opacity-75 dark:bg-gray-800 dark:bg-opacity-75">
-                <div className="w-32 sm:w-40 h-16 sm:h-20 relative">
+              <div className="absolute top-0 left-0 right-0 h-16 flex justify-center items-center z-10 bg-white bg-opacity-75 dark:bg-gray-800 dark:bg-opacity-75">
+                <div className="w-32 h-16 relative">
                   <Image
                     src="/logo itspp.jpeg"
                     alt="Logos institucionales"
@@ -565,10 +565,10 @@ export default function InterfazLaboratorio() {
                   />
                 </div>
               </div>
-              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-4 md:p-6`}>
+              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-4`}>
                 <div className="text-center">
-                  <CardTitle className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-2 sm:mb-4`}>
-                    <Computer className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 mb-2" />
+                  <CardTitle className={`text-2xl md:text-3xl lg:text-4xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-2`}>
+                    <Computer className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 mb-2" />
                     <motion.span
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -582,27 +582,26 @@ export default function InterfazLaboratorio() {
                     </motion.span>
                   </CardTitle>
                 </div>
-                <div className={`mt-4 flex items-center justify-center space-x-4`}>
-                  <div className={`flex items-center space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626]`}>
-                    <Sun className={`h-5 w-5 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
+                <div className={`mt-2 flex items-center justify-center space-x-4`}>
+                  <div className={`flex items-center space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200`}>
+                    <Sun className={`h-4 w-4 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
                     <Switch
                       checked={theme === 'dark'}
                       onCheckedChange={handleThemeToggle}
                       className={`${theme === 'dark' ? colors.dark.switchBackground : colors.light.switchBackground} data-[state=checked]:bg-green-600`}
                     />
-                    <Moon className={`h-5 w-5 ${theme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
+                    <Moon className={`h-4 w-4 ${theme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
                   </div>
                 </div>
               </CardHeader>
               
-              <CardContent className={`p-2 sm:p-4 md:p-6 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-lg sm:rounded-b-xl md:rounded-b-2xl`}>
+              <CardContent className={`p-4 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-2xl`}>
                 <Tabs 
                   value={activeTab} 
                   onValueChange={(value) => {
                     setIsReversed(value === 'estudiante' ? false : true);
                     setActiveTab(value as UserType);
                     setUserType('maestro');
-                    // Clear all input fields
                     setPassword('');
                     setMatricula('');
                     setUserMatricula('');
@@ -610,13 +609,13 @@ export default function InterfazLaboratorio() {
                   }} 
                   className="h-full flex flex-col"
                 >
-                  <TabsList className="grid w-full grid-cols-2 h-12 mb-4 rounded-xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800">
+                  <TabsList className="grid w-full grid-cols-2 h-10 mb-4 rounded-xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800">
                     {['estudiante', 'maestro'].map((tab) => (
                       <TabsTrigger
                         key={tab}
                         value={tab}
                         className={`
-                          relative flex items-center justify-center text-sm md:text-base
+                          relative flex items-center justify-center text-xs sm:text-sm md:text-base
                           ${theme === 'dark'
                             ? 'text-gray-400 data-[state=active]:text-white'
                             : 'text-green-700 data-[state=active]:text-gray-900'
@@ -630,8 +629,8 @@ export default function InterfazLaboratorio() {
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                         >
-                          {tab === 'estudiante' && <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 mr-2" />}
-                          {tab === 'maestro' && <UserCog className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 mr-2" />}
+                          {tab === 'estudiante' && <User className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />}
+                          {tab === 'maestro' && <UserCog className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />}
                           {tab.charAt(0).toUpperCase() + tab.slice(1)}
                         </motion.div>
                       </TabsTrigger>
@@ -641,10 +640,10 @@ export default function InterfazLaboratorio() {
                   <div className="flex-grow overflow-y-auto">
                     <AnimatePresence mode="wait">
                       <TabsContent value="estudiante" className="flex-grow">
-                        <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
-                          <div className="space-y-6">
-                            <div className="space-y-3">
-                              <Label htmlFor="matricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Matrícula</Label>
+                        <form onSubmit={handleSubmit} className="space-y-4 h-full flex flex-col justify-between">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="matricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>Matrícula</Label>
                               <Input
                                 id="matricula"
                                 type="text"
@@ -655,17 +654,17 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 rounded-lg transition-all duration-200`}
                               />
                             </div>
-                            <div className="space-y-3">
-                              <Label htmlFor="equipo" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Número de Equipo</Label>
+                            <div className="space-y-2">
+                              <Label htmlFor="equipo" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>Número de Equipo</Label>
                               <Select onValueChange={setEquipo} value={equipo}>
                                 <SelectTrigger id="equipo" className={`${
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`} >
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 rounded-lg transition-all duration-200`}>
                                   <SelectValue placeholder="Seleccione el equipo" />
                                 </SelectTrigger>
                                 <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
@@ -674,7 +673,7 @@ export default function InterfazLaboratorio() {
                                       key={equipment.id} 
                                       value={equipment.id}
                                       disabled={equipment.fueraDeServicio}
-                                      className={`text-lg md:text-xl ${equipment.fueraDeServicio ? 'text-gray-400' : ''}`}
+                                      className={`text-xs sm:text-sm md:text-base ${equipment.fueraDeServicio ? 'text-gray-400' : ''}`}
                                     >
                                       {equipment.id === 'personal' ? 'Equipo Personal' : `Equipo ${equipment.id}`} {equipment.fueraDeServicio ? '(Fuera de servicio)' : ''}
                                     </SelectItem>
@@ -683,19 +682,19 @@ export default function InterfazLaboratorio() {
                               </Select>
                             </div>
                             {isRegularClassStarted && isGuestClassStarted && (
-                              <div className="space-y-3">
-                                <Label htmlFor="class-choice" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Seleccionar Clase</Label>
+                              <div className="space-y-2">
+                                <Label htmlFor="class-choice" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>Seleccionar Clase</Label>
                                 <Select onValueChange={(value) => setClassChoice(value as 'regular' | 'guest')} value={classChoice || ''}>
                                   <SelectTrigger id="class-choice" className={`${
                                     theme === 'dark'
                                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                  } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`} >
+                                  } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 rounded-lg transition-all duration-200`}>
                                     <SelectValue placeholder="Seleccione la clase" />
                                   </SelectTrigger>
-                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme ==='dark' ? 'border-gray-600' : 'border-green-300'}`}>
-                                    <SelectItem value="regular" className="text-lg md:text-xl">Clase Regular</SelectItem>
-                                    <SelectItem value="guest" className="text-lg md:text-xl">Clase Invitado</SelectItem>
+                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
+                                    <SelectItem value="regular" className="text-xs sm:text-sm md:text-base">Clase Regular</SelectItem>
+                                    <SelectItem value="guest" className="text-xs sm:text-sm md:text-base">Clase Invitado</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -705,7 +704,7 @@ export default function InterfazLaboratorio() {
                             type="submit" 
                             className={`w-full ${
                               isRegularClassStarted || isGuestClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
-                            } transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#1c1c1c,-3px_-3px_6px_#262626] hover:shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:hover:shadow-[5px_5px_10px_#151515,-5px_-5px_10px_#292929]`}
+                            } transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0`}
                             disabled={!isRegularClassStarted && !isGuestClassStarted}
                           >
                             {isRegularClassStarted || isGuestClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
@@ -713,8 +712,8 @@ export default function InterfazLaboratorio() {
                         </form>
                       </TabsContent>
                       <TabsContent value="maestro" className="flex-grow">
-                        <div className="space-y-6 mb-6">
-                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:textxl`}>Seleccione su rol</Label>
+                        <div className="space-y-4 mb-4">
+                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>Seleccione su rol</Label>
                           <div className="flex space-x-4">
                             <Button
                               onClick={() => {
@@ -722,7 +721,7 @@ export default function InterfazLaboratorio() {
                                 setUserMatricula('');
                                 setPassword('');
                               }}
-                              className={`flex-1 ${userType === 'maestro' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === 'maestro' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} text-xs sm:text-sm md:text-base py-1 sm:py-2 rounded-lg`}
                             >
                               Maestro
                             </Button>
@@ -732,17 +731,17 @@ export default function InterfazLaboratorio() {
                                 setUserMatricula('');
                                 setPassword('');
                               }}
-                              className={`flex-1 ${userType === 'laboratorista' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === 'laboratorista' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} text-xs sm:text-sm md:text-base py-1 sm:py-2 rounded-lg`}
                             >
                               Laboratorista
                             </Button>
                           </div>
                         </div>
                         
-                        <form onSubmit={handleSubmit} className="space-y-6 h-full flex flex-col justify-between">
-                          <div className="space-y-6">
-                            <div className="space-y-3">
-                              <Label htmlFor="userMatricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} textlg md:text-xl`}>
+                        <form onSubmit={handleSubmit} className="space-y-4 h-full flex flex-col justify-between">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="userMatricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>
                                 Matrícula del {userType === 'maestro' ? 'Maestro' : 'Laboratorista'}
                               </Label>
                               <Input
@@ -755,11 +754,11 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 rounded-lg transition-all duration-200`}
                               />
                             </div>
-                            <div className="space-y-3">
-                              <Label htmlFor="password" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-lg md:text-xl`}>Contraseña</Label>
+                            <div className="space-y-2">
+                              <Label htmlFor="password" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base md:text-lg`}>Contraseña</Label>
                               <Input
                                 id="password"
                                 type="password"
@@ -770,12 +769,11 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 rounded-lg transition-all duration-200`}
                               />
                             </div>
                           </div>
-                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#1c1c1c,-3px_-3px_6px_#262626] hover:shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:hover:shadow-[5px_5px_10px_#151515,-5px_-5px_10px_#292929]`}
-                          >
+                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0`}>
                             Iniciar Sesión
                           </Button>
                         </form>
@@ -791,9 +789,9 @@ export default function InterfazLaboratorio() {
 
       {isAdminLoginOpen && (
         <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-2xl sm:rounded-3xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)] p-4 sm:p-6`}>
+          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-2xl border-none shadow-[0_10px_20px_rgba(0,0,0,0.2)] p-4`}>
             <DialogHeader>
-              <DialogTitle className={`text-2xl font-bold ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
+              <DialogTitle className={`text-xl font-bold ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
               <DialogDescription className={`${theme === 'dark' ? colors.dark.descriptionText : colors.light.descriptionText}`}>
                 Ingrese sus credenciales de administrador
               </DialogDescription>
@@ -812,7 +810,7 @@ export default function InterfazLaboratorio() {
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
+                  } border rounded-lg transition-all duration-200`}
                 />
               </div>
               <div className="space-y-2">
@@ -828,10 +826,10 @@ export default function InterfazLaboratorio() {
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
+                  } border rounded-lg transition-all duration-200`}
                 />
               </div>
-              <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-lg sm:rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
+              <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-lg py-2`}>
                 Iniciar Sesión
               </Button>
             </form>
