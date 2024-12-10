@@ -158,17 +158,14 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
   const exportarAPDF = async (practica: PracticaDetallada): Promise<void> => {
     const doc = new jsPDF()
     
-    // Add logo to the top-left corner
   doc.addImage("/FondoItspp.png", "PNG", 10, 10, 30, 30)
     
-    // Title
     doc.setFontSize(16)
     doc.text("TALLER DE PROGRAMACION", doc.internal.pageSize.width / 2, 25, { align: 'center' })
     doc.text("HOJA DE REGISTRO", doc.internal.pageSize.width / 2, 35, { align: 'center' })
     
-    // Information fields in two columns
     doc.setFontSize(12)
-    // Left column
+
     doc.text(`FECHA: ${formatearFecha(practica.fecha)}`, 14, 50)
     doc.text(`GRUPO: ${Array.from(new Set(practica.alumnos.map(a => a.grupo))).join(', ')}`, 14, 60)
     doc.text(`TURNO: ${Array.from(new Set(practica.alumnos.map(a => a.turno))).join(', ')}`, 14, 70)

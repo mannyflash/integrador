@@ -6,7 +6,7 @@ import { getFirestore, addDoc, collection, serverTimestamp } from 'firebase/fire
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { BarChart2, Calendar, Laptop, ClipboardList, Moon, Sun, UserPlus, BookOpen } from 'lucide-react'
+import { BarChart2, Calendar, Laptop, ClipboardList, Moon, Sun, UserPlus, BookOpen, LogOut } from 'lucide-react'
 import VistaReportes from '../components/VistaReportes'
 import VistaPracticas from '../components/VistaPracticas'
 import VistaHorario from '../components/VistaHorario'
@@ -15,6 +15,9 @@ import VistaMaestroInvitado from '../components/VistaMaestroInvitado'
 import VistaBitacora from '../components/VistaBitacora'
 import { firebaseConfig } from '../lib/constants'
 import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
+import { getAuth, signOut } from 'firebase/auth'
+import { useRouter } from 'next/router'
+import Swal from 'sweetalert2'
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
@@ -60,6 +63,7 @@ const colors = {
 export default function PanelLaboratorista() {
   const [theme, setThemeState] = useState<Theme>('light')
   const [vistaActual, setVistaActual] = useState<'reportes' | 'practicas' | 'horario' | 'equipos' | 'maestroInvitado' | 'bitacora'>('reportes')
+  const router = useRouter()
 
   useEffect(() => {
     const currentTheme = getTheme();
@@ -85,6 +89,31 @@ export default function PanelLaboratorista() {
       });
     } catch (error) {
       console.error('Error logging action:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    const result = await Swal.fire({
+      title: '¿Estás seguro?',
+      text: "¿Deseas cerrar sesión?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, cerrar sesión',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      const auth = getAuth();
+      try {
+        await signOut(auth);
+        await logAction('logout', 'User logged out');
+        router.push('http://localhost:3000');
+      } catch (error) {
+        console.error('Error logging out:', error);
+        Swal.fire('Error', 'No se pudo cerrar sesión', 'error');
+      }
     }
   };
 
@@ -115,6 +144,14 @@ export default function PanelLaboratorista() {
                 {vista.charAt(0).toUpperCase() + vista.slice(1)}
               </Button>
             ))}
+            <Button
+              variant="ghost"
+              className={`w-full justify-start mb-4 text-lg font-semibold ${modoColor.hoverBackground} ${modoColor.descriptionText}`}
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-5 w-5" />
+              Cerrar Sesión
+            </Button>
           </nav>
         </aside>
 

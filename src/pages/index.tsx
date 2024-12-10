@@ -562,7 +562,7 @@ export default function InterfazLaboratorio() {
                         ease: [0, 0.71, 0.2, 1.01]
                       }}
                     >
-                      Laboratorio Sistemas
+                      Laboratorio Programacion
                     </motion.span>
                   </CardTitle>
                 </div>

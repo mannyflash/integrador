@@ -307,10 +307,9 @@ export default function ListaAsistencias() {
     const pageHeight = doc.internal.pageSize.height
     const margin = 10
 
-    // Add ITSPP logo in the upper left corner
     doc.addImage('/FondoItspp.png', 'PNG', margin, margin, 25, 25)
 
-    // Add header text centered
+   
     doc.setFontSize(16)
     doc.setTextColor(0, 0, 0) // Black text color
     doc.text('TALLER DE PROGRAMACION', pageWidth / 2, margin + 10, { align: 'center' })
