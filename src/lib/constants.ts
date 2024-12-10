@@ -13,6 +13,9 @@ export const colors = {
     inputBackground: 'bg-white',
     inputBorder: 'border-green-300',
     inputText: 'text-green-800',
+    switchBackground: 'bg-green-200',
+    switchToggle: 'bg-white',
+    text: 'text-gray-800',
   },
   dark: {
     background: 'bg-gray-900',
@@ -28,6 +31,9 @@ export const colors = {
     inputBackground: 'bg-gray-700',
     inputBorder: 'border-gray-600',
     inputText: 'text-gray-100',
+    switchBackground: 'bg-gray-600',
+    switchToggle: 'bg-gray-300',
+    text: 'text-gray-200',
   },
 }
 

@@ -8,6 +8,7 @@ import Swal from 'sweetalert2'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import 'sweetalert2/dist/sweetalert2.css'
 
 import {
   Sidebar,
@@ -28,6 +29,7 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import styled, { createGlobalStyle } from 'styled-components'
 
 interface ClassInfo {
   id: string
@@ -37,6 +39,9 @@ interface ClassInfo {
   totalAsistencias: number
   maestroNombre: string
   maestroApellido: string
+  horaInicio: string
+  carrera: string;
+  grupo: string;
   alumnos: {
     id: string
     nombre: string
@@ -57,6 +62,12 @@ interface Practica {
   fecha: string
 }
 
+const GlobalStyle = createGlobalStyle`
+  .swal2-container {
+    z-index: 10000 !important;
+  }
+`
+
 export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left" }: { 
   maestroId: string
   materias: { id: string; nombre: string }[]
@@ -73,40 +84,51 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
     fecha: ''
   })
   const [classInfo, setClassInfo] = React.useState<ClassInfo[]>([])
-  const [selectedClassInfo, setSelectedClassInfo] = React.useState<ClassInfo | null>(null)
+  const [selectedClassInfo, setSelectedClassInfo] = React.useState<ClassInfo[]>([])
   const [practicas, setPracticas] = React.useState<Practica[]>([])
   const [editingPractica, setEditingPractica] = React.useState<Practica | null>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [isDialogOpen, setIsDialogOpen] = React.useState(false) 
   const { toast } = useToast()
+  const [dateFilter, setDateFilter] = React.useState('')
+  const [groupFilter, setGroupFilter] = React.useState('')
 
-  const fetchClassInfo = React.useCallback(async (materiaId: string, practicaId: string) => {
-    if (!maestroId || !materiaId || !practicaId) return
+  const fetchClassInfo = React.useCallback(async (materiaId: string) => {
+    if (!maestroId || !materiaId) return
     
-    const q = query(
+    let q = query(
       collection(db, 'ClassInformation'),
       where("maestroId", "==", maestroId),
-      where("materia", "==", materias.find(m => m.id === materiaId)?.nombre),
-      where("practica", "==", practicas.find(p => p.id === practicaId)?.Titulo)
+      where("materia", "==", materias.find(m => m.id === materiaId)?.nombre)
     )
     
+    if (dateFilter) {
+      q = query(q, where("fecha", "==", dateFilter))
+    }
+    
+    if (groupFilter) {
+      q = query(q, where("grupo", "==", groupFilter))
+    }
+    
     const querySnapshot = await getDocs(q)
-    if (!querySnapshot.empty) {
-      const data = querySnapshot.docs[0].data()
-      const info: ClassInfo = {
-        id: querySnapshot.docs[0].id,
+    const classInfoData: ClassInfo[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      classInfoData.push({
+        id: doc.id,
         materia: data.materia,
         practica: data.practica,
         fecha: data.fecha,
         totalAsistencias: data.totalAsistencias,
         maestroNombre: data.maestroNombre,
         maestroApellido: data.maestroApellido,
-        alumnos: data.alumnos
-      }
-      setSelectedClassInfo(info)
-    } else {
-      setSelectedClassInfo(null)
-    }
-  }, [maestroId, materias, practicas])
+        horaInicio: data.horaInicio || '',
+        carrera: data.alumnos && data.alumnos[0] ? data.alumnos[0].carrera : '',
+        grupo: data.alumnos && data.alumnos[0] ? data.alumnos[0].grupo : '',
+        alumnos: data.alumnos || []
+      })
+    })
+    setSelectedClassInfo(classInfoData)
+  }, [maestroId, materias, dateFilter, groupFilter])
 
   const fetchPracticas = React.useCallback(async (materiaId: string) => {
     if (!materiaId) return
@@ -124,15 +146,15 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
     if (selectedMateria) {
       fetchPracticas(selectedMateria)
       setSelectedPractica('')
-      setSelectedClassInfo(null)
+      setSelectedClassInfo([])
     }
   }, [selectedMateria, fetchPracticas])
 
   React.useEffect(() => {
-    if (selectedMateria && selectedPractica) {
-      fetchClassInfo(selectedMateria, selectedPractica)
+    if (selectedMateria) {
+      fetchClassInfo(selectedMateria)
     }
-  }, [selectedMateria, selectedPractica, fetchClassInfo])
+  }, [selectedMateria, dateFilter, groupFilter, fetchClassInfo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -185,7 +207,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
 
   const handleEdit = (practica: Practica) => {
     setEditingPractica(practica)
-    setIsEditDialogOpen(true)
+    setIsDialogOpen(true) 
   }
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -193,13 +215,15 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
     if (!editingPractica || !selectedMateria) return
 
     if (!editingPractica.Titulo || !editingPractica.Descripcion || !editingPractica.Duracion || !editingPractica.fecha) {
-      await Swal.fire({
+      toast({
         title: "Error",
-        text: "Por favor, complete todos los campos.",
-        icon: "error",
+        description: "Por favor, complete todos los campos.",
+        variant: "destructive",
       })
       return
     }
+
+    setIsDialogOpen(false) 
 
     const result = await Swal.fire({
       title: '¿Está seguro?',
@@ -224,7 +248,6 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
           icon: "success",
         })
 
-        setIsEditDialogOpen(false)
         fetchPracticas(selectedMateria)
       } catch (error) {
         console.error("Error al actualizar la práctica:", error)
@@ -273,50 +296,155 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
     }
   }
 
-  const exportToPDF = () => {
-    if (!selectedClassInfo) return
+  const exportToPDF = (classInfo: ClassInfo) => {
+    if (!classInfo) return
 
     const doc = new jsPDF()
-    doc.text(`Lista de Asistencia - ${selectedClassInfo.practica}`, 14, 15)
-    doc.text(`Materia: ${selectedClassInfo.materia}`, 14, 25)
-    doc.text(`Fecha: ${selectedClassInfo.fecha}`, 14, 35)
-    doc.text(`Total de Asistencias: ${selectedClassInfo.totalAsistencias}`, 14, 45)
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    const margin = 10
 
-    const tableColumn = ["#", "Nombre", "Apellido", "Carrera", "Semestre", "Grupo", "Turno", "Equipo"]
-    const tableRows = selectedClassInfo.alumnos.map((alumno, index) => [
-      index + 1,
-      alumno.nombre,
-      alumno.apellido,
-      alumno.carrera,
-      alumno.semestre,
-      alumno.grupo,
-      alumno.turno,
+    // Add ITSPP logo in the upper left corner
+    doc.addImage('/itspp-logo.png', 'PNG', margin, margin, 25, 25)
+
+    // Add header text centered
+    doc.setFontSize(16)
+    doc.setTextColor(0, 0, 0) // Black text color
+    doc.text('TALLER DE PROGRAMACION', pageWidth / 2, margin + 10, { align: 'center' })
+    doc.setFontSize(14)
+    doc.text('HOJA DE REGISTRO', pageWidth / 2, margin + 20, { align: 'center' })
+
+    // Form fields
+    doc.setFontSize(10)
+    const leftColX = margin
+    const rightColX = pageWidth / 2 + margin
+    let currentY = margin + 35
+
+    // Left column
+    doc.text(`FECHA: ${classInfo.fecha}`, leftColX, currentY)
+    doc.text(`GRUPO: ${classInfo.grupo}`, leftColX, currentY + 10)
+    doc.text(`HORA: ${classInfo.horaInicio}`, leftColX, currentY + 20)
+    doc.text(`MATERIA: ${classInfo.materia}`, leftColX, currentY + 30)
+
+    // Right column
+    doc.text(`CARRERA: ${classInfo.carrera}`, rightColX, currentY)
+    doc.text(`DOCENTE: ${classInfo.maestroNombre} ${classInfo.maestroApellido}`, rightColX, currentY + 10)
+    doc.text(`PRACTICA: ${classInfo.practica}`, rightColX, currentY + 20)
+    doc.text(`TOTAL ASISTENCIAS: ${classInfo.totalAsistencias}`, rightColX, currentY + 30)
+
+    currentY += 50
+
+    // Table
+    const tableHeaders = ['#', 'NOMBRE ALUMNO', 'NUM. PC']
+    const tableData = classInfo.alumnos.map((alumno, index) => [
+      (index + 1).toString(),
+      `${alumno.nombre} ${alumno.apellido}`,
       alumno.equipo
     ])
 
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 55,
-    })
+    // Pad the table to have at least 25 rows
+    const minRows = 25
+    while (tableData.length < minRows) {
+      tableData.push([
+        (tableData.length + 1).toString(),
+        '',
+        ''
+      ])
+    }
 
-    doc.save(`lista_asistencia_${selectedClassInfo.practica}.pdf`)
+    let finalY = currentY;
+    doc.autoTable({
+      head: [tableHeaders],
+      body: tableData,
+      startY: currentY,
+      theme: 'grid',
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+        textColor: [0, 0, 0],
+        lineWidth: 0.1
+      },
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold'
+      },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 20 }
+      },
+      didDrawPage: function(data: {
+        cursor: { y: number };
+        pageNumber: number;
+        pageCount: number;
+        settings: {
+          margin: { top: number; right: number; bottom: number; left: number };
+          startY: number;
+          pageBreak: string;
+        };
+        table: {
+          widths: number[];
+          heights: number[];
+          body: any[][];
+        };
+      }) {
+        finalY = data.cursor.y;
+      }
+    });
+
+    const signatureY = finalY + 20
+
+    // Signature lines
+    // Draw signature lines
+    doc.line(margin, signatureY, margin + 70, signatureY)
+    doc.text('FIRMA DOCENTE', margin + 35, signatureY + 5, { align: 'center' })
+
+    doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
+    doc.text('FIRMA ENCARGADO LABORATORIO', pageWidth - margin - 35, signatureY + 5, { align: 'center' })
+
+    doc.save(`lista_asistencia_${classInfo.practica}.pdf`)
   }
 
-  const exportToExcel = () => {
-    if (!selectedClassInfo) return
+  const exportToExcel = (classInfo: ClassInfo) => {
+    if (!classInfo) return
 
     const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet(selectedClassInfo.alumnos)
+    
+    // Hoja de resumen
+    const resumenSheet = XLSX.utils.json_to_sheet([{
+      Materia: classInfo.materia,
+      Practica: classInfo.practica,
+      Fecha: classInfo.fecha,
+      TotalAsistencias: classInfo.totalAsistencias,
+      Docente: `${classInfo.maestroNombre} ${classInfo.maestroApellido}`,
+      Carrera: classInfo.carrera,
+      Grupo: classInfo.grupo
+    }])
+    XLSX.utils.book_append_sheet(workbook, resumenSheet, "Resumen")
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencias")
-    XLSX.writeFile(workbook, `lista_asistencia_${selectedClassInfo.practica}.xlsx`)
+    // Hoja de alumnos
+    const alumnosSheet = XLSX.utils.json_to_sheet(classInfo.alumnos.map((alumno, index) => ({
+      '#': index + 1,
+      Nombre: alumno.nombre,
+      Apellido: alumno.apellido,
+      Equipo: alumno.equipo,
+      Carrera: alumno.carrera,
+      Grupo: alumno.grupo,
+      Semestre: alumno.semestre,
+      Turno: alumno.turno
+    })))
+    XLSX.utils.book_append_sheet(workbook, alumnosSheet, "Alumnos")
+
+    XLSX.writeFile(workbook, `lista_asistencia_${classInfo.practica}.xlsx`)
   }
 
   const clearListaAsistenciaFields = () => {
     setSelectedMateria('')
     setSelectedPractica('')
-    setSelectedClassInfo(null)
+    setSelectedClassInfo([])
+    setDateFilter('')
+    setGroupFilter('')
   }
 
   const clearPracticasFields = () => {
@@ -325,15 +453,16 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
   }
 
   return (
-    <Sidebar side={side} className="h-screen flex flex-col w-96">
-      <SidebarHeader className="p-2 border-b">
+    <>
+    <Sidebar side={side} className="h-screen flex flex-col w-96 bg-white dark:bg-gray-800">
+      <SidebarHeader className="p-2 border-b border-gray-200 dark:border-gray-700">
         <SidebarMenu>
           <div className="flex space-x-1">
             <SidebarMenuItem className="flex-1">
               <SidebarMenuButton 
                 isActive={activeTab === 'add'}
                 onClick={() => setActiveTab('add')}
-                className="w-full text-xs py-1"
+                className="w-full text-xs py-1 bg-green-500 hover:bg-green-600 text-white"
               >
                 <Plus className="mr-1 h-3 w-3" />
                 Agregar
@@ -343,7 +472,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
               <SidebarMenuButton 
                 isActive={activeTab === 'listasAsistencia'}
                 onClick={() => setActiveTab('listasAsistencia')}
-                className="w-full text-xs py-1"
+                className="w-full text-xs py-1 bg-blue-500 hover:bg-blue-600 text-white"
               >
                 <FileText className="mr-1 h-3 w-3" />
                 Listas Asistencia
@@ -353,7 +482,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
               <SidebarMenuButton 
                 isActive={activeTab === 'practicas'}
                 onClick={() => setActiveTab('practicas')}
-                className="w-full text-xs py-1"
+                className="w-full text-xs py-1 bg-purple-500 hover:bg-purple-600 text-white"
               >
                 <FileText className="mr-1 h-3 w-3" />
                 Prácticas
@@ -369,7 +498,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
               {activeTab === 'add' && (
                 <form onSubmit={handleSubmit} className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Materia</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Materia</Label>
                     <Select
                       value={selectedMateria}
                       onValueChange={setSelectedMateria}
@@ -388,7 +517,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                   </div>
                   
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Título</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Título</Label>
                     <Input
                       value={newPractica.Titulo}
                       onChange={(e) => setNewPractica({...newPractica, Titulo: e.target.value})}
@@ -398,7 +527,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                   </div>
                   
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Descripción</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</Label>
                     <Input
                       value={newPractica.Descripcion}
                       onChange={(e) => setNewPractica({...newPractica, Descripcion: e.target.value})}
@@ -408,7 +537,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                   </div>
                   
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Duración</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Duración</Label>
                     <Input
                       value={newPractica.Duracion}
                       onChange={(e) => setNewPractica({...newPractica, Duracion: e.target.value})}
@@ -418,7 +547,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                   </div>
                   
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Fecha</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fecha</Label>
                     <Input
                       type="date"
                       value={newPractica.fecha}
@@ -428,7 +557,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                     />
                   </div>
                   
-                  <Button type="submit" className="w-full mt-4 text-sm">
+                  <Button type="submit" className="w-full mt-4 text-sm bg-green-500 hover:bg-green-600 text-white">
                     Agregar Práctica
                   </Button>
                 </form>
@@ -436,13 +565,12 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
               {activeTab === 'listasAsistencia' && (
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Seleccionar Materia</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Seleccionar Materia</Label>
                     <Select
                       value={selectedMateria}
                       onValueChange={(value) => {
                         setSelectedMateria(value)
-                        setSelectedPractica('')
-                        setSelectedClassInfo(null)
+                        setSelectedClassInfo([])
                       }}
                     >
                       <SelectTrigger className="w-full text-sm">
@@ -457,62 +585,64 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                       </SelectContent>
                     </Select>
                   </div>
-                  {selectedMateria && (
-                    <div className="space-y-1">
-                      <Label className="text-sm font-medium">Seleccionar Práctica</Label>
-                      <Select
-                        value={selectedPractica}
-                        onValueChange={setSelectedPractica}
-                      >
-                        <SelectTrigger className="w-full text-sm">
-                          <SelectValue placeholder="Seleccionar práctica" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {practicas.map((practica) => (
-                            <SelectItem key={practica.id} value={practica.id} className="text-sm">
-                              {practica.Titulo}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {selectedClassInfo && (
-                    <Card className="w-full">
-                      <CardHeader className="p-3">
-                        <CardTitle className="text-sm">{selectedClassInfo.practica}</CardTitle>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fecha</Label>
+                    <Input
+                      type="text"
+                      placeholder="Ejemplo: 09/12/2024"
+                      value={dateFilter}
+                      onChange={(e) => {
+                        setDateFilter(e.target.value);
+                        if (selectedMateria) {
+                          fetchClassInfo(selectedMateria);
+                        }
+                      }}
+                      className="w-full text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Grupo</Label>
+                    <Input
+                      type="text"
+                      placeholder="Ejemplo: 7-ISCM"
+                      value={groupFilter}
+                      onChange={(e) => {
+                        setGroupFilter(e.target.value);
+                        if (selectedMateria) {
+                          fetchClassInfo(selectedMateria);
+                        }
+                      }}
+                      className="w-full text-sm"
+                    />
+                  </div>
+                  {selectedClassInfo.map((classInfo) => (
+                    <Card key={classInfo.id} className="w-full bg-white dark:bg-gray-700 shadow-md">
+                      <CardHeader className="p-3 bg-gray-100 dark:bg-gray-600">
+                        <CardTitle className="text-sm text-gray-800 dark:text-white">{classInfo.practica}</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-3">
+                      <CardContent className="p-3 text-gray-700 dark:text-gray-300">
                         <div className="space-y-1 text-sm">
-                          <p><strong>Materia:</strong> {selectedClassInfo.materia}</p>
-                          <p><strong>Fecha:</strong> {selectedClassInfo.fecha}</p>
-                          <p><strong>Total Asistencias:</strong> {selectedClassInfo.totalAsistencias}</p>
-                          <p><strong>Docente:</strong> {selectedClassInfo.maestroNombre} {selectedClassInfo.maestroApellido}</p>
-                        </div>
-                        <div className="mt-4">
-                          <h4 className="text-sm font-semibold mb-2">Lista de Asistencia:</h4>
-                          <ul className="space-y-1 text-sm">
-                            {selectedClassInfo.alumnos.map((alumno, index) => (
-                              <li key={alumno.id}>
-                                {index + 1}. {alumno.nombre} {alumno.apellido} - Carrera: {alumno.carrera}, Semestre: {alumno.semestre}, Grupo: {alumno.grupo}, Turno: {alumno.turno}, Equipo: {alumno.equipo}
-                              </li>
-                            ))}
-                          </ul>
+                          <p><strong>Materia:</strong> {classInfo.materia}</p>
+                          <p><strong>Fecha:</strong> {classInfo.fecha}</p>
+                          <p><strong>Total Asistencias:</strong> {classInfo.totalAsistencias}</p>
+                          <p><strong>Docente:</strong> {classInfo.maestroNombre} {classInfo.maestroApellido}</p>
+                          <p><strong>Carrera:</strong> {classInfo.carrera}</p>
+                          <p><strong>Grupo:</strong> {classInfo.grupo}</p>
                         </div>
                         <div className="flex justify-end space-x-2 mt-4">
-                          <Button size="sm" onClick={exportToPDF}>
+                          <Button size="sm" onClick={() => exportToPDF(classInfo)} className="bg-blue-500 hover:bg-blue-600 text-white">
                             <FileDown className="w-4 h-4 mr-1" />
                             Exportar PDF
                           </Button>
-                          <Button size="sm" onClick={exportToExcel}>
+                          <Button size="sm" onClick={() => exportToExcel(classInfo)} className="bg-blue-500 hover:bg-blue-600 text-white">
                             <FileDown className="w-4 h-4 mr-1" />
                             Exportar Excel
                           </Button>
                         </div>
                       </CardContent>
                     </Card>
-                  )}
-                  <Button onClick={clearListaAsistenciaFields} className="w-full mt-4 text-sm">
+                  ))}
+                  <Button onClick={clearListaAsistenciaFields} className="w-full mt-4 text-sm bg-gray-500 hover:bg-gray-600 text-white">
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Limpiar Campos
                   </Button>
@@ -521,7 +651,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
               {activeTab === 'practicas' && (
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-sm font-medium">Materia</Label>
+                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Materia</Label>
                     <Select
                       value={selectedMateria}
                       onValueChange={setSelectedMateria}
@@ -539,11 +669,11 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                     </Select>
                   </div>
                   {practicas.map((practica) => (
-                    <Card key={practica.id} className="w-full">
-                      <CardHeader className="p-3">
-                        <CardTitle className="text-sm">{practica.Titulo}</CardTitle>
+                    <Card key={practica.id} className="w-full bg-white dark:bg-gray-700 shadow-md">
+                      <CardHeader className="p-3 bg-gray-100 dark:bg-gray-600">
+                        <CardTitle className="text-sm text-gray-800 dark:text-white">{practica.Titulo}</CardTitle>
                       </CardHeader>
-                      <CardContent className="p-3">
+                      <CardContent className="p-3 text-gray-700 dark:text-gray-300">
                         <div className="space-y-1 text-sm">
                           <p><strong>Descripción:</strong> {practica.Descripcion}</p>
                           <p><strong>Duración:</strong> {practica.Duracion}</p>
@@ -562,7 +692,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
                       </CardContent>
                     </Card>
                   ))}
-                  <Button onClick={clearPracticasFields} className="w-full mt-4 text-sm">
+                  <Button onClick={clearPracticasFields} className="w-full mt-4 text-sm bg-gray-500 hover:bg-gray-600 text-white">
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Limpiar Campos
                   </Button>
@@ -573,14 +703,14 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
         </ScrollArea>
       </SidebarContent>
       <SidebarRail />
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}> 
+        <DialogContent className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
           <DialogHeader>
-            <DialogTitle>Editar Práctica</DialogTitle>
+            <DialogTitle className="text-gray-900 dark:text-white">Editar Práctica</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Título</Label>
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Título</Label>
               <Input
                 value={editingPractica?.Titulo || ''}
                 onChange={(e) => setEditingPractica(prev => prev ? {...prev, Titulo: e.target.value} : null)}
@@ -590,7 +720,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
             </div>
             
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Descripción</Label>
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</Label>
               <Input
                 value={editingPractica?.Descripcion || ''}
                 onChange={(e) => setEditingPractica(prev => prev ? {...prev, Descripcion: e.target.value} : null)}
@@ -600,7 +730,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
             </div>
             
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Duración</Label>
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Duración</Label>
               <Input
                 value={editingPractica?.Duracion || ''}
                 onChange={(e) => setEditingPractica(prev => prev ? {...prev, Duracion: e.target.value} : null)}
@@ -610,7 +740,7 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
             </div>
             
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Fecha</Label>
+              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fecha</Label>
               <Input
                 type="date"
                 value={editingPractica?.fecha || ''}
@@ -621,13 +751,15 @@ export function AppSidebar({ maestroId, materias, onPracticaAdded, side = "left"
             </div>
             
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancelar</Button>
-              <Button type="submit">Guardar Cambios</Button>
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="text-gray-700 dark:text-gray-300">Cancelar</Button>
+              <Button type="submit" className="bg-green-500 hover:bg-green-600 text-white">Guardar Cambios</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+      <GlobalStyle />
     </Sidebar>
+    </>
   )
 }
 

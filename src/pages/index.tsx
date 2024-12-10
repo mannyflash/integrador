@@ -144,6 +144,8 @@ export default function InterfazLaboratorio() {
   const [isGuestClassStarted, setIsGuestClassStarted] = useState(false)
   const [classChoice, setClassChoice] = useState<'regular' | 'guest' | null>(null)
   const [guestClassInfo, setGuestClassInfo] = useState<any>(null)
+  const [lastGuestClassStatus, setLastGuestClassStatus] = useState<boolean>(false);
+  const [lastRegularClassStatus, setLastRegularClassStatus] = useState<boolean>(false);
 
   const welcomeMessages = [
     '"Hombres y Mujeres Del Mar y Desierto',
@@ -166,55 +168,61 @@ export default function InterfazLaboratorio() {
   useEffect(() => {
     const unsubscribeRegularClass = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
       if (doc.exists()) {
-        const newStatus = doc.data().iniciada
-        setIsRegularClassStarted(newStatus)
-        setIsClassStarted(prevStatus => {
-          if (prevStatus !== newStatus) {
-            if (newStatus) {
-              swal({
-                title: "¡La clase regular ha iniciado!",
-                text: "Ya puedes registrar tu asistencia",
-                icon: "success",
-              })
-            } else {
-              swal({
-                title: "La clase regular ha finalizado",
-                text: "El registro de asistencia está cerrado.",
-                icon: "info",
-              })
-            }
+        const newStatus = doc.data().iniciada;
+        setIsRegularClassStarted(newStatus);
+      
+        if (newStatus !== lastRegularClassStatus) {
+          setLastRegularClassStatus(newStatus);
+          if (newStatus) {
+            swal({
+              title: "¡Clase regular iniciada!",
+              text: "Ya puedes registrar tu asistencia",
+              icon: "success",
+            });
+          } else {
+            swal({
+              title: "Clase regular finalizada",
+              text: "El registro de asistencia está cerrado.",
+              icon: "info",
+            });
           }
-          return newStatus
-        })
+        }
+        setIsClassStarted(newStatus);
       }
-    })
+    });
 
     const unsubscribeGuestClass = onSnapshot(doc(db, 'EstadoClaseInvitado', 'actual'), (doc) => {
       if (doc.exists()) {
-        const newStatus = doc.data().iniciada
-        setIsGuestClassStarted(newStatus)
-        if (newStatus) {
-          setGuestClassInfo(doc.data())
-          swal({
-            title: "¡La clase invitada ha iniciado!",
-            text: "Ya puedes registrar tu asistencia para la clase invitada",
-            icon: "success",
-          })
-        } else {
-          swal({
-            title: "La clase invitada ha finalizado",
-            text: "El registro de asistencia para la clase invitada está cerrado.",
-            icon: "info",
-          })
+        const data = doc.data();
+        const newStatus = data.iniciada;
+        setIsGuestClassStarted(newStatus);
+      
+        // Only show alert if status changed
+        if (newStatus !== lastGuestClassStatus) {
+          setLastGuestClassStatus(newStatus);
+          if (newStatus) {
+            swal({
+              title: "¡Clase invitada iniciada!",
+              text: `Maestro: ${data.MaestroInvitado}\nMateria: ${data.Materia}\nPráctica: ${data.Practica}\nHora de inicio: ${data.HoraInicio}`,
+              icon: "success",
+            });
+          } else {
+            swal({
+              title: "Clase invitada finalizada",
+              text: `La clase con el maestro ${data.MaestroInvitado} ha finalizado.`,
+              icon: "info",
+            });
+          }
         }
+        setGuestClassInfo(data);
       }
-    })
+    });
 
     return () => {
       unsubscribeRegularClass()
       unsubscribeGuestClass()
     }
-  }, [])
+  }, [lastGuestClassStatus, lastRegularClassStatus]);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'Numero de equipos', 'equipos'), (doc) => {
@@ -258,30 +266,6 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        if (isRegularClassStarted && isGuestClassStarted && !classChoice) {
-          const result = await swal({
-            title: "Selecciona una clase",
-            text: "Hay dos clases disponibles. ¿A cuál deseas asistir?",
-            icon: "info",
-            buttons: {
-              regular: {
-                text: "Clase Regular",
-                value: "regular",
-              },
-              guest: {
-                text: "Clase Invitado",
-                value: "guest",
-              },
-            },
-          });
-
-          if (result) {
-            setClassChoice(result as 'regular' | 'guest')
-          } else {
-            return
-          }
-        }
-
         if (!isRegularClassStarted && !isGuestClassStarted) {
           await swal({
             title: "Error",
@@ -291,7 +275,7 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        const selectedClass = classChoice || (isRegularClassStarted ? 'regular' : 'guest')
+        const selectedClass = isRegularClassStarted ? 'regular' : 'guest';
 
         // Check for duplicate matricula
         const asistenciasRef = collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias')
@@ -682,24 +666,6 @@ export default function InterfazLaboratorio() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            {isRegularClassStarted && isGuestClassStarted && (
-                              <div className="space-y-1 sm:space-y-2">
-                                <Label htmlFor="class-choice" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Seleccionar Clase</Label>
-                                <Select onValueChange={(value) => setClassChoice(value as 'regular' | 'guest')} value={classChoice || ''}>
-                                  <SelectTrigger id="class-choice" className={`${
-                                    theme === 'dark'
-                                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                  } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`} >
-                                    <SelectValue placeholder="Seleccione la clase" />
-                                  </SelectTrigger>
-                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-lg sm:rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
-                                    <SelectItem value="regular" className="text-xs sm:text-sm">Clase Regular</SelectItem>
-                                    <SelectItem value="guest" className="text-xs sm:text-sm">Clase Invitado</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
                           </div>
                           <Button 
                             type="submit" 
@@ -714,7 +680,7 @@ export default function InterfazLaboratorio() {
                       </TabsContent>
                       <TabsContent value="maestro" className="flex-grow">
                         <div className="space-y-3 sm:space-y-4 mb-3 sm:mb-4">
-                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Seleccione su rol</Label>
+                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Seleccione surol</Label>
                           <div className="flex space-x-2 sm:space-x-4">
                             <Button
                               onClick={() => {

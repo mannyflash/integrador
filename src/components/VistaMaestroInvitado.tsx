@@ -1,18 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../pages/panel-laboratorista'
+import { addDoc, collection, getDocs, query, where, setDoc, doc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import { toast, Toaster } from 'react-hot-toast'
 
 interface VistaMaestroInvitadoProps {
   esModoOscuro: boolean;
+  logAction: (action: string, details: string) => Promise<void>;
 }
 
 interface Maestro {
@@ -29,7 +30,7 @@ interface Materia {
   Semestre: string;
 }
 
-export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvitadoProps) {
+export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaMaestroInvitadoProps) {
   const [departamento, setDepartamento] = useState('')
   const [maestroSeleccionado, setMaestroSeleccionado] = useState('')
   const [nombreMaestroSeleccionado, setNombreMaestroSeleccionado] = useState('')
@@ -58,13 +59,15 @@ export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvit
           ...doc.data()
         } as Maestro))
         setMaestros(maestrosData)
+        await logAction('Cargar Maestros', `Se cargaron ${maestrosData.length} maestros del departamento ${departamento}`)
       } catch (error) {
         console.error('Error al cargar maestros:', error)
         toast.error('Error al cargar la lista de maestros')
+        await logAction('Error', `Error al cargar maestros: ${error}`)
       }
     }
     cargarMaestrosPorDepartamento()
-  }, [departamento])
+  }, [departamento, logAction])
 
   useEffect(() => {
     const cargarMaterias = async () => {
@@ -89,13 +92,15 @@ export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvit
         if (maestroSeleccionadoData) {
           setNombreMaestroSeleccionado(`${maestroSeleccionadoData.Nombre} ${maestroSeleccionadoData.Apellido}`)
         }
+        await logAction('Cargar Materias', `Se cargaron ${materiasData.length} materias para el maestro ${nombreMaestroSeleccionado}`)
       } catch (error) {
         console.error('Error al cargar materias:', error)
         toast.error('Error al cargar las materias')
+        await logAction('Error', `Error al cargar materias: ${error}`)
       }
     }
     cargarMaterias()
-  }, [maestroSeleccionado, maestros])
+  }, [maestroSeleccionado, maestros, nombreMaestroSeleccionado, logAction])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -119,7 +124,16 @@ export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvit
         alumnos: []
       })
 
-      const nombreCompletoDocente = `${nombreMaestroSeleccionado}`;
+      await setDoc(doc(db, 'EstadoClaseInvitado', 'actual'), {
+        iniciada: true,
+        MaestroInvitado: nombreMaestroSeleccionado,
+        Materia: materia,
+        Practica: practica,
+        Departamento: departamento,
+        HoraInicio: new Date().toLocaleTimeString()
+      })
+
+      const nombreCompletoDocente = nombreMaestroSeleccionado;
 
       localStorage.setItem('claseInfo', JSON.stringify({
         maestroNombre: nombreMaestroSeleccionado,
@@ -134,10 +148,12 @@ export default function VistaMaestroInvitado({ esModoOscuro }: VistaMaestroInvit
       }))
 
       toast.success('Clase iniciada con éxito')
-      router.push('/lista-asistencias-invitado')
+      await logAction('Iniciar Clase', `Clase iniciada por ${nombreMaestroSeleccionado} para ${materia} - ${practica}`)
+      router.push('/lista-asistenciasInvitado')
     } catch (error) {
       console.error('Error al iniciar la clase:', error)
       toast.error('Error al iniciar la clase')
+      await logAction('Error', `Error al iniciar la clase: ${error}`)
     }
   }
 

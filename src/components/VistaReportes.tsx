@@ -16,6 +16,7 @@ import "jspdf-autotable"
 import { colors } from '../lib/constants'
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import Image from 'next/image'
 
 interface Alumno {
   id: string;
@@ -47,13 +48,19 @@ interface ReportData {
   maestroNombre: string;
 }
 
-export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean }) {
+interface VistaReportesProps {
+  esModoOscuro: boolean;
+  logAction: (action: string, details: string) => Promise<void>;
+}
+
+export default function VistaReportes({ esModoOscuro, logAction }: VistaReportesProps) {
   const [practicasHoy, setPracticasHoy] = useState<ReportData[]>([])
   const [practicasFiltradas, setPracticasFiltradas] = useState<ReportData[]>([])
   const [estaCargando, setEstaCargando] = useState(true)
   const [filtroMateria, setFiltroMateria] = useState('')
   const [filtroPractica, setFiltroPractica] = useState('')
   const [filtroProfesor, setFiltroProfesor] = useState('')
+  const [filtroFecha, setFiltroFecha] = useState('')
   const [practicaSeleccionada, setPracticaSeleccionada] = useState<ReportData | null>(null)
   const [modalAbierto, setModalAbierto] = useState(false)
 
@@ -63,7 +70,7 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
 
   useEffect(() => {
     filtrarPracticas()
-  }, [practicasHoy, filtroMateria, filtroPractica, filtroProfesor])
+  }, [practicasHoy, filtroMateria, filtroPractica, filtroProfesor, filtroFecha])
 
   const obtenerPracticasHoy = async () => {
     try {
@@ -111,9 +118,11 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
       setPracticasHoy(practicasDelDia)
       setPracticasFiltradas(practicasDelDia)
       setEstaCargando(false)
+      await logAction('Obtener Prácticas', `Se obtuvieron ${practicasDelDia.length} prácticas del día ${fechaHoy}`)
     } catch (error) {
       console.error('Error al obtener prácticas del día:', error)
       setEstaCargando(false)
+      await logAction('Error', `Error al obtener prácticas del día: ${error}`)
     }
   }
 
@@ -138,64 +147,77 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
       )
     }
 
+    if (filtroFecha) {
+      filtradas = filtradas.filter(practica => 
+        practica.fecha.includes(filtroFecha)
+      )
+    }
+
     setPracticasFiltradas(filtradas)
+    logAction('Aplicar Filtros', `Se aplicaron filtros: Materia: ${filtroMateria}, Práctica: ${filtroPractica}, Profesor: ${filtroProfesor}, Fecha: ${filtroFecha}`)
   }
 
-  const limpiarFiltros = () => {
+  const limpiarFiltros = async () => {
     setFiltroMateria('')
     setFiltroPractica('')
     setFiltroProfesor('')
+    setFiltroFecha('')
+    await logAction('Limpiar Filtros', 'Se limpiaron todos los filtros de búsqueda')
   }
 
-  const seleccionarPractica = (practica: ReportData) => {
+  const seleccionarPractica = async (practica: ReportData) => {
     setPracticaSeleccionada(practica)
     setModalAbierto(true)
+    await logAction('Ver Detalles', `Se visualizaron los detalles de la práctica ${practica.id}`)
   }
 
-  const exportarAPDF = (practica: ReportData) => {
+  const exportarAPDF = async (practica: ReportData) => {
     const doc = new jsPDF()
     
-    // Add ITSPP header (you may want to add a logo image here)
-    doc.setFontSize(16)
-    doc.text("ITSPP", 14, 20)
+    // Add logo to the top-left corner
+    doc.addImage("/FondoItspp.png", "PNG", 10, 10, 30, 30)
     
     // Title
-    doc.setFontSize(14)
-    doc.text("TALLER DE PROGRAMACION", doc.internal.pageSize.width / 2, 20, { align: 'center' })
-    doc.text("HOJA DE REGISTRO", doc.internal.pageSize.width / 2, 28, { align: 'center' })
+    doc.setFontSize(16)
+    doc.text("TALLER DE PROGRAMACION", doc.internal.pageSize.width / 2, 25, { align: 'center' })
+    doc.text("HOJA DE REGISTRO", doc.internal.pageSize.width / 2, 35, { align: 'center' })
     
-    // Information fields
+    // Information fields in two columns
     doc.setFontSize(12)
-    doc.text(`FECHA: ${practica.fecha}`, 14, 45)
-    doc.text(`HORA: ${practica.horaInicio || ''}`, 120, 45)
+    // Left column
+    doc.text(`FECHA: ${practica.fecha}`, 14, 50)
+    doc.text(`GRUPO: ${Array.from(new Set(practica.estudiantes.map(e => e.Grupo))).join(', ')}`, 14, 60)
+    doc.text(`TURNO: ${Array.from(new Set(practica.estudiantes.map(e => e.Turno))).join(', ')}`, 14, 70)
+    doc.text(`PRACTICA: ${practica.practica}`, 14, 80)
+    doc.text(`MATERIA: ${practica.materia}`, 14, 90)
     
-    doc.text(`GRUPO: ${Array.from(new Set(practica.estudiantes.map(e => e.Grupo))).join(', ')}`, 14, 55)
-    doc.text(`CARRERA: ${Array.from(new Set(practica.estudiantes.map(e => e.Carrera))).join(', ')}`, 120, 55)
-    
-    doc.text(`TURNO: ${Array.from(new Set(practica.estudiantes.map(e => e.Turno))).join(', ')}`, 14, 65)
-    doc.text(`SEMESTRE: ${Array.from(new Set(practica.estudiantes.map(e => e.Semestre))).join(', ')}`, 120, 65)
-    
-    doc.text(`PRÁCTICA: ${practica.practica}`, 14, 75)
-    
-    doc.text(`MATERIA: ${practica.materia}`, 14, 85)
-    doc.text(`DOCENTE: ${practica.maestroNombre} ${practica.maestroApellido}`, 14, 95)
+    // Right column
+    doc.text(`HORA: ${practica.horaInicio || ''}`, 120, 50)
+    doc.text(`CARRERA: ${Array.from(new Set(practica.estudiantes.map(e => e.Carrera))).join(', ')}`, 120, 60)
+    doc.text(`SEMESTRE: ${Array.from(new Set(practica.estudiantes.map(e => e.Semestre))).join(', ')}`, 120, 70)
+    doc.text(`DOCENTE: ${practica.maestroNombre} ${practica.maestroApellido}`, 14, 100)
     
     // Table of students
     doc.autoTable({
-      startY: 105,
+      startY: 110,
       head: [['#', 'NOMBRE ALUMNO', 'NUM. PC', 'FIRMA']],
       body: practica.estudiantes.map((estudiante, index) => [
         (index + 1).toString(),
         `${estudiante.Nombre} ${estudiante.Apellido}`,
-        estudiante.Equipo,
+        estudiante.Equipo || '',
         '' // Space for signature
       ]),
       theme: 'grid',
-      headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
+      headStyles: { 
+        fillColor: [255, 255, 255], 
+        textColor: [0, 0, 0], 
+        fontStyle: 'bold',
+        lineWidth: 0.5
+      },
       columnStyles: {
-        0: { cellWidth: 15 },
+        0: { cellWidth: 10 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 30 },
+        2: { cellWidth: 25 },
         3: { cellWidth: 40 }
       },
       styles: {
@@ -214,9 +236,10 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
     doc.text("FIRMA ENCARGADO LABORATORIO", 120, finalY + 25)
     
     doc.save(`practica_${practica.id}.pdf`)
+    await logAction('Exportar PDF', `Se exportó a PDF la práctica ${practica.id}`)
   }
 
-  const exportarAExcel = (practica: ReportData) => {
+  const exportarAExcel = async (practica: ReportData) => {
     const workbook = XLSX.utils.book_new()
     
     // Create header data
@@ -261,6 +284,7 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
     
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Registro de Práctica')
     XLSX.writeFile(workbook, `practica_${practica.id}.xlsx`)
+    await logAction('Exportar Excel', `Se exportó a Excel la práctica ${practica.id}`)
   }
 
   if (estaCargando) {
@@ -312,10 +336,10 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
           <CardTitle className={`text-lg font-semibold ${modoColor.titleText}`}>Filtros</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="filtroMateria" className={esModoOscuro ? 'text-gray-300' : 'text-green-700'}>
-                Filtrar por Materia
+                Materia
               </Label>
               <Input
                 id="filtroMateria"
@@ -326,9 +350,9 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
                 className={`w-full ${modoColor.inputBackground} ${modoColor.inputBorder} ${modoColor.inputText}`}
               />
             </div>
-            <div>
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="filtroPractica" className={esModoOscuro ? 'text-gray-300' : 'text-green-700'}>
-                Filtrar por Práctica
+                Práctica
               </Label>
               <Input
                 id="filtroPractica"
@@ -339,24 +363,35 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
                 className={`w-full ${modoColor.inputBackground} ${modoColor.inputBorder} ${modoColor.inputText}`}
               />
             </div>
-            <div>
+            <div className="flex-1 min-w-[200px]">
               <Label htmlFor="filtroProfesor" className={esModoOscuro ? 'text-gray-300' : 'text-green-700'}>
-                Filtrar por Docente
+                Docente
               </Label>
               <Input
                 id="filtroProfesor"
                 type="text"
                 value={filtroProfesor}
                 onChange={(e) => setFiltroProfesor(e.target.value)}
-                placeholder="Ingrese el nombre del docente"
+                placeholder="Ingrese el docente"
                 className={`w-full ${modoColor.inputBackground} ${modoColor.inputBorder} ${modoColor.inputText}`}
               />
             </div>
-            <div className="flex items-end">
-              <Button onClick={limpiarFiltros} variant="outline" className={`w-full ${modoColor.buttonBlue}`}>
-                <X className="mr-2 h-4 w-4" /> Limpiar Filtros
-              </Button>
+            <div className="flex-1 min-w-[200px]">
+              <Label htmlFor="filtroFecha" className={esModoOscuro ? 'text-gray-300' : 'text-green-700'}>
+                Fecha
+              </Label>
+              <Input
+                id="filtroFecha"
+                type="text"
+                value={filtroFecha}
+                onChange={(e) => setFiltroFecha(e.target.value)}
+                placeholder="dd/mm/aaaa"
+                className={`w-full ${modoColor.inputBackground} ${modoColor.inputBorder} ${modoColor.inputText}`}
+              />
             </div>
+            <Button onClick={limpiarFiltros} variant="outline" className={`${modoColor.buttonBlue} whitespace-nowrap`}>
+              <X className="mr-2 h-4 w-4" /> Limpiar
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -408,6 +443,13 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
         <DialogContent className={`max-w-4xl ${esModoOscuro ? 'bg-gray-800' : 'bg-white'}`}>
           <DialogHeader>
             <DialogTitle className={esModoOscuro ? 'text-white' : 'text-black'}>Detalles de la Práctica</DialogTitle>
+            <Button
+              onClick={() => setModalAbierto(false)}
+              variant="ghost"
+              className="absolute right-4 top-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </DialogHeader>
           {practicaSeleccionada && (
             <div className={`space-y-4 ${esModoOscuro ? 'text-white' : 'text-black'}`}>
@@ -462,11 +504,11 @@ export default function VistaReportes({ esModoOscuro }: { esModoOscuro: boolean 
                 )}
               </div>
               <div className="flex justify-end space-x-2 mt-4">
-                <Button onClick={() => exportarAExcel(practicaSeleccionada)} variant="outline">
+                <Button onClick={() => practicaSeleccionada && exportarAExcel(practicaSeleccionada)} variant="outline">
                   <FileDown className="mr-2 h-4 w-4" />
                   Exportar a Excel
                 </Button>
-                <Button onClick={() => exportarAPDF(practicaSeleccionada)} variant="outline">
+                <Button onClick={() => practicaSeleccionada && exportarAPDF(practicaSeleccionada)} variant="outline">
                   <FileText className="mr-2 h-4 w-4" />
                   Exportar a PDF
                 </Button>

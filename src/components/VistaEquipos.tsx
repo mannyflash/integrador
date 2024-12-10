@@ -18,7 +18,7 @@ interface Equipo {
   fueraDeServicio: boolean;
 }
 
-export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }) {
+export default function VistaEquipos({ esModoOscuro, logAction }: { esModoOscuro: boolean; logAction: (action: string, details: string) => Promise<void> }) {
   const [equipos, setEquipos] = useState<Equipo[]>([])
   const [cantidadEquipos, setCantidadEquipos] = useState('')
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
@@ -35,12 +35,15 @@ export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }
       if (equiposDoc.exists()) {
         const data = equiposDoc.data()
         setEquipos(Array.isArray(data.Equipos) ? data.Equipos : [])
+        await logAction('Cargar Equipos', `Se cargaron ${Array.isArray(data.Equipos) ? data.Equipos.length : 0} equipos`)
       } else {
         setEquipos([])
+        await logAction('Cargar Equipos', 'No se encontraron equipos')
       }
     } catch (error) {
       console.error('Error al cargar equipos:', error)
       setEquipos([])
+      await logAction('Error', `Error al cargar equipos: ${error}`)
     }
   }
 
@@ -58,6 +61,7 @@ export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }
         text: `Estado del equipo ${id} actualizado`,
         icon: "success",
       })
+      await logAction('Actualizar Equipo', `Estado del equipo ${id} actualizado a ${equiposActualizados.find(e => e.id === id)?.fueraDeServicio ? 'fuera de servicio' : 'en servicio'}`)
     } catch (error) {
       console.error('Error al actualizar el equipo:', error)
       await swal({
@@ -65,6 +69,7 @@ export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }
         text: "Ha ocurrido un error al actualizar el equipo.",
         icon: "error",
       })
+      await logAction('Error', `Error al actualizar el equipo ${id}: ${error}`)
     }
   }
 
@@ -88,6 +93,7 @@ export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }
         text: `${cantidad} equipos agregados correctamente, reemplazando los anteriores`,
         icon: "success",
       })
+      await logAction('Agregar Equipos', `Se agregaron ${cantidad} equipos nuevos, reemplazando los anteriores`)
     } catch (error) {
       console.error('Error al agregar equipos:', error)
       await swal({
@@ -95,6 +101,7 @@ export default function VistaEquipos({ esModoOscuro }: { esModoOscuro: boolean }
         text: "Ha ocurrido un error al agregar los equipos.",
         icon: "error",
       })
+      await logAction('Error', `Error al agregar equipos: ${error}`)
     }
   }
 

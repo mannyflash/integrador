@@ -19,6 +19,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
 import {AppSidebar} from '../components/AppSidebar'
 import { SidebarProvider } from "@/components/ui/sidebar"
+import { logAction } from '../lib/logging';
+import * as XLSX from 'xlsx';
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
@@ -224,6 +226,7 @@ export default function ListaAsistencias() {
           text: `Los alumnos ahora pueden registrar su asistencia para la practica: ${selectedPractica.Titulo}. Hora de inicio: ${horaActual}`,
           icon: "success",
         });
+        await logAction('Iniciar Clase', `Clase iniciada para ${selectedPractica.Titulo} a las ${horaActual}`);
       } else {
         setHoraFin(horaActual);
         const historicalRef = collection(db, 'HistoricalAttendance');
@@ -269,6 +272,7 @@ export default function ListaAsistencias() {
           text: `Se ha cerrado el registro de asistencias y guardado el registro histórico y la información de la clase. Hora de fin: ${horaActual}`,
           icon: "success",
         });
+        await logAction('Finalizar Clase', `Clase finalizada para ${selectedPractica.Titulo} a las ${horaActual}. Total de asistencias: ${asistencias.length}`);
       }
       setClaseIniciada(nuevoEstado);
     } catch (error) {
@@ -278,8 +282,9 @@ export default function ListaAsistencias() {
         text: "No se pudo cambiar el estado de la clase.",
         icon: "error",
       });
+      await logAction('Error', `Error al cambiar el estado de la clase: ${error}`);
     }
-  }, [claseIniciada, selectedPractica, asistencias, materias, selectedMateriaId, maestroId, maestroInfo, limpiarCampos, horaInicio]);
+  }, [claseIniciada, selectedPractica, asistencias, horaInicio, limpiarCampos]);
   const eliminarAsistencia = useCallback(async (id: string) => {
     const willDelete = await swal({
       title: "¿Esta seguro?",
@@ -292,8 +297,10 @@ export default function ListaAsistencias() {
       try {
         await deleteDoc(doc(db, 'Asistencias', id))
         await swal("Registro eliminado con exito", { icon: "success" })
+        await logAction('Eliminar Asistencia', `Asistencia con ID ${id} eliminada`);
       } catch (error) {
         await swal("Error al eliminar el registro", { icon: "error" })
+        await logAction('Error', `Error al eliminar asistencia con ID ${id}: ${error}`);
       }
     }
   }, [])
@@ -304,84 +311,222 @@ export default function ListaAsistencias() {
   const closeModal = () => {
     setShowModal(false)
   }
-  const exportarPDF = () => {
+  const exportarPDF = async () => {
     const doc = new jsPDF()
     const pageWidth = doc.internal.pageSize.width
     const pageHeight = doc.internal.pageSize.height
     const margin = 10
-    // Add background image
-    doc.addImage('/Currículum Vitae Cv de Ventas Moderno Negro.jpg', 'JPEG', 0, 0, pageWidth, pageHeight)
-    // Header
+
+    // Add ITSPP logo in the upper left corner
+    doc.addImage('/itspp-logo.png', 'PNG', margin, margin, 25, 25)
+
+    // Add header text centered
     doc.setFontSize(16)
-    doc.setTextColor(255, 255, 255) // White text color
+    doc.setTextColor(0, 0, 0) // Black text color
     doc.text('TALLER DE PROGRAMACION', pageWidth / 2, margin + 10, { align: 'center' })
     doc.setFontSize(14)
     doc.text('HOJA DE REGISTRO', pageWidth / 2, margin + 20, { align: 'center' })
+
+    // Form fields
     doc.setFontSize(10)
     const leftColX = margin
     const rightColX = pageWidth / 2 + margin
-    const startY = margin + 30
-    let currentY = startY
+    let currentY = margin + 35
+
+    // Left column
     doc.text(`FECHA: ${new Date().toLocaleDateString()}`, leftColX, currentY)
-    doc.text(`CARRERA: Ingenieria En Sistemas Computacionales`, rightColX, currentY)
-    currentY += 10
-    doc.text(`GRUPO: ${selectedPractica?.Titulo || ''}`, leftColX, currentY)
-    doc.text(`SEMESTRE: ${selectedPractica?.Duracion || ''}`, rightColX, currentY)
-    currentY += 10
-    doc.text(`HORA: ${new Date().toLocaleTimeString()}`, leftColX, currentY)
-    doc.text(`TURNO: `, rightColX, currentY)
-    currentY += 10
-    doc.text(`NOMBRE PRACTICA: ${selectedPractica?.Titulo || ''}`, leftColX, currentY)
-    doc.text(`NUM. PRACTICA: `, rightColX, currentY)
-    currentY += 10
-    doc.text(`MATERIA: ${materias.find(m => m.id === selectedMateriaId)?.nombre|| ''}`, leftColX, currentY)
-    currentY += 10
-    doc.text(`DOCENTE: ${maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : ''}`, leftColX, currentY)
-    currentY += 15
+    doc.text(`GRUPO: ${asistencias[0]?.Grupo || ''}`, leftColX, currentY + 10)
+    doc.text(`HORA: ${horaInicio || new Date().toLocaleTimeString()}`, leftColX, currentY + 20)
+    doc.text(`MATERIA: ${materias.find(m => m.id === selectedMateriaId)?.nombre || ''}`, leftColX, currentY + 30)
+    doc.text(`DOCENTE: ${maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : ''}`, leftColX, currentY + 40)
+
+    // Right column
+    doc.text(`CARRERA: ${asistencias[0]?.Carrera || ''}`, rightColX, currentY)
+    doc.text(`TURNO: ${asistencias[0]?.Turno || ''}`, rightColX, currentY + 10)
+    doc.text(`PRACTICA: ${selectedPractica?.Titulo || ''}`, rightColX, currentY + 20)
+    doc.text(`SEMESTRE: ${asistencias[0]?.Semestre || ''}`, rightColX, currentY + 30)
+
+    currentY += 60
+
     // Table
-    const tableHeaders = ['#', 'NOMBRE ALUMNO', 'NUM. PC', 'FIRMA']
+    const tableHeaders = ['#', 'NOMBRE ALUMNO', 'NUM. PC']
     const tableData = asistencias.map((asistencia, index) => [
-      index + 1,
+      (index + 1).toString(),
       `${asistencia.Nombre} ${asistencia.Apellido}`,
-      asistencia.Equipo,
-      ''  // Empty string for signature
+      asistencia.Equipo
     ])
-    // Pad the table to always have 20 rows
-    while (tableData.length < 20) {
-      tableData.push([tableData.length + 1, '', '', ''])
+
+    // Pad the table to have at least 25 rows
+    const minRows = 25
+    while (tableData.length < minRows) {
+      tableData.push([
+        (tableData.length + 1).toString(),
+        '',
+        ''
+      ])
     }
-    const tableHeight = 20 * 10 // Estimate 10mm per row
+
+    let finalY = currentY;
     doc.autoTable({
       head: [tableHeaders],
       body: tableData,
       startY: currentY,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1, textColor: [255, 255, 255] },
-      headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+        textColor: [0, 0, 0],
+        lineWidth: 0.1
+      },
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold'
+      },
       columnStyles: {
         0: { cellWidth: 10 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 30 }
+        2: { cellWidth: 20 }
+      },
+      didDrawPage: function(data: {
+        cursor: { y: number };
+        pageNumber: number;
+        pageCount: number;
+        settings: {
+          margin: { top: number; right: number; bottom: number; left: number };
+          startY: number;
+          pageBreak: string;
+        };
+        table: {
+          widths: number[];
+          heights: number[];
+          body: any[][];
+        };
+      }) {
+        finalY = data.cursor.y;
       }
-    })
+    });
+
+    const signatureY = finalY + 20
+
     // Signature lines
-    const signatureY = currentY + tableHeight + 20
-    doc.setDrawColor(255, 255, 255) // White line color
+    // Draw signature lines
     doc.line(margin, signatureY, margin + 70, signatureY)
     doc.text('FIRMA DOCENTE', margin + 35, signatureY + 5, { align: 'center' })
+
     doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
     doc.text('FIRMA ENCARGADO LABORATORIO', pageWidth - margin - 35, signatureY + 5, { align: 'center' })
+
     doc.save('lista_asistencias.pdf')
+    await logAction('Exportar PDF', `PDF de asistencias exportado para ${selectedPractica?.Titulo || 'práctica no seleccionada'}`);
   }
+  const exportarAExcel = async () => {
+    const workbook = XLSX.utils.book_new();
+    
+    // Create header data with logo and title
+    const headerData = [
+      ['INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO'],
+      ['CONTROL DE ASISTENCIA - TALLER DE PROGRAMACIÓN'],
+      [''],
+      ['Información de la Clase'],
+      ['Fecha:', new Date().toLocaleDateString(), '', 'Carrera:', asistencias[0]?.Carrera || 'N/A'],
+      ['Grupo:', asistencias[0]?.Grupo || 'N/A', '', 'Materia:', materias.find(m => m.id === selectedMateriaId)?.nombre || 'N/A'],
+      ['Práctica:', selectedPractica?.Titulo || 'N/A', '', 'Docente:', maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'N/A'],
+      ['Hora Inicio:', horaInicio || 'N/A', '', 'Hora Fin:', horaFin || 'N/A'],
+      [''],
+      ['Lista de Asistencia'],
+      ['#', 'ID Alumno', 'Nombre', 'Apellido', 'Carrera', 'Grupo', 'Semestre', 'Turno', 'Equipo']
+    ];
+  
+    // Add student data
+    const studentData = asistencias.map((alumno, index) => [
+      index + 1,
+      alumno.AlumnoId,
+      alumno.Nombre,
+      alumno.Apellido,
+      alumno.Carrera,
+      alumno.Grupo,
+      alumno.Semestre,
+      alumno.Turno,
+      alumno.Equipo
+    ]);
+  
+    // Combine header and student data
+    const fullData = [...headerData, ...studentData];
+  
+    // Create worksheet
+    const worksheet = XLSX.utils.aoa_to_sheet(fullData);
+  
+    // Set column widths
+    const colWidths = [
+      { wch: 5 },  // #
+      { wch: 15 }, // ID
+      { wch: 20 }, // Nombre
+      { wch: 20 }, // Apellido
+      { wch: 25 }, // Carrera
+      { wch: 10 }, // Grupo
+      { wch: 10 }, // Semestre
+      { wch: 10 }, // Turno
+      { wch: 10 }  // Equipo
+    ];
+    worksheet['!cols'] = colWidths;
+  
+    // Merge cells for titles
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, // Instituto
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }, // Control de Asistencia
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } }  // Información de la Clase
+    ];
+  
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Control de Asistencia');
+  
+    // Generate statistics worksheet
+    const statsData = [
+      ['Estadísticas de Asistencia'],
+      [''],
+      ['Total de Alumnos:', asistencias.length],
+      ['Fecha:', new Date().toLocaleDateString()],
+      ['Práctica:', selectedPractica?.Titulo || 'N/A'],
+      ['Materia:', materias.find(m => m.id === selectedMateriaId)?.nombre || 'N/A'],
+      ['Docente:', maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'N/A']
+    ];
+  
+    const statsWorksheet = XLSX.utils.aoa_to_sheet(statsData);
+    XLSX.utils.book_append_sheet(workbook, statsWorksheet, 'Estadísticas');
+  
+    // Save the file
+    XLSX.writeFile(workbook, `control_asistencia_${new Date().toISOString().split('T')[0]}.xlsx`);
+    await logAction('Exportar Excel', `Se exportó el control de asistencia a Excel para la práctica ${selectedPractica?.Titulo || 'N/A'}`);
+  };
   const handleThemeToggle = () => {
     const newTheme = toggleTheme()
     setThemeState(newTheme)
   }
-  const handleLogout = () => {
+  const handleLogout = async () => {
+  if (claseIniciada) {
+    await swal({
+      title: "No se puede cerrar sesión",
+      text: "No puedes cerrar sesión mientras una clase está en progreso. Por favor, finaliza la clase primero.",
+      icon: "warning",
+    });
+    return;
+  }
+
+  const willLogout = await swal({
+    title: "¿Está seguro?",
+    text: "¿Desea cerrar la sesión?",
+    icon: "warning",
+    buttons: ["Cancelar", "Sí, cerrar sesión"],
+    dangerMode: true,
+  });
+
+  if (willLogout) {
     localStorage.removeItem('maestroId');
+    await logAction('Cerrar Sesión', `Sesión cerrada para ${maestroInfo?.Nombre} ${maestroInfo?.Apellido}`);
     router.push('/');
-  };
+  }
+};
   if (isLoading) {
     return <Loader />
   }
@@ -399,17 +544,17 @@ export default function ListaAsistencias() {
         <main className="flex-1 flex flex-col overflow-hidden p-4">
           <Card className={`flex-1 flex flex-col ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} p-2`}>
             <CardHeader className={`${theme === 'dark' ? 'bg-gray-700' : 'bg-green-100'} flex flex-col items-center justify-center text-center p-4 relative`}>
-              <div className="absolute top-4 right-4 flex items-center">
-                <User className={`h-8 w-8 mr-3 ${theme === 'dark' ? 'text-white' : 'text-green-800'}`} />
-                <span className={`text-4xl font-bold ${theme === 'dark' ? 'text-white' : 'text-green-800'}`}>
-                  {maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'Cargando...'}
-                </span>
-              </div>
               <CardTitle className={`text-3xl mb-2 ${theme === 'dark' ? 'text-white' : 'text-green-800'}`}>
                 Sistema de Gestión de Asistencias
               </CardTitle>
               <CardDescription className={`text-2xl font-bold ${theme === 'dark' ? 'text-gray-300' : 'text-green-700'}`}>
               </CardDescription>
+              <div className="flex items-center justify-center mt-4">
+                <User className={`h-8 w-8 mr-3 ${theme === 'dark' ? 'text-white' : 'text-green-800'}`} />
+                <span className={`text-4xl font-bold ${theme === 'dark' ? 'text-white' : 'text-green-800'}`}>
+                  {maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : 'Cargando...'}
+                </span>
+              </div>
               <div className="flex items-center space-x-2 mt-4">
                 <Sun className={`h-4 w-4 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
                 <Switch
@@ -421,13 +566,7 @@ export default function ListaAsistencias() {
               </div>
             </CardHeader>
             <CardContent className={`flex-1 flex flex-col p-2 overflow-auto ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
-              <div className="flex justify-between items-center mb-4">
-                  <h2 className={`text-2xl font-semibold ${theme === 'dark' ? 'text-green-400' : 'text-green-800'}`}>Lista de Estudiantes</h2>
-                  <span className={`text-lg font-medium ${theme === 'dark' ? 'bg-green-900 text-green-100' : 'bg-green-100 text-green-800'} py-1 px-3 rounded-full`}>
-                    Total: {contador}
-                  </span>
-                </div>
-                <div className="space-y-4 mb-4">
+              <div className="space-y-4 mb-4">
                   <div>
                     <Label htmlFor="materia-select" className={`text-xl ${theme === 'dark' ? 'text-gray-300' : 'text-green-700'}`}>Seleccionar Materia:</Label>
                     <Select onValueChange={handleMateriaChange}>
@@ -478,22 +617,6 @@ export default function ListaAsistencias() {
                     </Select>
                   </div>
                 </div>
-                <Dialog open={showModal} onOpenChange={setShowModal}>
-                  <DialogContent className={theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white'}>
-                    <DialogHeader>
-                      <DialogTitle>{selectedPractica?.Titulo}</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-2">
-                      <p><strong>Descripción:</strong> {selectedPractica?.Descripcion}</p>
-                      <p><strong>Duración:</strong> {selectedPractica?.Duracion}</p>
-                      <p><strong>Fecha:</strong> {selectedPractica?.fecha}</p>
-                    </div>
-                    <Button onClick={closeModal} className={`mt-4 ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-200 hover:bg-gray-300'}`}>
-                      <X className="w-4 h-4 mr-2" />
-                      Cerrar
-                    </Button>
-                  </DialogContent>
-                </Dialog>
                 <div className="flex flex-wrap gap-2 justify-between mb-2">
                   <Button 
                     onClick={toggleClase} 
@@ -509,6 +632,19 @@ export default function ListaAsistencias() {
                     <FileUp className="w-4 h-4 mr-1" />
                     Exportar PDF
                   </Button>
+                  <Button 
+                    onClick={exportarAExcel} 
+                    className={`flex-grow text-sm ${theme === 'dark' ? 'bg-green-700 hover:bg-green-600' : 'bg-green-600 hover:bg-green-700'}`}
+                  >
+                    <FileUp className="w-4 h-4 mr-1" />
+                    Exportar Excel
+                  </Button>
+                </div>
+                <div className="flex justify-between items-center my-4">
+                  <h2 className={`text-2xl font-semibold ${theme === 'dark' ? 'text-green-400' : 'text-green-800'}`}>Lista de Estudiantes</h2>
+                  <span className={`text-lg font-medium ${theme === 'dark' ? 'bg-green-900 text-green-100' : 'bg-green-100 text-green-800'} py-1 px-3 rounded-full`}>
+                    Total: {contador}
+                  </span>
                 </div>
                 <div className="flex-1 overflow-auto">
                 <Table className="w-full text-sm">
@@ -604,16 +740,21 @@ export default function ListaAsistencias() {
                   </TableBody>
                 </Table>
                 </div>
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button onClick={handleLogout} className={theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'}>
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Cerrar Sesión
-                </Button>
-              </CardFooter>
+            </CardContent>
+            <CardFooter className="flex justify-end">
+              <Button 
+                onClick={handleLogout} 
+                className={`${theme === 'dark' ? 'bg-red-600 hover:bg-red-700' : 'bg-red-500 hover:bg-red-600'} ${claseIniciada ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={claseIniciada}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Cerrar Sesión
+              </Button>
+            </CardFooter>
           </Card>
         </main>
       </div>
-      </SidebarProvider>
+    </SidebarProvider>
   )
 }
+

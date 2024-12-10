@@ -15,6 +15,8 @@ import { Sun, Moon } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import { motion, AnimatePresence } from 'framer-motion'
 import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
+import { useRouter } from 'next/navigation'
+import Swal from 'sweetalert2'
 
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
@@ -50,6 +52,26 @@ export default function AdminPanel() {
   const [isLoading, setIsLoading] = useState(true)
 
   const currentColors = theme === 'dark' ? colors.dark : colors.light
+
+  const router = useRouter()
+
+  const handleLogout = () => {
+    Swal.fire({
+      title: '¿Desea cerrar sesión?',
+      text: "Será redirigido a la página de inicio",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, cerrar sesión',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Perform logout actions here (e.g., clear session, cookies, etc.)
+        router.push('/') // Redirect to the home page
+      }
+    })
+  }
 
   useEffect(() => {
     applyTheme(theme)
@@ -110,7 +132,12 @@ export default function AdminPanel() {
       </header>
 
       <div className="flex">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDarkMode={theme === 'dark'} />
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          isDarkMode={theme === 'dark'} 
+          onLogout={handleLogout}
+        />
         <main className="flex-1 p-6 overflow-auto h-[calc(100vh-64px)]">
           <StatsCards stats={stats} isDarkMode={theme === 'dark'} colors={colors} />
           
