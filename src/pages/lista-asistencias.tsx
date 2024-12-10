@@ -565,7 +565,7 @@ export default function ListaAsistencias() {
                 <Moon className={`h-4 w-4 ${theme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
               </div>
             </CardHeader>
-            <CardContent className={`flex-1 flex flex-col p-2 overflow-auto ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
+            <CardContent className={`flex-1 flex flex-col p-2 overflow-hidden ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
               <div className="space-y-4 mb-4">
                   <div>
                     <Label htmlFor="materia-select" className={`text-xl ${theme === 'dark' ? 'text-gray-300' : 'text-green-700'}`}>Seleccionar Materia:</Label>
@@ -646,53 +646,50 @@ export default function ListaAsistencias() {
                     Total: {contador}
                   </span>
                 </div>
-                <div className="flex-1 overflow-auto">
-                <Table className="w-full text-sm">
-                  <TableHeader>
-                    <TableRow className={theme === 'dark' ? 'bg-gray-700' : 'bg-green-100'}>
-                      <TableHead>ID Alumno</TableHead>
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Apellido</TableHead>
-                      <TableHead>Carrera</TableHead>
-                      <TableHead>Semestre</TableHead>
-                      <TableHead>Grupo</TableHead>
-                      <TableHead>Turno</TableHead>
-                      <TableHead>Equipo</TableHead>
-                      <TableHead className="w-[100px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {asistencias.map((asistencia, index) => (
-                      <TableRow key={asistencia.id} className={theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-green-50'}>
-                        <TableCell>{asistencia.AlumnoId}</TableCell>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>{asistencia.Nombre}</TableCell>
-                        <TableCell>{asistencia.Apellido}</TableCell>
-                        <TableCell>{asistencia.Carrera}</TableCell>
-                        <TableCell>{asistencia.Semestre}</TableCell>
-                        <TableCell>{asistencia.Grupo}</TableCell>
-                        <TableCell>{asistencia.Turno}</TableCell>
-                        <TableCell>{asistencia.Equipo}</TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => eliminarAsistencia(asistencia.id)}
-                            className="group relative flex h-14 w-14 flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-red-800 bg-red-400 hover:bg-red-600"
-                          >
-                            <svg
-                              viewBox="0 0 1.625 1.625"
-                              className="absolute -top-7 fill-white delay-100 group-hover:top-6 group-hover:animate-[spin_1.4s] group-hover:duration-1000"
-                              height="15"
-                              width="15"
-                            >
+                <div className="flex-1 overflow-hidden">
+                  <div className="h-[calc(100vh-600px)] overflow-y-auto">
+                    <Table className="w-full text-sm">
+                      <TableHeader className="sticky top-0 z-10 bg-inherit">
+                        <TableRow className={`${theme === 'dark' ? 'bg-gray-700' : 'bg-green-100'}`}>
+                          <TableHead>ID Alumno</TableHead>
+                          <TableHead className="w-[50px]">#</TableHead>
+                          <TableHead>Nombre</TableHead>
+                          <TableHead>Apellido</TableHead>
+                          <TableHead>Carrera</TableHead>
+                          <TableHead>Semestre</TableHead>
+                          <TableHead>Grupo</TableHead>
+                          <TableHead>Turno</TableHead>
+                          <TableHead>Equipo</TableHead>
+                          <TableHead className="w-[100px]">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {asistencias.map((asistencia, index) => (
+                          <TableRow key={asistencia.id} className={theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-green-50'}>
+                            <TableCell>{asistencia.AlumnoId}</TableCell>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>{asistencia.Nombre}</TableCell>
+                            <TableCell>{asistencia.Apellido}</TableCell>
+                            <TableCell>{asistencia.Carrera}</TableCell>
+                            <TableCell>{asistencia.Semestre}</TableCell>
+                            <TableCell>{asistencia.Grupo}</TableCell>
+                            <TableCell>{asistencia.Turno}</TableCell>
+                            <TableCell>{asistencia.Equipo}</TableCell>
+                            <TableCell>
+                              <button
+                                onClick={() => eliminarAsistencia(asistencia.id)}
+                                className="group relative flex h-14 w-14 flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-red-800 bg-red-400 hover:bg-red-600"
+                              >
+                                <svg
+                                  viewBox="0 0 1.625 1.625"
+                                  className="absolute -top-7 fill-white delay-100 group-hover:top-6 group-hover:animate-[spin_1.4s] group-hover:duration-1000"
+                                  height="15"
+                                  width="15"
+                                >
+                                  <path
+                                    d="M.471 1.024v-.52a.1.1 0 0 0-.098.098v.618c0 .054.044.098.098.098h.487a.1.1 0 0 0 .098-.099h-.39c-.107 0-.195 0-.195-.195v-.39a.033.033 0 0 0-.032-.033z"></path>
                               <path
-                                d="M.471 1.024v-.52a.1.1 0 0 0-.098.098v.618c0 .054.044.098.098.098h.487a.1.1 0 0 0 .098-.099h-.39c-.107 0-.195 0-.195-.195"
-                              ></path>
-                              <path
-                                d="M1.219.601h-.163A.1.1 0 0 1 .959.504V.341A.033.033 0 0 0 .926.309h-.26a.1.1 0 0 0-.098.098v.618c0 .054.044.098.098.098h.487a.1.1 0 0 0 .098-.099v-.39a.033.033 0 0 0-.032-.033"
-                              ></path>
-                              <path
-                                d="m1.245.465-.15-.15a.02.02 0 0 0-.016-.006.023.023 0 0 0-.023.022v.108c0 .036.029.065.065.065h.107a.023.023 0 0 0 .023-.023.02.02 0 0 0-.007-.016"
+                                d="m1.245.465-.15-.15a.02.02 0 0 0-.016-.006.023.023 0 0 0-.023.022v.108c0 .036.029.065.065.065h.107a.023.023 0 0 0 .023-.023.02.02 0 0 0-.007-.016z"
                               ></path>
                             </svg>
                             <svg
@@ -732,13 +729,14 @@ export default function ListaAsistencias() {
                     ))}
                     {asistencias.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-4">
+                        <TableCell colSpan={10} className="text-center py-4">
                           No hay asistencias registradas.
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
+                  </div>
                 </div>
             </CardContent>
             <CardFooter className="flex justify-end">
