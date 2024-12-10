@@ -527,7 +527,7 @@ export default function InterfazLaboratorio() {
         </motion.div>
       </AnimatePresence>
 
-      <Card className={`w-full max-w-[1200px] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-lg rounded-2xl`}>
+      <Card className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-lg rounded-2xl`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div 
             key={activeTab}
@@ -567,8 +567,8 @@ export default function InterfazLaboratorio() {
               </div>
               <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-4 md:p-6`}>
                 <div className="text-center">
-                  <CardTitle className={`text-2xl md:text-4xl lg:text-5xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-4`}>
-                    <Computer className="w-12 h-12 md:w-16 md:h-16 mb-2" />
+                  <CardTitle className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-2 sm:mb-4`}>
+                    <Computer className="w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 mb-2" />
                     <motion.span
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -595,7 +595,7 @@ export default function InterfazLaboratorio() {
                 </div>
               </CardHeader>
               
-              <CardContent className={`p-4 md:p-6 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_4px_6px_rgba(0,0,0,0.1)] rounded-b-[1rem] sm:rounded-b-[1.5rem] md:rounded-b-[2rem]`}>
+              <CardContent className={`p-2 sm:p-4 md:p-6 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-lg sm:rounded-b-xl md:rounded-b-2xl`}>
                 <Tabs 
                   value={activeTab} 
                   onValueChange={(value) => {
@@ -655,7 +655,7 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-sm md:text-base w-full py-2 md:py-3 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
                               />
                             </div>
                             <div className="space-y-3">
@@ -665,7 +665,7 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-sm md:text-base w-full py-2 md:py-3 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}>
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`} >
                                   <SelectValue placeholder="Seleccione el equipo" />
                                 </SelectTrigger>
                                 <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
@@ -690,10 +690,10 @@ export default function InterfazLaboratorio() {
                                     theme === 'dark'
                                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                  } border text-sm md:text-base w-full py-2 md:py-3 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}>
+                                  } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`} >
                                     <SelectValue placeholder="Seleccione la clase" />
                                   </SelectTrigger>
-                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
+                                  <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-xl border ${theme ==='dark' ? 'border-gray-600' : 'border-green-300'}`}>
                                     <SelectItem value="regular" className="text-lg md:text-xl">Clase Regular</SelectItem>
                                     <SelectItem value="guest" className="text-lg md:text-xl">Clase Invitado</SelectItem>
                                   </SelectContent>
@@ -705,7 +705,7 @@ export default function InterfazLaboratorio() {
                             type="submit" 
                             className={`w-full ${
                               isRegularClassStarted || isGuestClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
-                            } transition-all duration-200 text-sm md:text-base py-2 md:py-3 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:shadow-[5px_5px_10px_#1c1c1c,-5px_-5px_10px_#262626] hover:shadow-[10px_10px_20px_#bebebe,-10px_-10px_20px_#ffffff] dark:hover:shadow-[10px_10px_20px_#151515,-10px_-10px_20px_#292929]`}
+                            } transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#1c1c1c,-3px_-3px_6px_#262626] hover:shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:hover:shadow-[5px_5px_10px_#151515,-5px_-5px_10px_#292929]`}
                             disabled={!isRegularClassStarted && !isGuestClassStarted}
                           >
                             {isRegularClassStarted || isGuestClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
@@ -755,7 +755,7 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-sm md:text-base w-full py-2 md:py-3 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
                               />
                             </div>
                             <div className="space-y-3">
@@ -770,11 +770,11 @@ export default function InterfazLaboratorio() {
                                   theme === 'dark'
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-sm md:text-base w-full py-2 md:py-3 rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
+                                } border text-xs sm:text-sm md:text-base w-full py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
                               />
                             </div>
                           </div>
-                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-sm md:text-base py-2 md:py-3 rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:shadow-[5px_5px_10px_#1c1c1c,-5px_-5px_10px_#262626] hover:shadow-[10px_10px_20px_#bebebe,-10px_-10px_20px_#ffffff] dark:hover:shadow-[10px_10px_20px_#151515,-10px_-10px_20px_#292929]`}
+                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm md:text-base py-1 sm:py-2 md:py-3 rounded-lg sm:rounded-xl text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:shadow-[3px_3px_6px_#1c1c1c,-3px_-3px_6px_#262626] hover:shadow-[5px_5px_10px_#bebebe,-5px_-5px_10px_#ffffff] dark:hover:shadow-[5px_5px_10px_#151515,-5px_-5px_10px_#292929]`}
                           >
                             Iniciar Sesión
                           </Button>
@@ -812,7 +812,7 @@ export default function InterfazLaboratorio() {
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
+                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
                 />
               </div>
               <div className="space-y-2">
@@ -828,7 +828,7 @@ export default function InterfazLaboratorio() {
                     theme === 'dark'
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_5px_5px_10px_#d1d1d1,inset_-5px_-5px_10px_#ffffff] dark:shadow-[inset_5px_5px_10px_#1c1c1c,inset_-5px_-5px_10px_#262626] focus:shadow-[inset_10px_10px_20px_#bebebe,inset_-10px_-10px_20px_#ffffff] dark:focus:shadow-[inset_10px_10px_20px_#151515,inset_-10px_-10px_20px_#292929]`}
+                  } border rounded-lg sm:rounded-xl transition-all duration-200 shadow-[inset_3px_3px_6px_#d1d1d1,inset_-3px_-3px_6px_#ffffff] dark:shadow-[inset_3px_3px_6px_#1c1c1c,inset_-3px_-3px_6px_#262626] focus:shadow-[inset_5px_5px_10px_#bebebe,inset_-5px_-5px_10px_#ffffff] dark:focus:shadow-[inset_5px_5px_10px_#151515,inset_-5px_-5px_10px_#292929]`}
                 />
               </div>
               <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-lg sm:rounded-xl py-2 shadow-[0_4px_6px_rgba(50,50,93,0.11),0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_7px_14px_rgba(50,50,93,0.1),0_3px_6px_rgba(0,0,0,0.08)]`}>
@@ -840,16 +840,16 @@ export default function InterfazLaboratorio() {
       )}
       <style jsx global>{`
         html {
-          font-size: 16px;
+          font-size: 14px;
         }
         @media (min-width: 640px) {
           html {
-            font-size: 18px;
+            font-size: 16px;
           }
         }
         @media (min-width: 1024px) {
           html {
-            font-size: 20px;
+            font-size: 18px;
           }
         }
       `}</style>
