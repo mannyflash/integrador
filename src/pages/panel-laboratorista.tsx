@@ -19,7 +19,6 @@ import { getAuth, signOut } from 'firebase/auth'
 import { useRouter } from 'next/router'
 import Swal from 'sweetalert2'
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 
@@ -84,7 +83,7 @@ export default function PanelLaboratorista() {
       await addDoc(collection(db, 'logs'), {
         timestamp: serverTimestamp(),
         action,
-        user: 'Mock User', // Replace with actual user data when authentication is implemented
+        user: 'Mock User',
         details
       });
     } catch (error) {
@@ -109,7 +108,7 @@ export default function PanelLaboratorista() {
       try {
         await signOut(auth);
         await logAction('logout', 'User logged out');
-        router.push('http://localhost:3000');
+        router.push('/');
       } catch (error) {
         console.error('Error logging out:', error);
         Swal.fire('Error', 'No se pudo cerrar sesión', 'error');

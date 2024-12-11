@@ -157,7 +157,6 @@ export default function InterfazLaboratorio() {
     setThemeState(currentTheme);
     applyTheme(currentTheme);
 
-    // Simulate loading time
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1500);
@@ -314,7 +313,6 @@ export default function InterfazLaboratorio() {
           const alumnoData = alumnoSnap.data()
           const asistenciaRef = doc(collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias'))
 
-          // Copy all fields from Alumnos to Asistencias
           await setDoc(asistenciaRef, {
             AlumnoId: matricula,
             Nombre: alumnoData.Nombre ?? '',
@@ -485,7 +483,6 @@ export default function InterfazLaboratorio() {
     "/FondoItspp.png",
     "/tecnmImagen.png",
     "/LogoSistemas.png",
-    "/momos.png",
   ]
 
   if (isLoading) {

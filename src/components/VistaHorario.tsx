@@ -220,7 +220,7 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
     const doc = new jsPDF('l', 'mm', 'a4')
   
     // Agregar la imagen en la esquina superior izquierda
-    doc.addImage('/placeholder.svg', 'SVG', 10, 10, 20, 20)
+    doc.addImage('/FondoItspp.png', 'PNG', 10, 10, 20, 20)
 
     doc.setFontSize(16)
     doc.text('INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO', 149, 20, { align: 'center' })
