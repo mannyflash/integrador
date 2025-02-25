@@ -582,8 +582,8 @@ export default function ListaAsistencias() {
           {/* Add your menu icon here */}
         </button>
 
-        <main className="flex-1 flex flex-col p-2 sm:p-4 overflow-hidden">
-          <Card className={`flex-1 flex flex-col ${theme === "dark" ? "bg-gray-800" : "bg-white"} p-2`}>
+        <main className="flex-1 flex flex-col p-4 sm:p-6 overflow-hidden">
+          <Card className={`flex-1 flex flex-col ${theme === "dark" ? "bg-gray-800" : "bg-white"} p-4 sm:p-6`}>
             <CardHeader
               className={`${theme === "dark" ? "bg-gray-700" : "bg-green-100"} flex flex-col items-center justify-center text-center p-4 relative`}
             >
@@ -601,8 +601,8 @@ export default function ListaAsistencias() {
                 </span>
               </div>
 
-              {/* Theme Toggle - Responsive positioning */}
-              <div className="absolute top-2 right-2 sm:static sm:mt-4">
+              {/* Theme Toggle - Fixed position on mobile, static on larger screens */}
+              <div className="fixed top-4 right-4 z-50 sm:static sm:mt-4 sm:z-0">
                 <label className="inline-flex items-center relative">
                   <input
                     className="peer hidden"
@@ -635,13 +635,13 @@ export default function ListaAsistencias() {
               className={`flex-1 flex flex-col p-2 overflow-hidden ${theme === "dark" ? "text-white" : "text-gray-800"}`}
             >
               {/* Controls Section */}
-              <div className="space-y-4 mb-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-6 mb-6">
+                <div className="grid grid-cols-1 gap-6">
                   {/* Materia Select */}
-                  <div>
+                  <div className="w-full">
                     <Label
                       htmlFor="materia-select"
-                      className={`text-base sm:text-lg lg:text-xl ${theme === "dark" ? "text-gray-300" : "text-green-700"}`}
+                      className={`block mb-2 text-base sm:text-lg lg:text-xl ${theme === "dark" ? "text-gray-300" : "text-green-700"}`}
                     >
                       Seleccionar Materia:
                     </Label>
@@ -669,10 +669,10 @@ export default function ListaAsistencias() {
                   </div>
 
                   {/* Practica Select */}
-                  <div>
+                  <div className="w-full">
                     <Label
                       htmlFor="practica-select"
-                      className={`text-base sm:text-lg lg:text-xl ${theme === "dark" ? "text-gray-300" : "text-green-700"}`}
+                      className={`block mb-2 text-base sm:text-lg lg:text-xl ${theme === "dark" ? "text-gray-300" : "text-green-700"}`}
                     >
                       Seleccionar Practica:
                     </Label>
@@ -715,27 +715,29 @@ export default function ListaAsistencias() {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
+              <div className="grid grid-cols-1 gap-3 mb-6">
                 <Button
                   onClick={toggleClase}
-                  className={`text-sm ${claseIniciada ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
+                  className={`w-full text-base ${claseIniciada ? "bg-red-500 hover:bg-red-600" : "bg-green-500 hover:bg-green-600"}`}
                 >
                   {claseIniciada ? "Finalizar Clase" : "Iniciar Clase"}
                 </Button>
-                <Button
-                  onClick={exportarPDF}
-                  className={`text-sm ${theme === "dark" ? "bg-blue-700 hover:bg-blue-600" : "bg-blue-600 hover:bg-blue-700"}`}
-                >
-                  <FileUp className="w-4 h-4 mr-1" />
-                  Exportar PDF
-                </Button>
-                <Button
-                  onClick={exportarAExcel}
-                  className={`text-sm ${theme === "dark" ? "bg-green-700 hover:bg-green-600" : "bg-green-600 hover:bg-green-700"}`}
-                >
-                  <FileUp className="w-4 h-4 mr-1" />
-                  Exportar Excel
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Button
+                    onClick={exportarPDF}
+                    className={`w-full text-base ${theme === "dark" ? "bg-blue-700 hover:bg-blue-600" : "bg-blue-600 hover:bg-blue-700"}`}
+                  >
+                    <FileUp className="w-4 h-4 mr-2" />
+                    Exportar PDF
+                  </Button>
+                  <Button
+                    onClick={exportarAExcel}
+                    className={`w-full text-base ${theme === "dark" ? "bg-green-700 hover:bg-green-600" : "bg-green-600 hover:bg-green-700"}`}
+                  >
+                    <FileUp className="w-4 h-4 mr-2" />
+                    Exportar Excel
+                  </Button>
+                </div>
               </div>
 
               {/* Table Header */}
