@@ -1,26 +1,37 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { User, UserCog, Moon, Sun, Computer } from 'lucide-react'
-import { initializeApp } from 'firebase/app'
-import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp, onSnapshot, query, where, getDocs } from 'firebase/firestore'
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { User, UserCog, Computer } from "lucide-react"
+import { initializeApp } from "firebase/app"
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
+// import { Switch } from "@/components/ui/switch" // Removed
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { ImageCarousel } from '../components/ImageCarousel'
-import { Sidebar } from '../components/Sidebar'
-import { getTheme, setTheme, toggleTheme, applyTheme, Theme } from '../lib/theme'
+import { ImageCarousel } from "../components/ImageCarousel"
+import { Sidebar } from "../components/Sidebar"
+import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
 
-import Image from 'next/image'
-import swal from 'sweetalert'
-import { motion, AnimatePresence } from 'framer-motion'
-import bcrypt from 'bcryptjs'
+import Image from "next/image"
+import swal from "sweetalert"
+import { motion, AnimatePresence } from "framer-motion"
+import bcrypt from "bcryptjs"
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
@@ -29,82 +40,82 @@ const firebaseConfig = {
   storageBucket: "integrador-7b39d.appspot.com",
   messagingSenderId: "780966021686",
   appId: "1:780966021686:web:485712fb7509339c6ae697",
-  measurementId: "G-FGB03PFM7Z"
+  measurementId: "G-FGB03PFM7Z",
 }
 
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 
-type UserType = 'estudiante' | 'maestro'
+type UserType = "estudiante" | "maestro"
 
 interface Equipment {
-  id: string;
-  fueraDeServicio: boolean;
+  id: string
+  fueraDeServicio: boolean
 }
 
 const colors = {
   light: {
-    background: 'bg-green-50',
-    cardBackground: 'bg-white',
-    headerBackground: 'bg-green-100',
-    titleText: 'text-green-800',
-    descriptionText: 'text-green-700',
-    hoverBackground: 'hover:bg-green-50',
-    buttonGreen: 'bg-green-500 hover:bg-green-600',
-    buttonBlue: 'bg-blue-500 hover:bg-blue-600',
-    countBackground: 'bg-green-100',
-    countText: 'text-green-800',
-    inputBackground: 'bg-green-50',
-    inputBorder: 'border-green-300',
-    inputText: 'text-green-800',
-    switchBackground: 'bg-green-200',
-    switchToggle: 'bg-white',
+    background: "bg-green-50",
+    cardBackground: "bg-white",
+    headerBackground: "bg-green-100",
+    titleText: "text-green-800",
+    descriptionText: "text-green-700",
+    hoverBackground: "hover:bg-green-50",
+    buttonGreen: "bg-green-500 hover:bg-green-600",
+    buttonBlue: "bg-blue-500 hover:bg-blue-600",
+    countBackground: "bg-green-100",
+    countText: "text-green-800",
+    inputBackground: "bg-green-50",
+    inputBorder: "border-green-300",
+    inputText: "text-green-800",
+    switchBackground: "bg-green-200",
+    switchToggle: "bg-white",
   },
   dark: {
-    background: 'bg-gray-900',
-    cardBackground: 'bg-gray-800',
-    headerBackground: 'bg-gray-700',
-    titleText: 'text-white',
-    descriptionText: 'text-gray-300',
-    hoverBackground: 'hover:bg-gray-700',
-    buttonGreen: 'bg-green-700 hover:bg-green-600',
-    buttonBlue: 'bg-blue-700 hover:bg-blue-600',
-    countBackground: 'bg-green-900',
-    countText: 'text-green-100',
-    inputBackground: 'bg-gray-700',
-    inputBorder: 'border-gray-600',
-    inputText: 'text-gray-200',
-    switchBackground: 'bg-gray-600',
-    switchToggle: 'bg-gray-300',
+    background: "bg-gray-900",
+    cardBackground: "bg-gray-800",
+    headerBackground: "bg-gray-700",
+    titleText: "text-white",
+    descriptionText: "text-gray-300",
+    hoverBackground: "hover:bg-gray-700",
+    buttonGreen: "bg-green-700 hover:bg-green-600",
+    buttonBlue: "bg-blue-700 hover:bg-blue-600",
+    countBackground: "bg-green-900",
+    countText: "text-green-100",
+    inputBackground: "bg-gray-700",
+    inputBorder: "border-gray-600",
+    inputText: "text-gray-200",
+    switchBackground: "bg-gray-600",
+    switchToggle: "bg-gray-300",
   },
-};
+}
 
 const TabAnimation = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -20 },
-  transition: { duration: 0.2 }
-};
+  transition: { duration: 0.2 },
+}
 
 const SlideAnimation = {
   initial: (isReversed: boolean) => ({
     x: isReversed ? "100%" : "-100%",
-    opacity: 0
+    opacity: 0,
   }),
   animate: {
     x: 0,
-    opacity: 1
+    opacity: 1,
   },
   exit: (isReversed: boolean) => ({
     x: isReversed ? "-100%" : "100%",
-    opacity: 0
+    opacity: 0,
   }),
   transition: {
     type: "spring",
     stiffness: 300,
-    damping: 30
-  }
-};
+    damping: 30,
+  },
+}
 
 const Loader = () => {
   return (
@@ -125,113 +136,107 @@ const Loader = () => {
 
 export default function InterfazLaboratorio() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<UserType>('estudiante')
-  const [matricula, setMatricula] = useState('')
-  const [equipo, setEquipo] = useState('')
-  const [userMatricula, setUserMatricula] = useState('')
-  const [password, setPassword] = useState('')
+  const [activeTab, setActiveTab] = useState<UserType>("estudiante")
+  const [matricula, setMatricula] = useState("")
+  const [equipo, setEquipo] = useState("")
+  const [userMatricula, setUserMatricula] = useState("")
+  const [password, setPassword] = useState("")
   const [isClassStarted, setIsClassStarted] = useState(false)
-  const [theme, setThemeState] = useState<Theme>('light')
+  const [theme, setThemeState] = useState<Theme>("light")
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false)
-  const [adminEmail, setAdminEmail] = useState('')
-  const [adminPassword, setAdminPassword] = useState('')
+  const [adminEmail, setAdminEmail] = useState("")
+  const [adminPassword, setAdminPassword] = useState("")
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
   const [isReversed, setIsReversed] = useState(false)
-  const [userType, setUserType] = useState<'maestro' | 'laboratorista'>('maestro')
+  const [userType, setUserType] = useState<"maestro" | "laboratorista">("maestro")
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isRegularClassStarted, setIsRegularClassStarted] = useState(false)
   const [isGuestClassStarted, setIsGuestClassStarted] = useState(false)
-  const [classChoice, setClassChoice] = useState<'regular' | 'guest' | null>(null)
+  const [classChoice, setClassChoice] = useState<"regular" | "guest" | null>(null)
   const [guestClassInfo, setGuestClassInfo] = useState<any>(null)
-  const [lastGuestClassStatus, setLastGuestClassStatus] = useState<boolean>(false);
-  const [lastRegularClassStatus, setLastRegularClassStatus] = useState<boolean>(false);
+  const [lastGuestClassStatus, setLastGuestClassStatus] = useState<boolean>(false)
+  const [lastRegularClassStatus, setLastRegularClassStatus] = useState<boolean>(false)
 
-  const welcomeMessages = [
-    '"Hombres y Mujeres Del Mar y Desierto',
-    'Unidos Por La Educación Tecnológica De Calidad."',
-  ]
+  const welcomeMessages = ['"Hombres y Mujeres Del Mar y Desierto', 'Unidos Por La Educación Tecnológica De Calidad."']
 
   useEffect(() => {
-    const currentTheme = getTheme();
-    setThemeState(currentTheme);
-    applyTheme(currentTheme);
+    const currentTheme = getTheme()
+    setThemeState(currentTheme)
+    applyTheme(currentTheme)
 
     const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
+      setIsLoading(false)
+    }, 1500)
 
-    return () => clearTimeout(timer);
-  }, []);
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
-    const unsubscribeRegularClass = onSnapshot(doc(db, 'EstadoClase', 'actual'), (doc) => {
+    const unsubscribeRegularClass = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
       if (doc.exists()) {
-        const newStatus = doc.data().iniciada;
-        setIsRegularClassStarted(newStatus);
-      
+        const newStatus = doc.data().iniciada
+        setIsRegularClassStarted(newStatus)
+
         if (newStatus !== lastRegularClassStatus) {
-          setLastRegularClassStatus(newStatus);
+          setLastRegularClassStatus(newStatus)
           if (newStatus) {
             swal({
               title: "¡Clase regular iniciada!",
               text: "Ya puedes registrar tu asistencia",
               icon: "success",
-            });
+            })
           } else {
             swal({
               title: "Clase regular finalizada",
               text: "El registro de asistencia está cerrado.",
               icon: "info",
-            });
+            })
           }
         }
-        setIsClassStarted(newStatus);
+        setIsClassStarted(newStatus)
       }
-    });
+    })
 
-    const unsubscribeGuestClass = onSnapshot(doc(db, 'EstadoClaseInvitado', 'actual'), (doc) => {
+    const unsubscribeGuestClass = onSnapshot(doc(db, "EstadoClaseInvitado", "actual"), (doc) => {
       if (doc.exists()) {
-        const data = doc.data();
-        const newStatus = data.iniciada;
-        setIsGuestClassStarted(newStatus);
-      
+        const data = doc.data()
+        const newStatus = data.iniciada
+        setIsGuestClassStarted(newStatus)
+
         // Only show alert if status changed
         if (newStatus !== lastGuestClassStatus) {
-          setLastGuestClassStatus(newStatus);
+          setLastGuestClassStatus(newStatus)
           if (newStatus) {
             swal({
               title: "¡Clase invitada iniciada!",
               text: `Maestro: ${data.MaestroInvitado}\nMateria: ${data.Materia}\nPráctica: ${data.Practica}\nHora de inicio: ${data.HoraInicio}`,
               icon: "success",
-            });
+            })
           } else {
             swal({
               title: "Clase invitada finalizada",
               text: `La clase con el maestro ${data.MaestroInvitado} ha finalizado.`,
               icon: "info",
-            });
+            })
           }
         }
-        setGuestClassInfo(data);
+        setGuestClassInfo(data)
       }
-    });
+    })
 
     return () => {
       unsubscribeRegularClass()
       unsubscribeGuestClass()
     }
-  }, [lastGuestClassStatus, lastRegularClassStatus]);
+  }, [lastGuestClassStatus, lastRegularClassStatus])
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, 'Numero de equipos', 'equipos'), (doc) => {
+    const unsubscribe = onSnapshot(doc(db, "Numero de equipos", "equipos"), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         const dbEquipment = data.Equipos || []
-        setEquipmentList([
-          { id: 'personal', fueraDeServicio: false },
-          ...dbEquipment
-        ])
+        setEquipmentList([{ id: "personal", fueraDeServicio: false }, ...dbEquipment])
       }
     })
 
@@ -240,22 +245,22 @@ export default function InterfazLaboratorio() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentMessageIndex((prevIndex) => (prevIndex + 1) % welcomeMessages.length);
-    }, 3500);
+      setCurrentMessageIndex((prevIndex) => (prevIndex + 1) % welcomeMessages.length)
+    }, 3500)
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearInterval(interval)
+  }, [])
 
   const handleThemeToggle = () => {
-    const newTheme = toggleTheme();
-    setThemeState(newTheme);
-    applyTheme(newTheme);
-  };
+    const newTheme = toggleTheme()
+    setThemeState(newTheme)
+    applyTheme(newTheme)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      if (activeTab === 'estudiante') {
+      if (activeTab === "estudiante") {
         if (!matricula || !equipo) {
           await swal({
             title: "Error",
@@ -274,10 +279,10 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        const selectedClass = isRegularClassStarted ? 'regular' : 'guest';
+        const selectedClass = isRegularClassStarted ? "regular" : "guest"
 
         // Check for duplicate matricula
-        const asistenciasRef = collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias')
+        const asistenciasRef = collection(db, selectedClass === "guest" ? "AsistenciasInvitado" : "Asistencias")
         const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
         const matriculaSnapshot = await getDocs(matriculaQuery)
 
@@ -286,12 +291,12 @@ export default function InterfazLaboratorio() {
             title: "Atención",
             text: "Ya has registrado tu asistencia.",
             icon: "warning",
-          });
+          })
           return
         }
 
         // Check for duplicate equipo, except for personal equipment
-        if (equipo !== 'personal') {
+        if (equipo !== "personal") {
           const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
           const equipoSnapshot = await getDocs(equipoQuery)
 
@@ -300,43 +305,45 @@ export default function InterfazLaboratorio() {
               title: "Atención",
               text: "Este equipo ya ha sido registrado.",
               icon: "warning",
-            });
+            })
             return
           }
         }
 
         // Get all student data
-        const alumnoRef = doc(db, 'Alumnos', matricula)
+        const alumnoRef = doc(db, "Alumnos", matricula)
         const alumnoSnap = await getDoc(alumnoRef)
 
         if (alumnoSnap.exists()) {
           const alumnoData = alumnoSnap.data()
-          const asistenciaRef = doc(collection(db, selectedClass === 'guest' ? 'AsistenciasInvitado' : 'Asistencias'))
+          const asistenciaRef = doc(collection(db, selectedClass === "guest" ? "AsistenciasInvitado" : "Asistencias"))
 
           await setDoc(asistenciaRef, {
             AlumnoId: matricula,
-            Nombre: alumnoData.Nombre ?? '',
-            Apellido: alumnoData.Apellido ?? '',
-            Carrera: alumnoData.Carrera ?? '',
-            Grupo: alumnoData.Grupo ?? '',
-            Semestre: alumnoData.Semestre ?? '',
-            Turno: alumnoData.Turno ?? '',
+            Nombre: alumnoData.Nombre ?? "",
+            Apellido: alumnoData.Apellido ?? "",
+            Carrera: alumnoData.Carrera ?? "",
+            Grupo: alumnoData.Grupo ?? "",
+            Semestre: alumnoData.Semestre ?? "",
+            Turno: alumnoData.Turno ?? "",
             Equipo: equipo,
             Fecha: serverTimestamp(),
-            ...(selectedClass === 'guest' ? {
-              MaestroInvitado: guestClassInfo.MaestroInvitado,
-              Materia: guestClassInfo.Materia
-            } : {})
+            ...(selectedClass === "guest"
+              ? {
+                  MaestroInvitado: guestClassInfo.MaestroInvitado,
+                  Materia: guestClassInfo.Materia,
+                }
+              : {}),
           })
 
           await swal({
             title: "¡Asistencia registrada!",
-            text: `Tu asistencia se ha registrado correctamente para la ${selectedClass === 'guest' ? 'clase invitada' : 'clase regular'}.`,
+            text: `Tu asistencia se ha registrado correctamente para la ${selectedClass === "guest" ? "clase invitada" : "clase regular"}.`,
             icon: "success",
           })
 
-          setMatricula('')
-          setEquipo('')
+          setMatricula("")
+          setEquipo("")
           setClassChoice(null)
         } else {
           await swal({
@@ -345,7 +352,7 @@ export default function InterfazLaboratorio() {
             icon: "error",
           })
         }
-      } else if (activeTab === 'maestro') {
+      } else if (activeTab === "maestro") {
         if (!userMatricula || !password) {
           await swal({
             title: "Error",
@@ -355,14 +362,14 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        console.log('Intentando iniciar sesión:', { userType, userMatricula, password })
+        console.log("Intentando iniciar sesión:", { userType, userMatricula, password })
 
-        const collectionName = userType === 'maestro' ? 'Docentes' : 'Laboratoristas'
+        const collectionName = userType === "maestro" ? "Docentes" : "Laboratoristas"
         const userRef = doc(db, collectionName, userMatricula)
         const userSnap = await getDoc(userRef)
 
         if (!userSnap.exists()) {
-          console.log('Usuario no encontrado')
+          console.log("Usuario no encontrado")
           await swal({
             title: "Error",
             text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
@@ -372,11 +379,11 @@ export default function InterfazLaboratorio() {
         }
 
         const userData = userSnap.data()
-        console.log('Datos del usuario:', userData)
+        console.log("Datos del usuario:", userData)
         const passwordMatch = await bcrypt.compare(password, userData.Contraseña)
 
         if (!passwordMatch) {
-          console.log('Contraseña incorrecta')
+          console.log("Contraseña incorrecta")
           await swal({
             title: "Error",
             text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
@@ -385,19 +392,19 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        console.log('Inicio de sesión exitoso')
+        console.log("Inicio de sesión exitoso")
         await swal({
           title: "¡Bienvenido!",
           text: "Inicio de sesión exitoso",
           icon: "success",
         })
 
-        localStorage.setItem(userType === 'maestro' ? 'maestroId' : 'labTechId', userMatricula);
+        localStorage.setItem(userType === "maestro" ? "maestroId" : "labTechId", userMatricula)
 
-        router.push(userType === 'maestro' ? '/lista-asistencias' : '/panel-laboratorista')
+        router.push(userType === "maestro" ? "/lista-asistencias" : "/panel-laboratorista")
       }
     } catch (error) {
-      console.error('Error al procesar la solicitud:', error)
+      console.error("Error al procesar la solicitud:", error)
       await swal({
         title: "Error",
         text: "Ha ocurrido un error. Por favor, intenta de nuevo.",
@@ -406,8 +413,11 @@ export default function InterfazLaboratorio() {
     }
   }
 
-  const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
-    const value = e.target.value.replace(/\D/g, '')
+  const handleNumberInput = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    const value = e.target.value.replace(/\D/g, "")
     setter(value)
   }
 
@@ -419,11 +429,11 @@ export default function InterfazLaboratorio() {
           title: "Error",
           text: "Por favor, completa todos los campos.",
           icon: "error",
-        });
-        return;
+        })
+        return
       }
 
-      const adminRef = doc(db, 'Administrador', adminEmail)
+      const adminRef = doc(db, "Administrador", adminEmail)
       const adminSnap = await getDoc(adminRef)
 
       if (!adminSnap.exists()) {
@@ -431,8 +441,8 @@ export default function InterfazLaboratorio() {
           title: "Error",
           text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
           icon: "error",
-        });
-        return;
+        })
+        return
       }
 
       const adminData = adminSnap.data()
@@ -441,8 +451,8 @@ export default function InterfazLaboratorio() {
           title: "Error",
           text: "Error en los datos del administrador. Por favor, contacte al soporte técnico.",
           icon: "error",
-        });
-        return;
+        })
+        return
       }
 
       const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
@@ -452,8 +462,8 @@ export default function InterfazLaboratorio() {
           title: "Error",
           text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
           icon: "error",
-        });
-        return;
+        })
+        return
       }
 
       await swal({
@@ -462,12 +472,12 @@ export default function InterfazLaboratorio() {
         icon: "success",
       })
       setIsAdminLoginOpen(false)
-      router.push('/AdminPanel')
+      router.push("/AdminPanel")
     } catch (error) {
-      console.error('Error al procesar la solicitud:', error)
+      console.error("Error al procesar la solicitud:", error)
       let errorMessage = "Ha ocurrido un error. Por favor, intenta de nuevo."
       if (error instanceof Error) {
-        errorMessage = error.message;
+        errorMessage = error.message
       }
       await swal({
         title: "Error",
@@ -479,7 +489,7 @@ export default function InterfazLaboratorio() {
 
   const carouselImages = [
     "/fondozugey.jpg",
-   // "/fondo_de_pantalla_de_salon.jpeg",
+    // "/fondo_de_pantalla_de_salon.jpeg",
     "/FondoItspp.png",
     "/tecnmImagen.png",
     "/LogoSistemas.png",
@@ -490,9 +500,15 @@ export default function InterfazLaboratorio() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-green-50'} transition-colors duration-300`}>
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 ${theme === "dark" ? "dark bg-gray-900" : "bg-green-50"} transition-colors duration-300`}
+    >
       <div className="fixed top-2 left-2 z-50">
-        <Sidebar isDarkMode={theme === 'dark'} onAdminLogin={() => setIsAdminLoginOpen(true)} adminLoginText="Administrador"/>
+        <Sidebar
+          isDarkMode={theme === "dark"}
+          onAdminLogin={() => setIsAdminLoginOpen(true)}
+          adminLoginText="Administrador"
+        />
       </div>
 
       <AnimatePresence mode="wait">
@@ -502,21 +518,23 @@ export default function InterfazLaboratorio() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className={`text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-green-800'} mb-2 sm:mb-4 text-center z-10 p-1 sm:p-2 rounded-xl max-w-[95%] sm:max-w-[90%] mx-auto overflow-hidden`}
+          className={`text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-semibold ${theme === "dark" ? "text-white" : "text-green-800"} mb-2 sm:mb-4 text-center z-10 p-1 sm:p-2 rounded-xl max-w-[95%] sm:max-w-[90%] mx-auto overflow-hidden`}
         >
           {welcomeMessages[currentMessageIndex]}
         </motion.div>
       </AnimatePresence>
 
-      <Card className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} border-none relative z-10 shadow-lg rounded-xl sm:rounded-2xl`}>
+      <Card
+        className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${theme === "dark" ? "bg-gray-800" : "bg-white"} border-none relative z-10 shadow-lg rounded-xl sm:rounded-2xl`}
+      >
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div 
+          <motion.div
             key={activeTab}
             className="flex flex-col lg:flex-row min-h-[70vh] sm:min-h-[80vh] relative overflow-hidden rounded-xl sm:rounded-2xl"
             {...TabAnimation}
           >
-            <motion.div 
-              className={`lg:w-2/5 relative h-48 sm:h-64 lg:h-auto ${isReversed ? 'order-last' : 'order-first'}`}
+            <motion.div
+              className={`lg:w-2/5 relative h-48 sm:h-64 lg:h-auto ${isReversed ? "order-last" : "order-first"}`}
               custom={isReversed}
               variants={SlideAnimation}
               initial="initial"
@@ -526,8 +544,8 @@ export default function InterfazLaboratorio() {
               <ImageCarousel images={carouselImages} />
             </motion.div>
 
-            <motion.div 
-              className={`lg:w-3/5 relative flex flex-col ${isReversed ? 'order-first' : 'order-last'}`}
+            <motion.div
+              className={`lg:w-3/5 relative flex flex-col ${isReversed ? "order-first" : "order-last"}`}
               custom={!isReversed}
               variants={SlideAnimation}
               initial="initial"
@@ -546,9 +564,13 @@ export default function InterfazLaboratorio() {
                   />
                 </div>
               </div>
-              <CardHeader className={`relative z-10 ${theme === 'dark' ? colors.dark.headerBackground : colors.light.headerBackground} p-2 sm:p-4`}>
+              <CardHeader
+                className={`relative z-10 ${theme === "dark" ? colors.dark.headerBackground : colors.light.headerBackground} p-2 sm:p-4`}
+              >
                 <div className="text-center">
-                  <CardTitle className={`text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold flex flex-col items-center justify-center ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText} mb-1 sm:mb-2`}>
+                  <CardTitle
+                    className={`text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold flex flex-col items-center justify-center ${theme === "dark" ? colors.dark.titleText : colors.light.titleText} mb-1 sm:mb-2`}
+                  >
                     <Computer className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 mb-1 sm:mb-2" />
                     <motion.span
                       initial={{ opacity: 0, scale: 0.5 }}
@@ -556,7 +578,7 @@ export default function InterfazLaboratorio() {
                       transition={{
                         duration: 0.8,
                         delay: 0.5,
-                        ease: [0, 0.71, 0.2, 1.01]
+                        ease: [0, 0.71, 0.2, 1.01],
                       }}
                     >
                       Laboratorio Programacion
@@ -564,43 +586,62 @@ export default function InterfazLaboratorio() {
                   </CardTitle>
                 </div>
                 <div className={`mt-2 flex items-center justify-center space-x-2 sm:space-x-4`}>
-                  <div className={`flex items-center space-x-1 sm:space-x-2 ${theme === 'dark' ? 'bg-gray-700 border border-gray-600' : 'bg-green-100 border border-green-200'} p-1 rounded-full transition-colors duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626]`}>
-                    <Sun className={`h-3 w-3 sm:h-4 sm:w-4 ${theme === 'dark' ? 'text-gray-400' : 'text-yellow-500'}`} />
-                    <Switch
-                      checked={theme === 'dark'}
-                      onCheckedChange={handleThemeToggle}
-                      className={`${theme === 'dark' ? colors.dark.switchBackground : colors.light.switchBackground} data-[state=checked]:bg-green-600`}
+                  <label className="inline-flex items-center relative">
+                    <input
+                      className="peer hidden"
+                      type="checkbox"
+                      checked={theme === "dark"}
+                      onChange={handleThemeToggle}
                     />
-                    <Moon className={`h-3 w-3 sm:h-4 sm:w-4 ${theme === 'dark' ? 'text-blue-400' : 'text-gray-400'}`} />
-                  </div>
+                    <div className="relative w-[110px] h-[50px] bg-white peer-checked:bg-zinc-500 rounded-full after:absolute after:content-[''] after:w-[40px] after:h-[40px] after:bg-gradient-to-r from-orange-500 to-yellow-400 peer-checked:after:from-zinc-900 peer-checked:after:to-zinc-900 after:rounded-full after:top-[5px] after:left-[5px] active:after:w-[50px] peer-checked:after:left-[105px] peer-checked:after:translate-x-[-100%] shadow-sm duration-300 after:duration-300 after:shadow-md"></div>
+                    <svg
+                      height="0"
+                      width="100"
+                      viewBox="0 0 24 24"
+                      className="fill-white peer-checked:opacity-60 absolute w-6 h-6 left-[13px]"
+                    >
+                      <path d="M12,17c-2.76,0-5-2.24-5-5s2.24-5,5-5,5,2.24,5,5-2.24,5-5,5ZM13,0h-2V5h2V0Zm0,19h-2v5h2v-5ZM5,11H0v2H5v-2Zm19,0h-5v2h5v-2Zm-2.81-6.78l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54ZM7.76,17.66l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54Zm0-11.31l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Zm13.44,13.44l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Z" />
+                    </svg>
+                    <svg
+                      height="512"
+                      width="512"
+                      viewBox="0 0 24 24"
+                      className="fill-black opacity-60 peer-checked:opacity-70 peer-checked:fill-white absolute w-6 h-6 right-[13px]"
+                    >
+                      <path d="M12.009,24A12.067,12.067,0,0,1,.075,10.725,12.121,12.121,0,0,1,10.1.152a13,13,0,0,1,5.03.206,2.5,2.5,0,0,1,1.8,1.8,2.47,2.47,0,0,1-.7,2.425c-4.559,4.168-4.165,10.645.807,14.412h0a2.5,2.5,0,0,1-.7,4.319A13.875,13.875,0,0,1,12.009,24Zm.074-22a10.776,10.776,0,0,0-1.675.127,10.1,10.1,0,0,0-8.344,8.8A9.928,9.928,0,0,0,4.581,18.7a10.473,10.473,0,0,0,11.093,2.734.5.5,0,0,0,.138-.856h0C9.883,16.1,9.417,8.087,14.865,3.124a.459.459,0,0,0,.127-.465.491.491,0,0,0-.356-.362A10.68,10.68,0,0,0,12.083,2ZM20.5,12a1,1,0,0,1-.97-.757l-.358-1.43L17.74,9.428a1,1,0,0,1,.035-1.94l1.4-.325.351-1.406a1,1,0,0,1,1.94,0l.355,1.418,1.418.355a1,1,0,0,1,0,1.94l-1.418.355-.355,1.418A1,1,0,0,1,20.5,12ZM16,14a1,1,0,0,0,2,0A1,1,0,0,0,16,14Zm6,4a1,1,0,0,0,2,0A1,1,0,0,0,22,18Z" />
+                    </svg>
+                  </label>
                 </div>
               </CardHeader>
-              
-              <CardContent className={`p-2 sm:p-4 ${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-lg sm:rounded-b-xl`}>
-                <Tabs 
-                  value={activeTab} 
+
+              <CardContent
+                className={`p-2 sm:p-4 ${theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-lg sm:rounded-b-xl`}
+              >
+                <Tabs
+                  value={activeTab}
                   onValueChange={(value) => {
-                    setIsReversed(value === 'estudiante' ? false : true);
-                    setActiveTab(value as UserType);
-                    setUserType('maestro');
+                    setIsReversed(value === "estudiante" ? false : true)
+                    setActiveTab(value as UserType)
+                    setUserType("maestro")
                     // Clear all input fields
-                    setPassword('');
-                    setMatricula('');
-                    setUserMatricula('');
-                    setEquipo('');
-                  }} 
+                    setPassword("")
+                    setMatricula("")
+                    setUserMatricula("")
+                    setEquipo("")
+                  }}
                   className="h-full flex flex-col"
                 >
                   <TabsList className="grid w-full grid-cols-2 h-10 mb-2 sm:mb-4 rounded-lg sm:rounded-xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800">
-                    {['estudiante', 'maestro'].map((tab) => (
+                    {["estudiante", "maestro"].map((tab) => (
                       <TabsTrigger
                         key={tab}
                         value={tab}
                         className={`
                           relative flex items-center justify-center text-xs sm:text-sm md:text-base
-                          ${theme === 'dark'
-                            ? 'text-gray-400 data-[state=active]:text-white'
-                            : 'text-green-700 data-[state=active]:text-gray-900'
+                          ${
+                            theme === "dark"
+                              ? "text-gray-400 data-[state=active]:text-white"
+                              : "text-green-700 data-[state=active]:text-gray-900"
                           } 
                           transition-all duration-300 z-10 h-full rounded-md sm:rounded-lg
                           data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700
@@ -611,21 +652,33 @@ export default function InterfazLaboratorio() {
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                         >
-                          {tab === 'estudiante' && <User className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />}
-                          {tab === 'maestro' && <UserCog className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />}
+                          {tab === "estudiante" && (
+                            <User className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />
+                          )}
+                          {tab === "maestro" && (
+                            <UserCog className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />
+                          )}
                           {tab.charAt(0).toUpperCase() + tab.slice(1)}
                         </motion.div>
                       </TabsTrigger>
                     ))}
                   </TabsList>
-                  
+
                   <div className="flex-grow overflow-y-auto">
                     <AnimatePresence mode="wait">
                       <TabsContent value="estudiante" className="flex-grow">
-                        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between">
+                        <form
+                          onSubmit={handleSubmit}
+                          className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between"
+                        >
                           <div className="space-y-3 sm:space-y-4">
                             <div className="space-y-1 sm:space-y-2">
-                              <Label htmlFor="matricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Matrícula</Label>
+                              <Label
+                                htmlFor="matricula"
+                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
+                              >
+                                Matrícula
+                              </Label>
                               <Input
                                 id="matricula"
                                 type="text"
@@ -633,96 +686,128 @@ export default function InterfazLaboratorio() {
                                 value={matricula}
                                 onChange={(e) => handleNumberInput(e, setMatricula)}
                                 className={`${
-                                  theme === 'dark'
+                                  theme === "dark"
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
+                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
                               />
                             </div>
                             <div className="space-y-1 sm:space-y-2">
-                              <Label htmlFor="equipo" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Número de Equipo</Label>
+                              <Label
+                                htmlFor="equipo"
+                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
+                              >
+                                Número de Equipo
+                              </Label>
                               <Select onValueChange={setEquipo} value={equipo}>
-                                <SelectTrigger id="equipo" className={`${
-                                  theme === 'dark'
-                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`} >
+                                <SelectTrigger
+                                  id="equipo"
+                                  className={`${
+                                    theme === "dark"
+                                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
+                                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
+                                  } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
+                                >
                                   <SelectValue placeholder="Seleccione el equipo" />
                                 </SelectTrigger>
-                                <SelectContent className={`${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'} rounded-lg sm:rounded-xl border ${theme === 'dark' ? 'border-gray-600' : 'border-green-300'}`}>
+                                <SelectContent
+                                  className={`${theme === "dark" ? "bg-gray-700 text-white" : "bg-white text-gray-800"} rounded-lg sm:rounded-xl border ${theme === "dark" ? "border-gray-600" : "border-green-300"}`}
+                                >
                                   {equipmentList.map((equipment) => (
-                                    <SelectItem 
-                                      key={equipment.id} 
+                                    <SelectItem
+                                      key={equipment.id}
                                       value={equipment.id}
                                       disabled={equipment.fueraDeServicio}
-                                      className={`text-xs sm:text-sm ${equipment.fueraDeServicio ? 'text-gray-400' : ''}`}
+                                      className={`text-xs sm:text-sm ${equipment.fueraDeServicio ? "text-gray-400" : ""}`}
                                     >
-                                      {equipment.id === 'personal' ? 'Equipo Personal' : `Equipo ${equipment.id}`} {equipment.fueraDeServicio ? '(Fuera de servicio)' : ''}
+                                      {equipment.id === "personal" ? "Equipo Personal" : `Equipo ${equipment.id}`}{" "}
+                                      {equipment.fueraDeServicio ? "(Fuera de servicio)" : ""}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
                           </div>
-                          <Button 
-                            type="submit" 
+                          <Button
+                            type="submit"
                             className={`w-full ${
-                              isRegularClassStarted || isGuestClassStarted ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'
+                              isRegularClassStarted || isGuestClassStarted
+                                ? theme === "dark"
+                                  ? colors.dark.buttonGreen
+                                  : colors.light.buttonGreen
+                                : "bg-gray-400"
                             } transition-all duration-200 text-xs sm:text-sm py-1 sm:py-2 rounded-md sm:rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[2px_2px_4px_#bebebe,-2px_-2px_4px_#ffffff] dark:shadow-[2px_2px_4px_#1c1c1c,-2px_-2px_4px_#262626] hover:shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:hover:shadow-[3px_3px_6px_#151515,-3px_-3px_6px_#292929]`}
                             disabled={!isRegularClassStarted && !isGuestClassStarted}
                           >
-                            {isRegularClassStarted || isGuestClassStarted ? 'Registrar Asistencia' : 'Esperando inicio de clase'}
+                            {isRegularClassStarted || isGuestClassStarted
+                              ? "Registrar Asistencia"
+                              : "Esperando inicio de clase"}
                           </Button>
                         </form>
                       </TabsContent>
                       <TabsContent value="maestro" className="flex-grow">
                         <div className="space-y-3 sm:space-y-4 mb-3 sm:mb-4">
-                          <Label className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Seleccione surol</Label>
+                          <Label
+                            className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
+                          >
+                            Seleccione surol
+                          </Label>
                           <div className="flex space-x-2 sm:space-x-4">
                             <Button
                               onClick={() => {
-                                setUserType('maestro');
-                                setUserMatricula('');
-                                setPassword('');
+                                setUserType("maestro")
+                                setUserMatricula("")
+                                setPassword("")
                               }}
-                              className={`flex-1 ${userType === 'maestro' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === "maestro" ? (theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen) : "bg-gray-400"} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
                             >
                               Maestro
                             </Button>
                             <Button
                               onClick={() => {
-                                setUserType('laboratorista');
-                                setUserMatricula('');
-                                setPassword('');
+                                setUserType("laboratorista")
+                                setUserMatricula("")
+                                setPassword("")
                               }}
-                              className={`flex-1 ${userType === 'laboratorista' ? (theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen) : 'bg-gray-400'} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
+                              className={`flex-1 ${userType === "laboratorista" ? (theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen) : "bg-gray-400"} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
                             >
                               Laboratorista
                             </Button>
                           </div>
                         </div>
-                        
-                        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between">
+
+                        <form
+                          onSubmit={handleSubmit}
+                          className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between"
+                        >
                           <div className="space-y-3 sm:space-y-4">
                             <div className="space-y-1 sm:space-y-2">
-                              <Label htmlFor="userMatricula" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>
-                                Matrícula del {userType === 'maestro' ? 'Maestro' : 'Laboratorista'}
+                              <Label
+                                htmlFor="userMatricula"
+                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
+                              >
+                                Matrícula del {userType === "maestro" ? "Maestro" : "Laboratorista"}
                               </Label>
                               <Input
                                 id="userMatricula"
                                 type="text"
-                                placeholder={`Ingrese su matrícula de ${userType === 'maestro' ? 'maestro' : 'laboratorista'}`}
+                                placeholder={`Ingrese su matrícula de ${userType === "maestro" ? "maestro" : "laboratorista"}`}
                                 value={userMatricula}
                                 onChange={(e) => handleNumberInput(e, setUserMatricula)}
                                 className={`${
-                                  theme === 'dark'
+                                  theme === "dark"
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
                               />
                             </div>
                             <div className="space-y-1 sm:space-y-2">
-                              <Label htmlFor="password" className={`${theme === 'dark' ? 'text-gray-300' : 'text-green-700'} text-sm sm:text-base`}>Contraseña</Label>
+                              <Label
+                                htmlFor="password"
+                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
+                              >
+                                Contraseña
+                              </Label>
                               <Input
                                 id="password"
                                 type="password"
@@ -730,14 +815,17 @@ export default function InterfazLaboratorio() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className={`${
-                                  theme === 'dark'
+                                  theme === "dark"
                                     ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                                     : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                                 } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
                               />
                             </div>
                           </div>
-                          <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm py-1 sm:py-2 rounded-md sm:rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[2px_2px_4px_#bebebe,-2px_-2px_4px_#ffffff] dark:shadow-[2px_2px_4px_#1c1c1c,-2px_-2px_4px_#262626] hover:shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:hover:shadow-[3px_3px_6px_#151515,-3px_-3px_6px_#292929]`}>
+                          <Button
+                            type="submit"
+                            className={`w-full ${theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm py-1 sm:py-2 rounded-md sm:rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[2px_2px_4px_#bebebe,-2px_-2px_4px_#ffffff] dark:shadow-[2px_2px_4px_#1c1c1c,-2px_-2px_4px_#262626] hover:shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:hover:shadow-[3px_3px_6px_#151515,-3px_-3px_6px_#292929]`}
+                          >
                             Iniciar Sesión
                           </Button>
                         </form>
@@ -753,16 +841,27 @@ export default function InterfazLaboratorio() {
 
       {isAdminLoginOpen && (
         <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-          <DialogContent className={`${theme === 'dark' ? colors.dark.cardBackground : colors.light.cardBackground} rounded-xl sm:rounded-2xl border-none shadow-[0_5px_15px_rgba(0,0,0,0.2)] p-3 sm:p-4`}>
+          <DialogContent
+            className={`${theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground} rounded-xl sm:rounded-2xl border-none shadow-[0_5px_15px_rgba(0,0,0,0.2)] p-3 sm:p-4`}
+          >
             <DialogHeader>
-              <DialogTitle className={`text-lg sm:text-xl font-bold ${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>Inicio de Sesión de Administrador</DialogTitle>
-              <DialogDescription className={`${theme === 'dark' ? colors.dark.descriptionText : colors.light.descriptionText}`}>
+              <DialogTitle
+                className={`text-lg sm:text-xl font-bold ${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
+              >
+                Inicio de Sesión de Administrador
+              </DialogTitle>
+              <DialogDescription
+                className={`${theme === "dark" ? colors.dark.descriptionText : colors.light.descriptionText}`}
+              >
                 Ingrese sus credenciales de administrador
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAdminLogin} className="space-y-3 sm:space-y-4">
               <div className="space-y-1 sm:space-y-2">
-                <Label htmlFor="adminEmail" className={`${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>
+                <Label
+                  htmlFor="adminEmail"
+                  className={`${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
+                >
                   ID de Administrador
                 </Label>
                 <Input
@@ -771,14 +870,17 @@ export default function InterfazLaboratorio() {
                   onChange={(e) => setAdminEmail(e.target.value)}
                   placeholder="Ingrese el ID de administrador"
                   className={`${
-                    theme === 'dark'
+                    theme === "dark"
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                   } border rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
                 />
               </div>
               <div className="space-y-1 sm:space-y-2">
-                <Label htmlFor="adminPassword" className={`${theme === 'dark' ? colors.dark.titleText : colors.light.titleText}`}>
+                <Label
+                  htmlFor="adminPassword"
+                  className={`${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
+                >
                   Contraseña
                 </Label>
                 <Input
@@ -787,13 +889,16 @@ export default function InterfazLaboratorio() {
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   className={`${
-                    theme === 'dark'
+                    theme === "dark"
                       ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
                       : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
                   } border rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
                 />
               </div>
-              <Button type="submit" className={`w-full ${theme === 'dark' ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-md sm:rounded-lg py-1 sm:py-2 shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}>
+              <Button
+                type="submit"
+                className={`w-full ${theme === "dark" ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-md sm:rounded-lg py-1 sm:py-2 shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
+              >
                 Iniciar Sesión
               </Button>
             </form>
