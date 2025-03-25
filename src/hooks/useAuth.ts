@@ -26,7 +26,7 @@ export function useAuth() {
       if (authData) {
         const { userType, matricula, timestamp } = JSON.parse(authData)
         const currentTime = new Date().getTime()
-        if (currentTime - timestamp < 30 * 60 * 1000) { // 30 minutes
+        if (currentTime - timestamp < 30 * 60 * 1000) {
           setIsAuthenticated(true)
           setUser({ userType, matricula })
         } else {
