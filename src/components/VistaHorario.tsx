@@ -1,51 +1,27 @@
-'use client'
+"use client"
 
+import type React from "react"
 import { useState, useEffect } from "react"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Sun, Moon } from 'lucide-react'
 import { jsPDF } from "jspdf"
 import "jspdf-autotable"
-import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { db } from "../pages/panel-laboratorista" // Importamos la instancia de Firestore
 
-interface VistaHorarioProps {
-  esModoOscuro: boolean;
-  logAction: (action: string, details: string) => Promise<void>;
-}
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
-  authDomain: "integrador-7b39d.firebaseapp.com",
-  projectId: "integrador-7b39d",
-  storageBucket: "integrador-7b39d.appspot.com",
-  messagingSenderId: "780966021686",
-  appId: "1:780966021686:web:485712fb7509339c6ae697",
-  measurementId: "G-FGB03PFM7Z"
-}
-
-const app = initializeApp(firebaseConfig)
-const db = getFirestore(app)
-
+// Definición de tipos
 interface FranjaHoraria {
-  hora: string
-  materia?: string
-  docente?: string
+  materia: string
+  docente: string
 }
 
-interface DatosHorario {
-  [key: string]: {
-    [key: string]: FranjaHoraria
+interface Horario {
+  [dia: string]: {
+    [hora: string]: FranjaHoraria
   }
 }
 
@@ -58,156 +34,310 @@ interface Docente {
 interface Materia {
   id: string
   NombreMateria: string
+  MaestroID?: string
+  DocenteId?: string
+}
+
+// Definición de colores
+const colors = {
+  light: {
+    primary: "#800040", // Guinda/vino como color principal en modo claro
+    secondary: "#1d5631", // Verde oscuro como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "#fff0f5", // Fondo con tono rosado muy suave
+    cardBackground: "bg-white",
+    headerBackground: "bg-gradient-to-r from-[#800040] to-[#a30050]",
+    titleText: "text-[#800040]",
+    descriptionText: "text-[#800040]/80",
+    hoverBackground: "hover:bg-[#fff0f5]",
+    buttonPrimary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonSecondary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#fff0f5]",
+    countText: "text-[#800040]",
+    inputBackground: "bg-[#f8f8f8]",
+    inputBorder: "border-[#800040]/30",
+    inputText: "text-[#800040]",
+    switchBackground: "bg-[#800040]/20",
+    switchToggle: "bg-white",
+    grayText: "text-[#74726f]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#f0f0f0]",
+  },
+  dark: {
+    primary: "#1d5631", // Verde oscuro como color principal en modo oscuro
+    secondary: "#800040", // Guinda/vino como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "#0c1f15", // Fondo verde muy oscuro
+    cardBackground: "bg-[#2a2a2a]",
+    headerBackground: "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]",
+    titleText: "text-white",
+    descriptionText: "text-gray-300",
+    hoverBackground: "hover:bg-[#153d23]",
+    buttonPrimary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonSecondary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#1d5631]/20",
+    countText: "text-[#2a7a45]",
+    inputBackground: "bg-[#3a3a3a]",
+    inputBorder: "border-[#1d5631]/30",
+    inputText: "text-white",
+    switchBackground: "bg-[#1d5631]/20",
+    switchToggle: "bg-[#1d5631]",
+    grayText: "text-[#a0a0a0]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#3a3a3a]",
+  },
 }
 
 const DIAS = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES"]
-const HORAS_MATUTINO = [
-  "7:00-8:00", "8:00-9:00", "9:00-10:00", "10:00-11:00", "11:00-12:00",
-  "12:00-13:00", "13:00-14:00"
-]
+const HORAS_MATUTINO = ["7:00 - 8:00", "8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00"]
 const HORAS_VESPERTINO = [
-  "14:00-15:00", "15:00-16:00", "16:00-17:00", "17:00-18:00", "18:00-19:00",
-  "19:00-20:00", "20:00-21:00", "21:00-22:00"
+  "13:00 - 14:00",
+  "14:00 - 15:00",
+  "15:00 - 16:00",
+  "16:00 - 17:00",
+  "17:00 - 18:00",
+  "18:00 - 19:00",
 ]
 
-export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorarioProps) {
-  const [periodo, setPeriodo] = useState("JULIO 2024 - ENERO 2025")
-  const [horario, setHorario] = useState<DatosHorario>({})
-  const [franjaSeleccionada, setFranjaSeleccionada] = useState<{dia: string, hora: string} | null>(null)
-  const [modoOscuro, setModoOscuro] = useState(false)
-  const [docentes, setDocentes] = useState<Docente[]>([])
-  const [materias, setMaterias] = useState<Materia[]>([])
-  const [materiasPorDocente, setMateriasPorDocente] = useState<Materia[]>([])
+// Actualizar la interfaz VistaHorarioProps para incluir esModoOscuro
+interface VistaHorarioProps {
+  esModoOscuro: boolean
+  logAction: (action: string, details: string) => Promise<void>
+}
+
+// Modificar la definición del componente para usar esModoOscuro como prop
+const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) => {
+  const [horario, setHorario] = useState<Horario>({})
   const [mostrarTarjeta, setMostrarTarjeta] = useState(false)
+  const [franjaSeleccionada, setFranjaSeleccionada] = useState<{
+    dia: string
+    hora: string
+  } | null>(null)
+  const [periodo, setPeriodo] = useState("AGOSTO - DICIEMBRE 2024")
+  const [docentes, setDocentes] = useState<Docente[]>([])
+  const [materiasPorDocente, setMateriasPorDocente] = useState<Materia[]>([])
+  const [docenteSeleccionado, setDocenteSeleccionado] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
-    document.body.classList.toggle('dark', modoOscuro)
-    cargarDocentes()
-    cargarMaterias()
-  }, [modoOscuro])
+    const cargarDocentes = async () => {
+      try {
+        // Obtener docentes desde Firestore
+        const docentesRef = collection(db, "Docentes")
+        const docentesSnapshot = await getDocs(docentesRef)
+        const docentesData = docentesSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Docente[]
 
-  const cargarDocentes = async () => {
-    try {
-      const docentesRef = collection(db, 'Docentes');
-      const docentesSnapshot = await getDocs(docentesRef);
-      const listaDocentes = docentesSnapshot.docs.map((docSnapshot) => {
-        const docenteData = docSnapshot.data();
-        return { 
-          id: docSnapshot.id, 
-          Nombre: docenteData.Nombre, 
-          Apellido: docenteData.Apellido
-        } as Docente;
-      });
-      setDocentes(listaDocentes);
-      await logAction('Cargar Docentes', `Se cargaron ${listaDocentes.length} docentes`)
-    } catch (error) {
-      console.error('Error al cargar docentes:', error);
-      await logAction('Error', `Error al cargar docentes: ${error}`)
+        setDocentes(docentesData)
+      } catch (error) {
+        console.error("Error al cargar los docentes:", error)
+        toast({
+          title: "Error al cargar los docentes",
+          description: "Hubo un problema al obtener la lista de docentes. Por favor, inténtelo de nuevo más tarde.",
+          variant: "destructive",
+        })
+      }
     }
-  };
 
-  const cargarMaterias = async () => {
+    cargarDocentes()
+  }, [toast])
+
+  const handleDocenteChange = async (docenteId: string) => {
+    setDocenteSeleccionado(docenteId)
+
     try {
-      const materiasRef = collection(db, 'Materias')
-      const materiasSnapshot = await getDocs(materiasRef)
-      const listaMaterias = materiasSnapshot.docs.map(doc => ({
+      // Obtener materias del docente seleccionado desde Firestore
+      const materiasRef = collection(db, "Materias")
+      const materiasQuery = query(materiasRef, where("MaestroID", "==", docenteId))
+      const materiasSnapshot = await getDocs(materiasQuery)
+
+      const materiasData = materiasSnapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as Materia[]
-      setMaterias(listaMaterias)
-      await logAction('Cargar Materias', `Se cargaron ${listaMaterias.length} materias`)
+
+      setMateriasPorDocente(materiasData)
     } catch (error) {
-      console.error('Error al cargar materias:', error)
-      await logAction('Error', `Error al cargar materias: ${error}`)
+      console.error("Error al cargar las materias:", error)
+      toast({
+        title: "Error al cargar las materias",
+        description: "Hubo un problema al obtener las materias del docente. Por favor, inténtelo de nuevo más tarde.",
+        variant: "destructive",
+      })
     }
   }
 
-  const guardarFranja = async (materiaId: string, docenteId: string) => {
+  const seleccionarFranja = (dia: string, hora: string) => {
+    setFranjaSeleccionada({ dia, hora })
+    setMostrarTarjeta(true)
+  }
+
+  const guardarFranja = (materia: string, docente: string) => {
     if (!franjaSeleccionada) return
 
-    const docenteSeleccionado = docentes.find(d => d.id === docenteId)
-    const materiaSeleccionada = materiasPorDocente.find(m => m.id === materiaId)
-    
-    if (!docenteSeleccionado || !materiaSeleccionada) return
-
-    const nombreCompletoDocente = `${docenteSeleccionado.Nombre} ${docenteSeleccionado.Apellido}`
-
-    setHorario(prevHorario => ({
-      ...prevHorario,
-      [franjaSeleccionada.dia]: {
-        ...prevHorario[franjaSeleccionada.dia],
-        [franjaSeleccionada.hora]: {
-          hora: franjaSeleccionada.hora,
-          materia: materiaSeleccionada.NombreMateria,
-          docente: nombreCompletoDocente
-        }
+    setHorario((prevHorario) => {
+      const { dia, hora } = franjaSeleccionada
+      return {
+        ...prevHorario,
+        [dia]: {
+          ...prevHorario[dia],
+          [hora]: {
+            materia: materiasPorDocente.find((m) => m.id === materia)?.NombreMateria || "Materia no encontrada",
+            docente:
+              docentes.find((d) => d.id === docente)?.Nombre + " " + docentes.find((d) => d.id === docente)?.Apellido ||
+              "Docente no encontrado",
+          },
+        },
       }
-    }))
+    })
 
-    await logAction('Modificar Horario', `Agregada clase de ${materiaSeleccionada.NombreMateria} con ${nombreCompletoDocente} el ${franjaSeleccionada.dia} a las ${franjaSeleccionada.hora}`)
-
-    // Close the card
     setMostrarTarjeta(false)
     setFranjaSeleccionada(null)
   }
 
-  const handleDocenteChange = async (docenteId: string) => {
-    try {
-      const materiasRef = collection(db, 'Materias');
-      const materiasQuery = query(materiasRef, where('MaestroID', '==', docenteId));
-      const materiasSnapshot = await getDocs(materiasQuery);
-      const materiasList = materiasSnapshot.docs.map(doc => ({
-        id: doc.id,
-        NombreMateria: doc.data().NombreMateria
-      }));
-      setMateriasPorDocente(materiasList);
-      await logAction('Cargar Materias por Docente', `Se cargaron ${materiasList.length} materias para el docente ${docenteId}`)
-    } catch (error) {
-      console.error('Error al cargar materias del docente:', error)
-      await logAction('Error', `Error al cargar materias del docente: ${error}`)
-      setMateriasPorDocente([])
-    }
-  };
+  const generarPDF = async () => {
+    const doc = new jsPDF("l", "mm", "a4")
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    const margin = 10
 
-  const seleccionarFranja = async (dia: string, hora: string) => {
-    setFranjaSeleccionada({ dia, hora })
-    setMostrarTarjeta(true)
-    await logAction('Seleccionar Franja', `Seleccionada franja para el ${dia} a las ${hora}`)
+    // Agregar la imagen en la esquina superior izquierda
+    doc.addImage("/FondoItspp.png", "PNG", margin, margin, 25, 25)
+
+    // Agregar encabezado centrado
+    doc.setFontSize(16)
+    doc.setTextColor(0, 0, 0) // Color de texto negro
+    doc.text("INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO", pageWidth / 2, margin + 10, { align: "center" })
+    doc.setFontSize(14)
+    doc.text("SUBDIRECCIÓN ACADÉMICA", pageWidth / 2, margin + 20, { align: "center" })
+    doc.text(`PERIODO: ${periodo}`, pageWidth / 2, margin + 30, { align: "center" })
+    doc.text("LABORATORIO: TALLER DE PROGRAMACIÓN", pageWidth / 2, margin + 40, { align: "center" })
+
+    const datosTabla = [...HORAS_MATUTINO, ...HORAS_VESPERTINO].map((hora) => {
+      const fila = [hora]
+      DIAS.forEach((dia) => {
+        const franja = horario[dia]?.[hora]
+        fila.push(franja ? `${franja.materia}\n- ${franja.docente}` : "")
+      })
+      return fila
+    })
+
+    const dividerIndex = HORAS_MATUTINO.length
+    datosTabla.splice(dividerIndex, 0, ["TURNO VESPERTINO", "", "", "", "", ""])
+
+    doc.autoTable({
+      startY: 60,
+      head: [["HORA", ...DIAS]],
+      body: datosTabla,
+      theme: "grid",
+      styles: {
+        cellPadding: 2,
+        fontSize: 8,
+        valign: "middle",
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [128, 0, 64], // Color guinda/vino
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      didParseCell: (data: { row: { index: number }; cell: { styles: any } }) => {
+        if (data.row.index === dividerIndex) {
+          data.cell.styles.fillColor = [128, 0, 64] // Color guinda/vino
+          data.cell.styles.textColor = [255, 255, 255]
+          data.cell.styles.fontStyle = "bold"
+        }
+      },
+      didDrawCell: (data: {
+        cell: {
+          text: string | string[]
+          x: number
+          y: number
+          width: number
+          height: number
+        }
+        row: { index: number }
+      }) => {
+        if (data.cell.text.length > 0 && data.row.index >= 0 && data.row.index !== dividerIndex) {
+          doc.setFillColor(255, 240, 245) // Color de fondo rosado muy suave
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F")
+          doc.setTextColor(128, 0, 64) // Color guinda/vino
+          const [materia, docente] = data.cell.text.toString().split("\n")
+          if (materia) {
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "bold")
+            doc.text(materia, data.cell.x + data.cell.width / 2, data.cell.y + 5, {
+              align: "center",
+            })
+          }
+          if (docente) {
+            doc.setFontSize(6)
+            doc.setFont("helvetica", "normal")
+            doc.text(docente, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height - 3, {
+              align: "center",
+              maxWidth: data.cell.width - 2,
+            })
+          }
+        }
+      },
+    })
+
+    // Agregar pie de página con firmas
+    const finalY = (doc as any).lastAutoTable.finalY || 220
+    const signatureY = finalY + 20
+
+    // Líneas de firma
+    doc.line(margin, signatureY, margin + 70, signatureY)
+    doc.text("FIRMA DOCENTE", margin + 35, signatureY + 5, { align: "center" })
+
+    doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
+    doc.text("FIRMA ENCARGADO LABORATORIO", pageWidth - margin - 35, signatureY + 5, { align: "center" })
+
+    // Guardar el PDF con nombre formateado
+    const fechaActual = new Date().toLocaleDateString().replace(/\//g, "-")
+    doc.save(`horario_laboratorio_${fechaActual}.pdf`)
+
+    await logAction("Generar PDF", "Generado PDF del horario de laboratorio")
+
+    // Reiniciar el horario
+    setHorario({})
   }
 
   const renderizarFranjasHorarias = (horas: string[]) => {
-    return horas.map(hora => (
+    return horas.map((hora) => (
       <>
-        <div key={`hora-${hora}`} className={`p-2 text-center border ${
-          modoOscuro ? 'border-[#2d3748] text-[#e2e8f0] bg-[#1a1f2c]' : 'border-[#98FB98] text-[#006400] bg-white'
-        }`}>
+        <div
+          key={`hora-${hora}`}
+          className={`p-2 text-center border ${
+            esModoOscuro ? "border-gray-700 text-white bg-[#1d5631]/10" : "border-[#800040]/20 text-[#800040] bg-white"
+          }`}
+        >
           {hora}
         </div>
-        {DIAS.map(dia => {
+        {DIAS.map((dia) => {
           const franja = horario[dia]?.[hora]
           return (
             <Button
+              key={`${dia}-${hora}`}
               variant="outline"
               className={`h-full min-h-[80px] w-full ${
-                modoOscuro 
-                  ? 'border-[#2d3748] hover:bg-[#1a1f2c] bg-[#0f172a]' 
-                  : 'border-[#98FB98] hover:bg-[#e6ffe6] bg-white'
+                esModoOscuro
+                  ? "border-gray-700 hover:bg-[#1d5631]/20 bg-[#1d5631]/10"
+                  : "border-[#800040]/20 hover:bg-[#fff0f5] bg-white"
               }`}
               onClick={() => seleccionarFranja(dia, hora)}
             >
               {franja ? (
                 <div className="text-xs">
-                  <p className={`font-semibold ${modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'}`}>
-                    {franja.materia}
-                  </p>
-                  <p className={modoOscuro ? 'text-[#a0aec0]' : 'text-[#006400]'}>
-                    {franja.docente}
-                  </p>
+                  <p className={`font-semibold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>{franja.materia}</p>
+                  <p className={esModoOscuro ? "text-gray-300" : "text-[#800040]/80"}>{franja.docente}</p>
                 </div>
               ) : (
-                <span className={modoOscuro ? 'text-[#a0aec0]' : 'text-[#006400]'}>
-                  Haga clic para agregar
-                </span>
+                <span className={esModoOscuro ? "text-gray-400" : "text-[#800040]/60"}>Haga clic para agregar</span>
               )}
             </Button>
           )
@@ -216,140 +346,32 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
     ))
   }
 
-  const generarPDF = async () => {
-    const doc = new jsPDF('l', 'mm', 'a4')
-  
-    // Agregar la imagen en la esquina superior izquierda
-    doc.addImage('/FondoItspp.png', 'PNG', 10, 10, 20, 20)
-
-    doc.setFontSize(16)
-    doc.text('INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO', 149, 20, { align: 'center' })
-    doc.setFontSize(14)
-    doc.text('SUBDIRECCIÓN ACADÉMICA', 149, 30, { align: 'center' })
-    doc.text(`PERIODO: ${periodo}`, 149, 40, { align: 'center' })
-    doc.text('LABORATORIO: TALLER DE PROGRAMACIÓN', 149, 50, { align: 'center' })
-
-    const datosTabla = [...HORAS_MATUTINO, ...HORAS_VESPERTINO].map(hora => {
-      const fila = [hora]
-      DIAS.forEach(dia => {
-        const franja = horario[dia]?.[hora]
-        fila.push(franja ? `${franja.materia}\n- ${franja.docente}` : '')
-      })
-      return fila
-    })
-
-    const dividerIndex = HORAS_MATUTINO.length
-    datosTabla.splice(dividerIndex, 0, ['TURNO VESPERTINO', '', '', '', '', ''])
-
-    doc.autoTable({
-      startY: 60,
-      head: [['HORA', ...DIAS]],
-      body: datosTabla,
-      theme: 'grid',
-      styles: {
-        cellPadding: 2,
-        fontSize: 8,
-        valign: 'middle',
-        halign: 'center'
-      },
-      headStyles: {
-        fillColor: [144, 238, 144],
-        textColor: [0, 100, 0],
-        fontStyle: 'bold'
-      },
-      didParseCell: function(data: { row: { index: number }, cell: { styles: any } }) {
-        if (data.row.index === dividerIndex) {
-          data.cell.styles.fillColor = [144, 238, 144];
-          data.cell.styles.textColor = [0, 100, 0];
-          data.cell.styles.fontStyle = 'bold';
-        }
-      },
-      didDrawCell: (data: {
-        cell: {
-          text: string | string[];
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-        };
-        row: { index: number };
-      }) => {
-        if (data.cell.text.length > 0 && data.row.index >= 0 && data.row.index !== dividerIndex) {
-          doc.setFillColor(230, 255, 230)
-          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F')
-          doc.setTextColor(0, 100, 0)
-          const [materia, docente] = data.cell.text.toString().split('\n')
-          if (materia) {
-            doc.setFontSize(8)
-            doc.setFont("helvetica", 'bold')
-            doc.text(materia, data.cell.x + data.cell.width / 2, data.cell.y + 5, {
-              align: 'center'
-            })
-          }
-          if (docente) {
-            doc.setFontSize(6)
-            doc.setFont("helvetica", 'normal')
-            doc.text(docente, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height - 3, {
-              align: 'center',
-              maxWidth: data.cell.width - 2
-            })
-          }
-        }
-      }
-    })
-
-    doc.save('horario_laboratorio.pdf')
-
-    await logAction('Generar PDF', 'Generado PDF del horario de laboratorio')
-
-    // Reiniciar el horario
-    setHorario({})
-  }
-
   return (
-    <div className={`min-h-screen ${modoOscuro ? 'dark bg-[#0f172a]' : 'bg-[#e6ffe6]'}`}>
+    <div className={`min-h-screen ${esModoOscuro ? "dark bg-[#0c1f15]" : "bg-[#fff0f5]"}`}>
       <div className="container mx-auto py-6 space-y-8">
-        <Card className={`border-none shadow-none ${
-          modoOscuro ? 'bg-[#1a1f2c]' : 'bg-white'
-        }`}>
-          <CardHeader className="text-center space-y-4">
+        <Card
+          className={`border-none shadow-lg ${esModoOscuro ? colors.dark.cardBackground : colors.light.cardBackground}`}
+        >
+          <CardHeader
+            className={`text-center space-y-4 ${
+              esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground
+            }`}
+          >
             <div className="flex justify-between items-center px-6">
-              <CardTitle className={`text-2xl font-bold tracking-tight ${
-                modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'
-              }`}>
+              <CardTitle className="text-2xl font-bold tracking-tight text-white">
                 INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO
               </CardTitle>
-              <div className="flex items-center space-x-2">
-                <Sun className={`h-4 w-4 ${modoOscuro ? 'text-[#a0aec0]' : 'text-yellow-500'}`} />
-                <Switch
-                  checked={modoOscuro}
-                  onCheckedChange={setModoOscuro}
-                  aria-label="Alternar modo oscuro"
-                />
-                <Moon className={`h-4 w-4 ${modoOscuro ? 'text-blue-400' : 'text-[#a0aec0]'}`} />
-              </div>
             </div>
-            <p className={`text-xl font-semibold ${
-              modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'
-            }`}>
-              SUBDIRECCIÓN ACADÉMICA
-            </p>
+            <p className="text-xl font-semibold text-white">SUBDIRECCIÓN ACADÉMICA</p>
             <div className="flex flex-col items-center gap-2">
               <div className="flex items-center gap-4">
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={
-                        modoOscuro 
-                          ? 'border-[#2d3748] text-[#e2e8f0]' 
-                          : 'border-[#98FB98] text-[#006400]'
-                      }
-                    >
+                    <Button variant="outline" className="bg-white/20 text-white hover:bg-white/30">
                       PERIODO: {periodo}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className={modoOscuro ? 'bg-[#1a1f2c] text-[#e2e8f0]' : 'bg-white text-[#006400]'}>
+                  <DialogContent className={esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-white text-[#800040]"}>
                     <DialogHeader>
                       <DialogTitle>Cambiar Periodo</DialogTitle>
                     </DialogHeader>
@@ -358,16 +380,20 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
                         id="periodo"
                         value={periodo}
                         onChange={(e) => setPeriodo(e.target.value)}
-                        className={modoOscuro ? 'bg-[#2d3748] text-[#e2e8f0]' : 'bg-white text-[#006400]'}
+                        className={
+                          esModoOscuro
+                            ? colors.dark.inputBackground + " " + colors.dark.inputBorder + " " + colors.dark.inputText
+                            : colors.light.inputBackground +
+                              " " +
+                              colors.light.inputBorder +
+                              " " +
+                              colors.light.inputText
+                        }
                       />
                     </div>
                   </DialogContent>
                 </Dialog>
-                <p className={`text-sm font-medium ${
-                  modoOscuro ? 'text-[#a0aec0]' : 'text-[#006400]'
-                }`}>
-                  LABORATORIO: TALLER DE PROGRAMACIÓN
-                </p>
+                <p className="text-sm font-medium text-white">LABORATORIO: TALLER DE PROGRAMACIÓN</p>
               </div>
             </div>
           </CardHeader>
@@ -376,30 +402,39 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
         <div className="w-full overflow-x-auto">
           <div className="min-w-[800px]">
             <div className="grid grid-cols-[80px_repeat(5,1fr)] gap-2">
-              <div className={`p-2 font-bold text-center ${
-                modoOscuro ? 'bg-[#1a1f2c] text-[#e2e8f0]' : 'bg-white text-[#006400]'
-              }`}>
+              <div
+                className={`p-2 font-bold text-center ${
+                  esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-[#800040] text-white"
+                }`}
+              >
                 HORA
               </div>
-              {DIAS.map(dia => (
-                <div key={dia} className={`p-2 font-bold text-center ${
-                  modoOscuro ? 'bg-[#1a1f2c] text-[#e2e8f0]' : 'bg-white text-[#006400]'
-                }`}>
+              {DIAS.map((dia) => (
+                <div
+                  key={dia}
+                  className={`p-2 font-bold text-center ${
+                    esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-[#800040] text-white"
+                  }`}
+                >
                   {dia}
                 </div>
               ))}
 
-              <div className={`col-span-6 ${
-                modoOscuro ? 'bg-[#1a1f2c]/50 text-[#e2e8f0]' : 'bg-[#e6ffe6] text-[#006400]'
-              } p-2 text-center font-semibold`}>
+              <div
+                className={`col-span-6 ${
+                  esModoOscuro ? "bg-[#1d5631]/50 text-white" : "bg-[#800040]/80 text-white"
+                } p-2 text-center font-semibold`}
+              >
                 TURNO MATUTINO
               </div>
 
               {renderizarFranjasHorarias(HORAS_MATUTINO)}
 
-              <div className={`col-span-6 ${
-                modoOscuro ? 'bg-[#1a1f2c] text-[#e2e8f0]' : 'bg-white text-[#006400]'
-              } p-2 text-center font-semibold`}>
+              <div
+                className={`col-span-6 ${
+                  esModoOscuro ? "bg-[#1d5631]/50 text-white" : "bg-[#800040]/80 text-white"
+                } p-2 text-center font-semibold`}
+              >
                 TURNO VESPERTINO
               </div>
 
@@ -409,28 +444,25 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
         </div>
 
         {mostrarTarjeta && franjaSeleccionada && (
-          <Card className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-96 ${
-            modoOscuro ? 'bg-[#1a1f2c] text-[#e2e8f0]' : 'bg-white'
-          }`}>
-            <CardHeader>
-              <CardTitle className={modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'}>
-                Agregar Detalles de Clase
-              </CardTitle>
+          <Card
+            className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-96 ${
+              esModoOscuro ? colors.dark.cardBackground : colors.light.cardBackground
+            }`}
+          >
+            <CardHeader className={esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground}>
+              <CardTitle className="text-white">Agregar Detalles de Clase</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
                   const formData = new FormData(e.currentTarget)
-                  guardarFranja(
-                    formData.get("materia") as string,
-                    formData.get("docente") as string
-                  )
+                  guardarFranja(formData.get("materia") as string, formData.get("docente") as string)
                 }}
                 className="space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="docente" className={modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'}>
+                  <Label htmlFor="docente" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
                     Docente
                   </Label>
                   <select
@@ -439,13 +471,14 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
                     defaultValue=""
                     required
                     onChange={(e) => handleDocenteChange(e.target.value)}
-                    className={`w-full p-2 rounded-md ${modoOscuro 
-                      ? 'bg-[#2d3748] border-[#2d3748] text-[#e2e8f0]' 
-                      : 'bg-white border-[#98FB98] text-[#006400]'
+                    className={`w-full p-2 rounded-md ${
+                      esModoOscuro
+                        ? "bg-[#3a3a3a] border-[#1d5631]/30 text-white"
+                        : "bg-[#f8f8f8] border-[#800040]/30 text-[#800040]"
                     }`}
                   >
                     <option value="">Seleccione un docente</option>
-                    {docentes.map(docente => (
+                    {docentes.map((docente) => (
                       <option key={docente.id} value={docente.id}>
                         {`${docente.Nombre} ${docente.Apellido}`}
                       </option>
@@ -453,7 +486,7 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="materia" className={modoOscuro ? 'text-[#e2e8f0]' : 'text-[#006400]'}>
+                  <Label htmlFor="materia" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
                     Materia
                   </Label>
                   <select
@@ -461,13 +494,14 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
                     name="materia"
                     defaultValue=""
                     required
-                    className={`w-full p-2 rounded-md ${modoOscuro 
-                      ? 'bg-[#2d3748] border-[#2d3748] text-[#e2e8f0]' 
-                      : 'bg-white border-[#98FB98] text-[#006400]'
+                    className={`w-full p-2 rounded-md ${
+                      esModoOscuro
+                        ? "bg-[#3a3a3a] border-[#1d5631]/30 text-white"
+                        : "bg-[#f8f8f8] border-[#800040]/30 text-[#800040]"
                     }`}
                   >
                     <option value="">Seleccione una materia</option>
-                    {materiasPorDocente.map(materia => (
+                    {materiasPorDocente.map((materia) => (
                       <option key={materia.id} value={materia.id}>
                         {materia.NombreMateria}
                       </option>
@@ -475,22 +509,16 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
                   </select>
                 </div>
                 <div className="flex justify-between">
-                  <Button 
+                  <Button
                     type="submit"
-                    className={modoOscuro 
-                      ? 'bg-[#006400] hover:bg-[#008000] text-white' 
-                      : 'bg-[#006400] hover:bg-[#008000] text-white'
-                    }
+                    className={esModoOscuro ? colors.dark.buttonPrimary : colors.light.buttonPrimary}
                   >
                     Guardar
                   </Button>
-                  <Button 
+                  <Button
                     type="button"
                     onClick={() => setMostrarTarjeta(false)}
-                    className={modoOscuro 
-                      ? 'bg-red-600 hover:bg-red-700 text-white' 
-                      : 'bg-red-500 hover:bg-red-600 text-white'
-                    }
+                    className="bg-red-500 hover:bg-red-600 text-white"
                   >
                     Cancelar
                   </Button>
@@ -501,12 +529,9 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
         )}
 
         <div className="flex justify-center">
-          <Button 
+          <Button
             onClick={generarPDF}
-            className={modoOscuro 
-              ? 'bg-[#006400] hover:bg-[#008000] text-white' 
-              : 'bg-[#006400] hover:bg-[#008000] text-white'
-            }
+            className={esModoOscuro ? colors.dark.buttonPrimary : colors.light.buttonPrimary}
           >
             Generar PDF del Horario
           </Button>
@@ -515,4 +540,6 @@ export default function HorarioDashboard({ esModoOscuro, logAction }: VistaHorar
     </div>
   )
 }
+
+export default VistaHorario
 

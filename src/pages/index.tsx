@@ -1,8 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { User, UserCog, Computer } from "lucide-react"
+import { User, UserCog, Computer, Moon, Sun, ChevronRight } from "lucide-react"
 import { initializeApp } from "firebase/app"
 import {
   getFirestore,
@@ -19,10 +21,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// import { Switch } from "@/components/ui/switch" // Removed
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ImageCarousel } from "../components/ImageCarousel"
 import { Sidebar } from "../components/Sidebar"
@@ -51,42 +52,64 @@ type UserType = "estudiante" | "maestro"
 interface Equipment {
   id: string
   fueraDeServicio: boolean
+  enUso?: boolean
 }
 
+// Modificar la definición de colores para intercambiar los colores principales
 const colors = {
   light: {
-    background: "bg-green-50",
+    primary: "#800040", // Guinda/vino como color principal en modo claro
+    secondary: "#1d5631", // Verde oscuro como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "#fff0f5", // Fondo con tono rosado muy suave
     cardBackground: "bg-white",
-    headerBackground: "bg-green-100",
-    titleText: "text-green-800",
-    descriptionText: "text-green-700",
-    hoverBackground: "hover:bg-green-50",
-    buttonGreen: "bg-green-500 hover:bg-green-600",
-    buttonBlue: "bg-blue-500 hover:bg-blue-600",
-    countBackground: "bg-green-100",
-    countText: "text-green-800",
-    inputBackground: "bg-green-50",
-    inputBorder: "border-green-300",
-    inputText: "text-green-800",
-    switchBackground: "bg-green-200",
+    headerBackground: "bg-gradient-to-r from-[#800040] to-[#a30050]",
+    titleText: "text-[#800040]",
+    descriptionText: "text-[#800040]/80",
+    hoverBackground: "hover:bg-[#fff0f5]",
+    buttonPrimary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonSecondary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#fff0f5]",
+    countText: "text-[#800040]",
+    inputBackground: "bg-[#f8f8f8]",
+    inputBorder: "border-[#800040]/30",
+    inputText: "text-[#800040]",
+    switchBackground: "bg-[#800040]/20",
     switchToggle: "bg-white",
+    grayText: "text-[#74726f]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#f0f0f0]",
+    badge: "bg-[#800040]",
+    badgeOutline: "border-[#800040] text-[#800040]",
+    badgeSecundario: "bg-[#800040]/20 text-[#800040]",
   },
   dark: {
-    background: "bg-gray-900",
-    cardBackground: "bg-gray-800",
-    headerBackground: "bg-gray-700",
+    primary: "#1d5631", // Verde oscuro como color principal en modo oscuro
+    secondary: "#800040", // Guinda/vino como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "#0c1f15", // Fondo verde muy oscuro
+    cardBackground: "bg-[#2a2a2a]",
+    headerBackground: "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]",
     titleText: "text-white",
     descriptionText: "text-gray-300",
-    hoverBackground: "hover:bg-gray-700",
-    buttonGreen: "bg-green-700 hover:bg-green-600",
-    buttonBlue: "bg-blue-700 hover:bg-blue-600",
-    countBackground: "bg-green-900",
-    countText: "text-green-100",
-    inputBackground: "bg-gray-700",
-    inputBorder: "border-gray-600",
-    inputText: "text-gray-200",
-    switchBackground: "bg-gray-600",
-    switchToggle: "bg-gray-300",
+    hoverBackground: "hover:bg-[#153d23]",
+    buttonPrimary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonSecondary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#1d5631]/20",
+    countText: "text-[#2a7a45]",
+    inputBackground: "bg-[#3a3a3a]",
+    inputBorder: "border-[#1d5631]/30",
+    inputText: "text-white",
+    switchBackground: "bg-[#1d5631]/20",
+    switchToggle: "bg-[#1d5631]",
+    grayText: "text-[#a0a0a0]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#3a3a3a]",
+    badge: "bg-[#1d5631]",
+    badgeOutline: "border-[#1d5631] text-[#2a7a45]",
+    badgeSecundario: "bg-[#1d5631]/20 text-[#1d5631]",
   },
 }
 
@@ -94,7 +117,7 @@ const TabAnimation = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -20 },
-  transition: { duration: 0.2 },
+  transition: { duration: 0.3 },
 }
 
 const SlideAnimation = {
@@ -123,12 +146,15 @@ const Loader = () => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900"
+      className="flex items-center justify-center h-screen bg-[#f0fff4] dark:bg-[#0c1f1a]"
     >
-      <div className="w-32 aspect-square rounded-full relative flex justify-center items-center animate-spin-slow z-40 bg-[conic-gradient(white_0deg,white_300deg,transparent_270deg,transparent_360deg)]">
-        <div className="absolute w-[60%] aspect-square rounded-full z-[80] animate-spin-medium bg-[conic-gradient(white_0deg,white_270deg,transparent_180deg,transparent_360deg)]" />
-        <div className="absolute w-3/4 aspect-square rounded-full z-[60] animate-spin-slow bg-[conic-gradient(#065f46_0deg,#065f46_180deg,transparent_180deg,transparent_360deg)]" />
-        <div className="absolute w-[85%] aspect-square rounded-full z-[60] animate-spin-extra-slow bg-[conic-gradient(#34d399_0deg,#34d399_180deg,transparent_180deg,transparent_360deg)]" />
+      <div className="relative flex flex-col items-center">
+        <div className="w-32 aspect-square rounded-full relative flex justify-center items-center animate-spin-slow z-40 bg-[conic-gradient(#1BB827_0deg,#1BB827_300deg,transparent_270deg,transparent_360deg)]">
+          <div className="absolute w-[60%] aspect-square rounded-full z-[80] animate-spin-medium bg-[conic-gradient(#1BB827_0deg,#1BB827_270deg,transparent_180deg,transparent_360deg)]" />
+          <div className="absolute w-3/4 aspect-square rounded-full z-[60] animate-spin-slow bg-[conic-gradient(#1C4A3F_0deg,#1C4A3F_180deg,transparent_180deg,transparent_360deg)]" />
+          <div className="absolute w-[85%] aspect-square rounded-full z-[60] animate-spin-extra-slow bg-[conic-gradient(#25D533_0deg,#25D533_180deg,transparent_180deg,transparent_360deg)]" />
+        </div>
+        <div className="mt-8 text-[#1C4A3F] dark:text-white text-xl font-medium">Cargando...</div>
       </div>
     </motion.div>
   )
@@ -139,6 +165,9 @@ export default function InterfazLaboratorio() {
   const [activeTab, setActiveTab] = useState<UserType>("estudiante")
   const [matricula, setMatricula] = useState("")
   const [equipo, setEquipo] = useState("")
+  const [nombre, setNombre] = useState("")
+  const [apellido, setApellido] = useState("")
+  const [matriculaInvitado, setMatriculaInvitado] = useState("")
   const [userMatricula, setUserMatricula] = useState("")
   const [password, setPassword] = useState("")
   const [isClassStarted, setIsClassStarted] = useState(false)
@@ -151,12 +180,11 @@ export default function InterfazLaboratorio() {
   const [userType, setUserType] = useState<"maestro" | "laboratorista">("maestro")
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
-  const [isRegularClassStarted, setIsRegularClassStarted] = useState(false)
   const [isGuestClassStarted, setIsGuestClassStarted] = useState(false)
-  const [classChoice, setClassChoice] = useState<"regular" | "guest" | null>(null)
   const [guestClassInfo, setGuestClassInfo] = useState<any>(null)
   const [lastGuestClassStatus, setLastGuestClassStatus] = useState<boolean>(false)
-  const [lastRegularClassStatus, setLastRegularClassStatus] = useState<boolean>(false)
+  const [classChoice, setClassChoice] = useState<"normal" | "invitado">("normal")
+  const [classInfo, setClassInfo] = useState<any>(null)
 
   const welcomeMessages = ['"Hombres y Mujeres Del Mar y Desierto', 'Unidos Por La Educación Tecnológica De Calidad."']
 
@@ -173,52 +201,51 @@ export default function InterfazLaboratorio() {
   }, [])
 
   useEffect(() => {
-    const unsubscribeRegularClass = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
+    // Verificar si hay una clase normal iniciada
+    const unsubscribeClass = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
       if (doc.exists()) {
-        const newStatus = doc.data().iniciada
-        setIsRegularClassStarted(newStatus)
-
-        if (newStatus !== lastRegularClassStatus) {
-          setLastRegularClassStatus(newStatus)
-          if (newStatus) {
-            swal({
-              title: "¡Clase regular iniciada!",
-              text: "Ya puedes registrar tu asistencia",
-              icon: "success",
-            })
-          } else {
-            swal({
-              title: "Clase regular finalizada",
-              text: "El registro de asistencia está cerrado.",
-              icon: "info",
-            })
-          }
+        const data = doc.data()
+        const isStarted = data.iniciada === true
+        setIsClassStarted(isStarted)
+        if (isStarted) {
+          setClassInfo(data)
+          console.log("Clase normal actualizada:", data)
+        } else {
+          setClassInfo(null)
+          console.log("Clase normal finalizada")
         }
-        setIsClassStarted(newStatus)
       }
     })
 
+    // Verificar si hay una clase de invitado iniciada
     const unsubscribeGuestClass = onSnapshot(doc(db, "EstadoClaseInvitado", "actual"), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         const newStatus = data.iniciada
         setIsGuestClassStarted(newStatus)
+        console.log("Estado de clase invitado actualizado:", newStatus)
 
         // Only show alert if status changed
         if (newStatus !== lastGuestClassStatus) {
           setLastGuestClassStatus(newStatus)
           if (newStatus) {
             swal({
-              title: "¡Clase invitada iniciada!",
-              text: `Maestro: ${data.MaestroInvitado}\nMateria: ${data.Materia}\nPráctica: ${data.Practica}\nHora de inicio: ${data.HoraInicio}`,
+              title: "¡Clase iniciada!",
+              text: `Maestro: ${data.MaestroInvitado}
+Materia: ${data.Materia}
+Práctica: ${data.Practica}
+Hora de inicio: ${data.HoraInicio}`,
               icon: "success",
             })
           } else {
             swal({
-              title: "Clase invitada finalizada",
-              text: `La clase con el maestro ${data.MaestroInvitado} ha finalizado.`,
+              title: "Clase finalizada",
+              text: `La clase con el maestro ${data.MaestroInvitado} ha finalizada.`,
               icon: "info",
             })
+
+            // Cuando finaliza la clase, resetear el estado "enUso" de todos los equipos
+            resetEquiposEnUso()
           }
         }
         setGuestClassInfo(data)
@@ -226,10 +253,16 @@ export default function InterfazLaboratorio() {
     })
 
     return () => {
-      unsubscribeRegularClass()
+      unsubscribeClass()
       unsubscribeGuestClass()
     }
-  }, [lastGuestClassStatus, lastRegularClassStatus])
+  }, [])
+
+  // Efecto separado para manejar los cambios en lastGuestClassStatus
+  useEffect(() => {
+    // Este efecto se ejecutará cuando cambie lastGuestClassStatus
+    // pero no afectará a los listeners de Firestore
+  }, [lastGuestClassStatus])
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, "Numero de equipos", "equipos"), (doc) => {
@@ -257,20 +290,33 @@ export default function InterfazLaboratorio() {
     applyTheme(newTheme)
   }
 
+  // Función para resetear el estado "enUso" de todos los equipos
+  const resetEquiposEnUso = async () => {
+    try {
+      const equipoRef = doc(db, "Numero de equipos", "equipos")
+      const equipoDoc = await getDoc(equipoRef)
+
+      if (equipoDoc.exists()) {
+        const equiposData = equipoDoc.data()
+        const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => ({
+          ...eq,
+          enUso: false,
+        }))
+
+        await setDoc(equipoRef, { Equipos: equiposActualizados })
+      }
+    } catch (error) {
+      console.error("Error al restablecer el estado de los equipos:", error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       if (activeTab === "estudiante") {
-        if (!matricula || !equipo) {
-          await swal({
-            title: "Error",
-            text: "Por favor, completa todos los campos.",
-            icon: "error",
-          })
-          return
-        }
-
-        if (!isRegularClassStarted && !isGuestClassStarted) {
+        // Verificar si hay alguna clase iniciada
+        const isAnyClassStarted = isClassStarted || isGuestClassStarted
+        if (!isAnyClassStarted) {
           await swal({
             title: "Error",
             text: "No hay clases iniciadas en este momento.",
@@ -279,78 +325,215 @@ export default function InterfazLaboratorio() {
           return
         }
 
-        const selectedClass = isRegularClassStarted ? "regular" : "guest"
+        // Determinar qué tipo de clase está activa
+        const selectedClass = isGuestClassStarted ? "invitado" : "normal"
+        setClassChoice(selectedClass as "normal" | "invitado")
 
-        // Check for duplicate matricula
-        const asistenciasRef = collection(db, selectedClass === "guest" ? "AsistenciasInvitado" : "Asistencias")
-        const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
-        const matriculaSnapshot = await getDocs(matriculaQuery)
+        // Colección de asistencias según el tipo de clase
+        const asistenciasCollection = selectedClass === "invitado" ? "AsistenciasInvitado" : "Asistencias"
 
-        if (!matriculaSnapshot.empty) {
-          await swal({
-            title: "Atención",
-            text: "Ya has registrado tu asistencia.",
-            icon: "warning",
-          })
-          return
-        }
+        // Para clase normal, verificar matrícula y equipo
+        if (selectedClass === "normal") {
+          if (!matricula || !equipo) {
+            await swal({
+              title: "Error",
+              text: "Por favor, completa todos los campos.",
+              icon: "error",
+            })
+            return
+          }
 
-        // Check for duplicate equipo, except for personal equipment
-        if (equipo !== "personal") {
-          const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
-          const equipoSnapshot = await getDocs(equipoQuery)
+          // Check for duplicate matricula
+          const asistenciasRef = collection(db, asistenciasCollection)
+          const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
+          const matriculaSnapshot = await getDocs(matriculaQuery)
 
-          if (!equipoSnapshot.empty) {
+          if (!matriculaSnapshot.empty) {
             await swal({
               title: "Atención",
-              text: "Este equipo ya ha sido registrado.",
+              text: "Ya has registrado tu asistencia.",
               icon: "warning",
             })
             return
           }
-        }
 
-        // Get all student data
-        const alumnoRef = doc(db, "Alumnos", matricula)
-        const alumnoSnap = await getDoc(alumnoRef)
+          // Check for duplicate equipo, except for personal equipment
+          if (equipo !== "personal") {
+            const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
+            const equipoSnapshot = await getDocs(equipoQuery)
 
-        if (alumnoSnap.exists()) {
-          const alumnoData = alumnoSnap.data()
-          const asistenciaRef = doc(collection(db, selectedClass === "guest" ? "AsistenciasInvitado" : "Asistencias"))
+            if (!equipoSnapshot.empty) {
+              await swal({
+                title: "Atención",
+                text: "Este equipo ya ha sido registrado.",
+                icon: "warning",
+              })
+              return
+            }
+          }
 
-          await setDoc(asistenciaRef, {
-            AlumnoId: matricula,
-            Nombre: alumnoData.Nombre ?? "",
-            Apellido: alumnoData.Apellido ?? "",
-            Carrera: alumnoData.Carrera ?? "",
-            Grupo: alumnoData.Grupo ?? "",
-            Semestre: alumnoData.Semestre ?? "",
-            Turno: alumnoData.Turno ?? "",
+          // Get all student data
+          const alumnoRef = doc(db, "Alumnos", matricula)
+          const alumnoSnap = await getDoc(alumnoRef)
+
+          if (alumnoSnap.exists()) {
+            const alumnoData = alumnoSnap.data()
+            const asistenciaRef = doc(collection(db, asistenciasCollection))
+
+            // Datos comunes para ambos tipos de asistencia
+            const commonData = {
+              AlumnoId: matricula,
+              Nombre: alumnoData.Nombre ?? "",
+              Apellido: alumnoData.Apellido ?? "",
+              Carrera: alumnoData.Carrera ?? "",
+              Grupo: alumnoData.Grupo ?? "",
+              Semestre: alumnoData.Semestre ?? "",
+              Turno: alumnoData.Turno ?? "",
+              Equipo: equipo,
+              Fecha: serverTimestamp(),
+            }
+
+            // Datos específicos según el tipo de clase
+            if (classInfo) {
+              // Para clase normal
+              await setDoc(asistenciaRef, {
+                ...commonData,
+                MaestroNombre: classInfo.maestroNombre,
+                MaestroApellido: classInfo.maestroApellido,
+                Materia: classInfo.materiaNombre,
+                Practica: classInfo.practicaTitulo,
+              })
+            } else {
+              // Caso básico sin información adicional
+              await setDoc(asistenciaRef, commonData)
+            }
+
+            // Marcar el equipo como "en uso" si no es equipo personal
+            if (equipo !== "personal") {
+              try {
+                const equipoRef = doc(db, "Numero de equipos", "equipos")
+                const equipoDoc = await getDoc(equipoRef)
+
+                if (equipoDoc.exists()) {
+                  const equiposData = equipoDoc.data()
+                  const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => {
+                    if (eq.id === equipo) {
+                      return { ...eq, enUso: true }
+                    }
+                    return eq
+                  })
+
+                  await setDoc(equipoRef, { Equipos: equiposActualizados })
+                }
+              } catch (error) {
+                console.error("Error al actualizar el estado del equipo:", error)
+              }
+            }
+
+            await swal({
+              title: "¡Asistencia registrada!",
+              text: "Tu asistencia se ha registrado correctamente.",
+              icon: "success",
+            })
+
+            setMatricula("")
+            setEquipo("")
+          } else {
+            await swal({
+              title: "Error",
+              text: "Matrícula no encontrada",
+              icon: "error",
+            })
+          }
+        } else {
+          // Para clase invitada, verificar nombre, apellido y equipo
+          if (!nombre || !apellido || !equipo) {
+            await swal({
+              title: "Error",
+              text: "Por favor, completa todos los campos.",
+              icon: "error",
+            })
+            return
+          }
+
+          // Check for duplicate equipo, except for personal equipment
+          if (equipo !== "personal") {
+            const asistenciasRef = collection(db, asistenciasCollection)
+            const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
+            const equipoSnapshot = await getDocs(equipoQuery)
+
+            if (!equipoSnapshot.empty) {
+              await swal({
+                title: "Atención",
+                text: "Este equipo ya ha sido registrado.",
+                icon: "warning",
+              })
+              return
+            }
+          }
+
+          // Generar un ID único para el alumno invitado
+          const alumnoId = matriculaInvitado ? matriculaInvitado : `INV-${Date.now()}`
+          const asistenciaRef = doc(collection(db, asistenciasCollection))
+
+          // Datos para asistencia de invitado
+          const invitadoData = {
+            AlumnoId: alumnoId,
+            Nombre: nombre,
+            Apellido: apellido,
+            Carrera: "Externo",
+            Grupo: "Externo",
+            Semestre: "Externo",
+            Turno: "Externo",
             Equipo: equipo,
             Fecha: serverTimestamp(),
-            ...(selectedClass === "guest"
-              ? {
-                  MaestroInvitado: guestClassInfo.MaestroInvitado,
-                  Materia: guestClassInfo.Materia,
-                }
-              : {}),
-          })
+          }
+
+          // Añadir datos específicos de la clase invitada
+          if (guestClassInfo) {
+            await setDoc(asistenciaRef, {
+              ...invitadoData,
+              MaestroInvitado: guestClassInfo.MaestroInvitado,
+              Materia: guestClassInfo.Materia,
+              Practica: guestClassInfo.Practica,
+              Departamento: guestClassInfo.Departamento,
+            })
+          } else {
+            await setDoc(asistenciaRef, invitadoData)
+          }
+
+          // Marcar el equipo como "en uso" si no es equipo personal
+          if (equipo !== "personal") {
+            try {
+              const equipoRef = doc(db, "Numero de equipos", "equipos")
+              const equipoDoc = await getDoc(equipoRef)
+
+              if (equipoDoc.exists()) {
+                const equiposData = equipoDoc.data()
+                const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => {
+                  if (eq.id === equipo) {
+                    return { ...eq, enUso: true }
+                  }
+                  return eq
+                })
+
+                await setDoc(equipoRef, { Equipos: equiposActualizados })
+              }
+            } catch (error) {
+              console.error("Error al actualizar el estado del equipo:", error)
+            }
+          }
 
           await swal({
             title: "¡Asistencia registrada!",
-            text: `Tu asistencia se ha registrado correctamente para la ${selectedClass === "guest" ? "clase invitada" : "clase regular"}.`,
+            text: `Tu asistencia se ha registrado correctamente para la clase con ${guestClassInfo?.MaestroInvitado || "el maestro invitado"}.`,
             icon: "success",
           })
 
-          setMatricula("")
+          setNombre("")
+          setApellido("")
           setEquipo("")
-          setClassChoice(null)
-        } else {
-          await swal({
-            title: "Error",
-            text: "Matrícula no encontrada",
-            icon: "error",
-          })
+          setMatriculaInvitado("")
         }
       } else if (activeTab === "maestro") {
         if (!userMatricula || !password) {
@@ -487,13 +670,7 @@ export default function InterfazLaboratorio() {
     }
   }
 
-  const carouselImages = [
-    "/fondozugey.jpg",
-    // "/fondo_de_pantalla_de_salon.jpeg",
-    "/FondoItspp.png",
-    "/tecnmImagen.png",
-    "/LogoSistemas.png",
-  ]
+  const carouselImages = ["/fondo chato.jpg", "/FondoItspp.png", "/tecnmImagen.png", "/LogoSistemas.png"]
 
   if (isLoading) {
     return <Loader />
@@ -501,7 +678,9 @@ export default function InterfazLaboratorio() {
 
   return (
     <div
-      className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 ${theme === "dark" ? "dark bg-gray-900" : "bg-green-50"} transition-colors duration-300`}
+      className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 ${
+        theme === "dark" ? "dark bg-[#0c1f1a]" : "bg-[#f0fff4]"
+      } transition-colors duration-300`}
     >
       <div className="fixed top-2 left-2 z-50">
         <Sidebar
@@ -511,6 +690,16 @@ export default function InterfazLaboratorio() {
         />
       </div>
 
+      {/* Botón de cambio de tema */}
+      <button
+        onClick={handleThemeToggle}
+        className={`fixed top-4 right-4 z-50 p-3 rounded-full transition-all duration-300 ${
+          theme === "dark" ? "bg-[#1C4A3F] text-white hover:bg-[#153731]" : "bg-[#1BB827] text-white hover:bg-[#18a423]"
+        }`}
+      >
+        {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={currentMessageIndex}
@@ -518,23 +707,27 @@ export default function InterfazLaboratorio() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.5 }}
-          className={`text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-semibold ${theme === "dark" ? "text-white" : "text-green-800"} mb-2 sm:mb-4 text-center z-10 p-1 sm:p-2 rounded-xl max-w-[95%] sm:max-w-[90%] mx-auto overflow-hidden`}
+          className={`text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold ${
+            theme === "dark" ? "text-white" : "text-[#1C4A3F]"
+          } mb-6 sm:mb-8 text-center z-10 p-2 sm:p-3 rounded-xl max-w-[95%] sm:max-w-[90%] mx-auto overflow-hidden`}
         >
           {welcomeMessages[currentMessageIndex]}
         </motion.div>
       </AnimatePresence>
 
       <Card
-        className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${theme === "dark" ? "bg-gray-800" : "bg-white"} border-none relative z-10 shadow-lg rounded-xl sm:rounded-2xl`}
+        className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${
+          theme === "dark" ? "bg-[#1C4A3F]" : "bg-white"
+        } border-none relative z-10 shadow-xl rounded-2xl sm:rounded-3xl`}
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
-            className="flex flex-col lg:flex-row min-h-[70vh] sm:min-h-[80vh] relative overflow-hidden rounded-xl sm:rounded-2xl"
+            className="flex flex-col lg:flex-row min-h-[70vh] sm:min-h-[80vh] relative overflow-hidden rounded-2xl sm:rounded-3xl"
             {...TabAnimation}
           >
             <motion.div
-              className={`lg:w-2/5 relative h-48 sm:h-64 lg:h-auto ${isReversed ? "order-last" : "order-first"}`}
+              className={`lg:w-2/5 relative h-53 sm:h-69 lg:h-auto ${isReversed ? "order-last" : "order-first"}`}
               custom={isReversed}
               variants={SlideAnimation}
               initial="initial"
@@ -552,8 +745,8 @@ export default function InterfazLaboratorio() {
               animate="animate"
               exit="exit"
             >
-              <div className="absolute top-0 left-0 right-0 h-12 sm:h-16 flex justify-center items-center z-10 bg-white bg-opacity-75 dark:bg-gray-800 dark:bg-opacity-75">
-                <div className="w-24 sm:w-32 h-12 sm:h-16 relative">
+              <div className="absolute top-0 left-0 right-0 h-16 sm:h-20 flex justify-center items-center z-10 bg-white/80 dark:bg-[#1C4A3F]/80 backdrop-blur-sm">
+                <div className="w-28 sm:w-36 h-14 sm:h-18 relative">
                   <Image
                     src="/logo itspp.jpeg"
                     alt="Logos institucionales"
@@ -565,13 +758,17 @@ export default function InterfazLaboratorio() {
                 </div>
               </div>
               <CardHeader
-                className={`relative z-10 ${theme === "dark" ? colors.dark.headerBackground : colors.light.headerBackground} p-2 sm:p-4`}
+                className={`relative z-10 ${
+                  theme === "dark" ? colors.dark.headerBackground : colors.light.headerBackground
+                } p-6 sm:p-8 pt-20 sm:pt-24`}
               >
                 <div className="text-center">
                   <CardTitle
-                    className={`text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold flex flex-col items-center justify-center ${theme === "dark" ? colors.dark.titleText : colors.light.titleText} mb-1 sm:mb-2`}
+                    className={`text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold flex flex-col items-center justify-center ${
+                      theme === "dark" ? "text-white" : "text-white"
+                    } mb-2 sm:mb-3`}
                   >
-                    <Computer className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 mb-1 sm:mb-2" />
+                    <Computer className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 mb-2 sm:mb-3" />
                     <motion.span
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -581,345 +778,503 @@ export default function InterfazLaboratorio() {
                         ease: [0, 0.71, 0.2, 1.01],
                       }}
                     >
-                      Laboratorio Programacion
+                      Laboratorio Programación
                     </motion.span>
                   </CardTitle>
-                </div>
-                <div className={`mt-2 flex items-center justify-center space-x-2 sm:space-x-4`}>
-                  <label className="inline-flex items-center relative">
-                    <input
-                      className="peer hidden"
-                      type="checkbox"
-                      checked={theme === "dark"}
-                      onChange={handleThemeToggle}
-                    />
-                    <div className="relative w-[110px] h-[50px] bg-white peer-checked:bg-zinc-500 rounded-full after:absolute after:content-[''] after:w-[40px] after:h-[40px] after:bg-gradient-to-r from-orange-500 to-yellow-400 peer-checked:after:from-zinc-900 peer-checked:after:to-zinc-900 after:rounded-full after:top-[5px] after:left-[5px] active:after:w-[50px] peer-checked:after:left-[105px] peer-checked:after:translate-x-[-100%] shadow-sm duration-300 after:duration-300 after:shadow-md"></div>
-                    <svg
-                      height="0"
-                      width="100"
-                      viewBox="0 0 24 24"
-                      className="fill-white peer-checked:opacity-60 absolute w-6 h-6 left-[13px]"
-                    >
-                      <path d="M12,17c-2.76,0-5-2.24-5-5s2.24-5,5-5,5,2.24,5,5-2.24,5-5,5ZM13,0h-2V5h2V0Zm0,19h-2v5h2v-5ZM5,11H0v2H5v-2Zm19,0h-5v2h5v-2Zm-2.81-6.78l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54ZM7.76,17.66l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54Zm0-11.31l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Zm13.44,13.44l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Z" />
-                    </svg>
-                    <svg
-                      height="512"
-                      width="512"
-                      viewBox="0 0 24 24"
-                      className="fill-black opacity-60 peer-checked:opacity-70 peer-checked:fill-white absolute w-6 h-6 right-[13px]"
-                    >
-                      <path d="M12.009,24A12.067,12.067,0,0,1,.075,10.725,12.121,12.121,0,0,1,10.1.152a13,13,0,0,1,5.03.206,2.5,2.5,0,0,1,1.8,1.8,2.47,2.47,0,0,1-.7,2.425c-4.559,4.168-4.165,10.645.807,14.412h0a2.5,2.5,0,0,1-.7,4.319A13.875,13.875,0,0,1,12.009,24Zm.074-22a10.776,10.776,0,0,0-1.675.127,10.1,10.1,0,0,0-8.344,8.8A9.928,9.928,0,0,0,4.581,18.7a10.473,10.473,0,0,0,11.093,2.734.5.5,0,0,0,.138-.856h0C9.883,16.1,9.417,8.087,14.865,3.124a.459.459,0,0,0,.127-.465.491.491,0,0,0-.356-.362A10.68,10.68,0,0,0,12.083,2ZM20.5,12a1,1,0,0,1-.97-.757l-.358-1.43L17.74,9.428a1,1,0,0,1,.035-1.94l1.4-.325.351-1.406a1,1,0,0,1,1.94,0l.355,1.418,1.418.355a1,1,0,0,1,0,1.94l-1.418.355-.355,1.418A1,1,0,0,1,20.5,12ZM16,14a1,1,0,0,0,2,0A1,1,0,0,0,16,14Zm6,4a1,1,0,0,0,2,0A1,1,0,0,0,22,18Z" />
-                    </svg>
-                  </label>
                 </div>
               </CardHeader>
 
               <CardContent
-                className={`p-2 sm:p-4 ${theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground} flex-grow overflow-y-auto shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] rounded-b-lg sm:rounded-b-xl`}
+                className={`flex-grow flex flex-col justify-center items-center p-6 sm:p-8 ${
+                  theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground
+                }`}
               >
                 <Tabs
+                  defaultValue="estudiante"
+                  className="w-full max-w-md mx-auto"
                   value={activeTab}
                   onValueChange={(value) => {
-                    setIsReversed(value === "estudiante" ? false : true)
-                    setActiveTab(value as UserType)
-                    setUserType("maestro")
-                    // Clear all input fields
-                    setPassword("")
-                    setMatricula("")
-                    setUserMatricula("")
-                    setEquipo("")
+                    setIsReversed(!isReversed)
+                    setTimeout(() => {
+                      setActiveTab(value as UserType)
+                    }, 100)
                   }}
-                  className="h-full flex flex-col"
                 >
-                  <TabsList className="grid w-full grid-cols-2 h-10 mb-2 sm:mb-4 rounded-lg sm:rounded-xl overflow-hidden p-1 bg-gray-100 dark:bg-gray-800">
-                    {["estudiante", "maestro"].map((tab) => (
-                      <TabsTrigger
-                        key={tab}
-                        value={tab}
-                        className={`
-                          relative flex items-center justify-center text-xs sm:text-sm md:text-base
-                          ${
-                            theme === "dark"
-                              ? "text-gray-400 data-[state=active]:text-white"
-                              : "text-green-700 data-[state=active]:text-gray-900"
-                          } 
-                          transition-all duration-300 z-10 h-full rounded-md sm:rounded-lg
-                          data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700
-                        `}
-                      >
-                        <motion.div
-                          className="flex items-center justify-center w-full h-full"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          {tab === "estudiante" && (
-                            <User className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />
-                          )}
-                          {tab === "maestro" && (
-                            <UserCog className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 mr-1 sm:mr-2" />
-                          )}
-                          {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </motion.div>
-                      </TabsTrigger>
-                    ))}
+                  <TabsList className="grid w-full grid-cols-2 mb-6 p-1 bg-[#1BB827]/10 dark:bg-[#1BB827]/20 rounded-xl">
+                    <TabsTrigger
+                      value="estudiante"
+                      className={`text-sm sm:text-base py-3 rounded-lg transition-all duration-300 ${
+                        theme === "dark"
+                          ? "data-[state=active]:bg-[#1BB827] data-[state=active]:text-white"
+                          : "data-[state=active]:bg-[#1BB827] data-[state=active]:text-white"
+                      }`}
+                    >
+                      <User className="w-4 h-4 mr-2" />
+                      Estudiante
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="maestro"
+                      className={`text-sm sm:text-base py-3 rounded-lg transition-all duration-300 ${
+                        theme === "dark"
+                          ? "data-[state=active]:bg-[#1BB827] data-[state=active]:text-white"
+                          : "data-[state=active]:bg-[#1BB827] data-[state=active]:text-white"
+                      }`}
+                    >
+                      <UserCog className="w-4 h-4 mr-2" />
+                      Maestro/Laboratorista
+                    </TabsTrigger>
                   </TabsList>
 
-                  <div className="flex-grow overflow-y-auto">
-                    <AnimatePresence mode="wait">
-                      <TabsContent value="estudiante" className="flex-grow">
-                        <form
-                          onSubmit={handleSubmit}
-                          className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between"
+                  <TabsContent value="estudiante" className="space-y-6">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                      {/* Estado de las clases */}
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="classStatus"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
                         >
-                          <div className="space-y-3 sm:space-y-4">
-                            <div className="space-y-1 sm:space-y-2">
-                              <Label
-                                htmlFor="matricula"
-                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
-                              >
-                                Matrícula
-                              </Label>
-                              <Input
-                                id="matricula"
-                                type="text"
-                                placeholder="Ingrese su matrícula"
-                                value={matricula}
-                                onChange={(e) => handleNumberInput(e, setMatricula)}
-                                className={`${
-                                  theme === "dark"
-                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                              />
-                            </div>
-                            <div className="space-y-1 sm:space-y-2">
-                              <Label
-                                htmlFor="equipo"
-                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
-                              >
-                                Número de Equipo
-                              </Label>
-                              <Select onValueChange={setEquipo} value={equipo}>
-                                <SelectTrigger
-                                  id="equipo"
-                                  className={`${
-                                    theme === "dark"
-                                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                  } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                                >
-                                  <SelectValue placeholder="Seleccione el equipo" />
-                                </SelectTrigger>
-                                <SelectContent
-                                  className={`${theme === "dark" ? "bg-gray-700 text-white" : "bg-white text-gray-800"} rounded-lg sm:rounded-xl border ${theme === "dark" ? "border-gray-600" : "border-green-300"}`}
-                                >
-                                  {equipmentList.map((equipment) => (
-                                    <SelectItem
-                                      key={equipment.id}
-                                      value={equipment.id}
-                                      disabled={equipment.fueraDeServicio}
-                                      className={`text-xs sm:text-sm ${equipment.fueraDeServicio ? "text-gray-400" : ""}`}
-                                    >
-                                      {equipment.id === "personal" ? "Equipo Personal" : `Equipo ${equipment.id}`}{" "}
-                                      {equipment.fueraDeServicio ? "(Fuera de servicio)" : ""}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <Button
-                            type="submit"
-                            className={`w-full ${
-                              isRegularClassStarted || isGuestClassStarted
-                                ? theme === "dark"
-                                  ? colors.dark.buttonGreen
-                                  : colors.light.buttonGreen
-                                : "bg-gray-400"
-                            } transition-all duration-200 text-xs sm:text-sm py-1 sm:py-2 rounded-md sm:rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[2px_2px_4px_#bebebe,-2px_-2px_4px_#ffffff] dark:shadow-[2px_2px_4px_#1c1c1c,-2px_-2px_4px_#262626] hover:shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:hover:shadow-[3px_3px_6px_#151515,-3px_-3px_6px_#292929]`}
-                            disabled={!isRegularClassStarted && !isGuestClassStarted}
-                          >
-                            {isRegularClassStarted || isGuestClassStarted
-                              ? "Registrar Asistencia"
-                              : "Esperando inicio de clase"}
-                          </Button>
-                        </form>
-                      </TabsContent>
-                      <TabsContent value="maestro" className="flex-grow">
-                        <div className="space-y-3 sm:space-y-4 mb-3 sm:mb-4">
-                          <Label
-                            className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
-                          >
-                            Seleccione surol
-                          </Label>
-                          <div className="flex space-x-2 sm:space-x-4">
-                            <Button
-                              onClick={() => {
-                                setUserType("maestro")
-                                setUserMatricula("")
-                                setPassword("")
-                              }}
-                              className={`flex-1 ${userType === "maestro" ? (theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen) : "bg-gray-400"} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
-                            >
-                              Maestro
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setUserType("laboratorista")
-                                setUserMatricula("")
-                                setPassword("")
-                              }}
-                              className={`flex-1 ${userType === "laboratorista" ? (theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen) : "bg-gray-400"} shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
-                            >
-                              Laboratorista
-                            </Button>
-                          </div>
-                        </div>
+                          Estado de Clases
+                        </Label>
+                        <div
+                          className={`p-3 rounded-xl ${
+                            theme === "dark" ? "bg-[#153731] text-white" : "bg-[#e6ffe9] text-[#1C4A3F]"
+                          }`}
+                        >
+                          {isClassStarted || isGuestClassStarted ? (
+                            <>
+                              <div className="flex items-center justify-center mb-2">
+                                <div
+                                  className={`w-3 h-3 rounded-full animate-pulse mr-2 ${
+                                    theme === "dark" ? "bg-green-400" : "bg-green-500"
+                                  }`}
+                                ></div>
+                                <p className="font-medium text-center">¡Clase activa en este momento!</p>
+                              </div>
 
-                        <form
-                          onSubmit={handleSubmit}
-                          className="space-y-3 sm:space-y-4 h-full flex flex-col justify-between"
-                        >
-                          <div className="space-y-3 sm:space-y-4">
-                            <div className="space-y-1 sm:space-y-2">
-                              <Label
-                                htmlFor="userMatricula"
-                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
-                              >
-                                Matrícula del {userType === "maestro" ? "Maestro" : "Laboratorista"}
-                              </Label>
-                              <Input
-                                id="userMatricula"
-                                type="text"
-                                placeholder={`Ingrese su matrícula de ${userType === "maestro" ? "maestro" : "laboratorista"}`}
-                                value={userMatricula}
-                                onChange={(e) => handleNumberInput(e, setUserMatricula)}
-                                className={`${
-                                  theme === "dark"
-                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                              />
+                              {isClassStarted && classInfo && (
+                                <div className="mt-3 p-3 rounded-lg bg-opacity-20 bg-white">
+                                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                                    <span className="font-semibold">Maestro:</span>
+                                    <span>
+                                      {classInfo.maestroNombre} {classInfo.maestroApellido}
+                                    </span>
+
+                                    <span className="font-semibold">Materia:</span>
+                                    <span>{classInfo.materiaNombre}</span>
+
+                                    <span className="font-semibold">Práctica:</span>
+                                    <span>{classInfo.practicaTitulo}</span>
+
+                                    <span className="font-semibold">Inicio:</span>
+                                    <span>{classInfo.horaInicio}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {isGuestClassStarted && guestClassInfo && (
+                                <div className="mt-3 p-3 rounded-lg bg-opacity-20 bg-white">
+                                  <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                                    <span className="font-semibold">Maestro:</span>
+                                    <span>{guestClassInfo.MaestroInvitado}</span>
+
+                                    <span className="font-semibold">Materia:</span>
+                                    <span>{guestClassInfo.Materia}</span>
+
+                                    <span className="font-semibold">Práctica:</span>
+                                    <span>{guestClassInfo.Practica}</span>
+
+                                    <span className="font-semibold">Inicio:</span>
+                                    <span>{guestClassInfo.HoraInicio}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="flex items-center justify-center">
+                              <div
+                                className={`w-3 h-3 rounded-full mr-2 ${
+                                  theme === "dark" ? "bg-red-400" : "bg-red-500"
+                                }`}
+                              ></div>
+                              <p className="font-medium text-center">No hay clases iniciadas en este momento</p>
                             </div>
-                            <div className="space-y-1 sm:space-y-2">
-                              <Label
-                                htmlFor="password"
-                                className={`${theme === "dark" ? "text-gray-300" : "text-green-700"} text-sm sm:text-base`}
-                              >
-                                Contraseña
-                              </Label>
-                              <Input
-                                id="password"
-                                type="password"
-                                placeholder="Ingrese su contraseña"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className={`${
-                                  theme === "dark"
-                                    ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                                    : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                                } border text-xs sm:text-sm w-full py-1 sm:py-2 rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                              />
-                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Formulario para clase normal */}
+                      {isClassStarted && !isGuestClassStarted && (
+                        <>
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="matricula"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Matrícula
+                            </Label>
+                            <Input
+                              id="matricula"
+                              type="text"
+                              value={matricula}
+                              onChange={(e) => handleNumberInput(e, setMatricula)}
+                              placeholder="Ingresa tu matrícula"
+                              className={`${
+                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              maxLength={8}
+                              required
+                            />
                           </div>
-                          <Button
-                            type="submit"
-                            className={`w-full ${theme === "dark" ? colors.dark.buttonGreen : colors.light.buttonGreen} transition-all duration-200 text-xs sm:text-sm py-1 sm:py-2 rounded-md sm:rounded-lg text-white transform hover:-translate-y-1 active:translate-y-0 shadow-[2px_2px_4px_#bebebe,-2px_-2px_4px_#ffffff] dark:shadow-[2px_2px_4px_#1c1c1c,-2px_-2px_4px_#262626] hover:shadow-[3px_3px_6px_#bebebe,-3px_-3px_6px_#ffffff] dark:hover:shadow-[3px_3px_6px_#151515,-3px_-3px_6px_#292929]`}
+
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="equipo"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Equipo
+                            </Label>
+                            <Select value={equipo} onValueChange={setEquipo}>
+                              <SelectTrigger
+                                className={`${
+                                  theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                                } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                  theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              >
+                                <SelectValue placeholder="Selecciona un equipo" />
+                              </SelectTrigger>
+                              <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                                {equipmentList.map((equipment) => (
+                                  <SelectItem
+                                    key={equipment.id}
+                                    value={equipment.id}
+                                    disabled={equipment.fueraDeServicio || equipment.enUso}
+                                    className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
+                                  >
+                                    {equipment.id}
+                                    {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
+                                    {equipment.enUso ? " (En uso)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Formulario para clase invitada */}
+                      {isGuestClassStarted && !isClassStarted && (
+                        <>
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="nombre"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Nombre
+                            </Label>
+                            <Input
+                              id="nombre"
+                              type="text"
+                              value={nombre}
+                              onChange={(e) => setNombre(e.target.value)}
+                              placeholder="Ingresa tu nombre"
+                              className={`${
+                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="apellido"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Apellido
+                            </Label>
+                            <Input
+                              id="apellido"
+                              type="text"
+                              value={apellido}
+                              onChange={(e) => setApellido(e.target.value)}
+                              placeholder="Ingresa tu apellido"
+                              className={`${
+                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="matriculaInvitado"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Matrícula
+                            </Label>
+                            <Input
+                              id="matriculaInvitado"
+                              type="text"
+                              value={matriculaInvitado}
+                              onChange={(e) => setMatriculaInvitado(e.target.value)}
+                              placeholder="Ingresa tu matrícula (opcional)"
+                              className={`${
+                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                            />
+                          </div>
+
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="equipo"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Equipo
+                            </Label>
+                            <Select value={equipo} onValueChange={setEquipo}>
+                              <SelectTrigger
+                                className={`${
+                                  theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                                } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                  theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              >
+                                <SelectValue placeholder="Selecciona un equipo" />
+                              </SelectTrigger>
+                              <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                                {equipmentList.map((equipment) => (
+                                  <SelectItem
+                                    key={equipment.id}
+                                    value={equipment.id}
+                                    disabled={equipment.fueraDeServicio || equipment.enUso}
+                                    className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
+                                  >
+                                    {equipment.id}
+                                    {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
+                                    {equipment.enUso ? " (En uso)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+
+                      <Button
+                        type="submit"
+                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
+                          theme === "dark" ? colors.dark.buttonPrimary : colors.light.buttonPrimary
+                        } transition-all duration-300 ${!(isClassStarted || isGuestClassStarted) ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={!(isClassStarted || isGuestClassStarted)}
+                      >
+                        {!(isClassStarted || isGuestClassStarted) ? (
+                          "No hay clases iniciadas"
+                        ) : (
+                          <>
+                            Registrar Asistencia
+                            <ChevronRight className="w-5 h-5" />
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  </TabsContent>
+
+                  <TabsContent value="maestro" className="space-y-6">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="userType"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
+                        >
+                          Tipo de Usuario
+                        </Label>
+                        <Select
+                          value={userType}
+                          onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}
+                        >
+                          <SelectTrigger
+                            className={`${
+                              theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                            } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                              theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                            } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
                           >
-                            Iniciar Sesión
-                          </Button>
-                        </form>
-                      </TabsContent>
-                    </AnimatePresence>
-                  </div>
+                            <SelectValue placeholder="Selecciona tipo de usuario" />
+                          </SelectTrigger>
+                          <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                            <SelectItem value="maestro">Maestro</SelectItem>
+                            <SelectItem value="laboratorista">Laboratorista</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="userMatricula"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
+                        >
+                          {userType === "maestro" ? "Número de Empleado" : "ID de Laboratorista"}
+                        </Label>
+                        <Input
+                          id="userMatricula"
+                          type="text"
+                          value={userMatricula}
+                          onChange={(e) => handleNumberInput(e, setUserMatricula)}
+                          placeholder={`Ingresa tu ${userType === "maestro" ? "número de empleado" : "ID de laboratorista"}`}
+                          className={`${
+                            theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                          } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                            theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                          } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                          maxLength={8}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="password"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
+                        >
+                          Contraseña
+                        </Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Ingresa tu contraseña"
+                          className={`${
+                            theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                          } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                            theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                          } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                          required
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
+                          theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
+                        } transition-all duration-300`}
+                      >
+                        Iniciar Sesión
+                        <ChevronRight className="w-5 h-5" />
+                      </Button>
+                    </form>
+                  </TabsContent>
                 </Tabs>
               </CardContent>
+
+              <CardFooter className={`p-4 ${theme === "dark" ? "bg-[#153731]" : "bg-[#f0fff4]"} text-center text-sm`}>
+                <p className={`w-full ${theme === "dark" ? "text-gray-300" : "text-[#1C4A3F]/70"}`}>
+                  Instituto Tecnológico Superior de Puerto Peñasco © {new Date().getFullYear()}
+                </p>
+              </CardFooter>
             </motion.div>
           </motion.div>
         </AnimatePresence>
       </Card>
 
-      {isAdminLoginOpen && (
-        <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-          <DialogContent
-            className={`${theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground} rounded-xl sm:rounded-2xl border-none shadow-[0_5px_15px_rgba(0,0,0,0.2)] p-3 sm:p-4`}
-          >
-            <DialogHeader>
-              <DialogTitle
-                className={`text-lg sm:text-xl font-bold ${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
+      <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
+        <DialogContent
+          className={`sm:max-w-md ${
+            theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"
+          } border-none shadow-lg rounded-2xl`}
+        >
+          <DialogHeader>
+            <DialogTitle className={`text-center text-xl ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}>
+              Acceso Administrador
+            </DialogTitle>
+            <DialogDescription className={`text-center ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+              Ingresa tus credenciales de administrador
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdminLogin} className="space-y-5">
+            <div className="space-y-3">
+              <Label
+                htmlFor="adminEmail"
+                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
               >
-                Inicio de Sesión de Administrador
-              </DialogTitle>
-              <DialogDescription
-                className={`${theme === "dark" ? colors.dark.descriptionText : colors.light.descriptionText}`}
+                Correo Electrónico
+              </Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="Ingresa tu correo electrónico"
+                className={`${
+                  theme === "dark"
+                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
+                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
+                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label
+                htmlFor="adminPassword"
+                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
               >
-                Ingrese sus credenciales de administrador
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleAdminLogin} className="space-y-3 sm:space-y-4">
-              <div className="space-y-1 sm:space-y-2">
-                <Label
-                  htmlFor="adminEmail"
-                  className={`${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
-                >
-                  ID de Administrador
-                </Label>
-                <Input
-                  id="adminEmail"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="Ingrese el ID de administrador"
-                  className={`${
-                    theme === "dark"
-                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                />
-              </div>
-              <div className="space-y-1 sm:space-y-2">
-                <Label
-                  htmlFor="adminPassword"
-                  className={`${theme === "dark" ? colors.dark.titleText : colors.light.titleText}`}
-                >
-                  Contraseña
-                </Label>
-                <Input
-                  id="adminPassword"
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  className={`${
-                    theme === "dark"
-                      ? `${colors.dark.inputBackground} ${colors.dark.inputText} ${colors.dark.inputBorder}`
-                      : `${colors.light.inputBackground} ${colors.light.inputText} ${colors.light.inputBorder}`
-                  } border rounded-md sm:rounded-lg transition-all duration-200 shadow-[inset_2px_2px_4px_#d1d1d1,inset_-2px_-2px_4px_#ffffff] dark:shadow-[inset_2px_2px_4px_#1c1c1c,inset_-2px_-2px_4px_#262626] focus:shadow-[inset_3px_3px_6px_#bebebe,inset_-3px_-3px_6px_#ffffff] dark:focus:shadow-[inset_3px_3px_6px_#151515,inset_-3px_-3px_6px_#292929]`}
-                />
-              </div>
-              <Button
-                type="submit"
-                className={`w-full ${theme === "dark" ? colors.dark.buttonBlue : colors.light.buttonBlue} text-white transition-all duration-200 rounded-md sm:rounded-lg py-1 sm:py-2 shadow-[0_2px_4px_rgba(50,50,93,0.1),0_1px_2px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_6px_rgba(50,50,93,0.1),0_2px_4px_rgba(0,0,0,0.08)]`}
-              >
-                Iniciar Sesión
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-      <style jsx global>{`
-        html {
-          font-size: 14px;
-        }
-        @media (min-width: 640px) {
-          html {
-            font-size: 16px;
-          }
-        }
-        @media (min-width: 1024px) {
-          html {
-            font-size: 18px;
-          }
-        }
-      `}</style>
+                Contraseña
+              </Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Ingresa tu contraseña"
+                className={`${
+                  theme === "dark"
+                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
+                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
+                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium ${
+                theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
+              } transition-all duration-300`}
+            >
+              Iniciar Sesión
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

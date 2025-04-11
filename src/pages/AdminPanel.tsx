@@ -10,27 +10,92 @@ import { DocentesTab } from "../components/DocentesTab"
 import { MateriasTab } from "../components/MateriasTab"
 import { LaboratoristasTab } from "../components/LaboratoristasTab"
 import { AdministradoresTab } from "../components/AdministradoresTab"
-import { colors, firebaseConfig } from "../lib/constants"
+import { firebaseConfig } from "../lib/constants"
 import { motion } from "framer-motion"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
 import { useRouter } from "next/navigation"
 import Swal from "sweetalert2"
 
+// Importar los iconos necesarios de Lucide React
+import { Moon, Sun } from "lucide-react"
+
+// Añadir la definición de colores del index.tsx
+const colors = {
+  light: {
+    primary: "#800040", // Guinda/vino como color principal en modo claro
+    secondary: "#1d5631", // Verde oscuro como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "bg-[#fff0f5]", // Fondo con tono rosado muy suave
+    cardBackground: "bg-white",
+    headerBackground: "bg-gradient-to-r from-[#800040] to-[#a30050]",
+    titleText: "text-white",
+    descriptionText: "text-[#800040]/80",
+    hoverBackground: "hover:bg-[#fff0f5]",
+    buttonPrimary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonSecondary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#fff0f5]",
+    countText: "text-[#800040]",
+    inputBackground: "bg-[#f8f8f8]",
+    inputBorder: "border-[#800040]/30",
+    inputText: "text-[#800040]",
+    switchBackground: "bg-[#800040]/20",
+    switchToggle: "bg-white",
+    grayText: "text-[#74726f]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#f0f0f0]",
+    badge: "bg-[#800040]",
+    badgeOutline: "border-[#800040] text-[#800040]",
+    badgeSecundario: "bg-[#800040]/20 text-[#800040]",
+  },
+  dark: {
+    primary: "#1d5631", // Verde oscuro como color principal en modo oscuro
+    secondary: "#800040", // Guinda/vino como color secundario
+    tertiary: "#74726f", // Gris para elementos terciarios
+    background: "bg-[#0c1f15]", // Fondo verde muy oscuro
+    cardBackground: "bg-[#2a2a2a]",
+    headerBackground: "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]",
+    titleText: "text-white",
+    descriptionText: "text-gray-300",
+    hoverBackground: "hover:bg-[#153d23]",
+    buttonPrimary: "bg-[#1d5631] hover:bg-[#153d23] text-white",
+    buttonSecondary: "bg-[#800040] hover:bg-[#5c002e] text-white",
+    buttonTertiary: "bg-[#74726f] hover:bg-[#5a5856] text-white",
+    countBackground: "bg-[#1d5631]/20",
+    countText: "text-[#2a7a45]",
+    inputBackground: "bg-[#3a3a3a]",
+    inputBorder: "border-[#1d5631]/30",
+    inputText: "text-white",
+    switchBackground: "bg-[#1d5631]/20",
+    switchToggle: "bg-[#1d5631]",
+    grayText: "text-[#a0a0a0]",
+    grayBorder: "border-[#74726f]",
+    grayBackground: "bg-[#3a3a3a]",
+    badge: "bg-[#1d5631]",
+    badgeOutline: "border-[#1d5631] text-[#2a7a45]",
+    badgeSecundario: "bg-[#1d5631]/20 text-[#1d5631]",
+  },
+}
+
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 
+// Modificar el componente Loader para usar los colores del proyecto
 const Loader = () => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900"
+      className="flex items-center justify-center h-screen bg-[#f0fff4] dark:bg-[#0c1f1a]"
     >
-      <div className="w-32 aspect-square rounded-full relative flex justify-center items-center animate-spin-slow z-40 bg-[conic-gradient(white_0deg,white_300deg,transparent_270deg,transparent_360deg)]">
-        <div className="absolute w-[60%] aspect-square rounded-full z-[80] animate-spin-medium bg-[conic-gradient(white_0deg,white_270deg,transparent_180deg,transparent_360deg)]" />
-        <div className="absolute w-3/4 aspect-square rounded-full z-[60] animate-spin-slow bg-[conic-gradient(#065f46_0deg,#065f46_180deg,transparent_180deg,transparent_360deg)]" />
-        <div className="absolute w-[85%] aspect-square rounded-full z-[60] animate-spin-extra-slow bg-[conic-gradient(#34d399_0deg,#34d399_180deg,transparent_180deg,transparent_360deg)]" />
+      <div className="relative flex flex-col items-center">
+        <div className="w-32 aspect-square rounded-full relative flex justify-center items-center animate-spin-slow z-40 bg-[conic-gradient(#1BB827_0deg,#1BB827_300deg,transparent_270deg,transparent_360deg)]">
+          <div className="absolute w-[60%] aspect-square rounded-full z-[80] animate-spin-medium bg-[conic-gradient(#1BB827_0deg,#1BB827_270deg,transparent_180deg,transparent_360deg)]" />
+          <div className="absolute w-3/4 aspect-square rounded-full z-[60] animate-spin-slow bg-[conic-gradient(#1C4A3F_0deg,#1C4A3F_180deg,transparent_180deg,transparent_360deg)]" />
+          <div className="absolute w-[85%] aspect-square rounded-full z-[60] animate-spin-extra-slow bg-[conic-gradient(#25D533_0deg,#25D533_180deg,transparent_180deg,transparent_360deg)]" />
+        </div>
+        <div className="mt-8 text-[#1C4A3F] dark:text-white text-xl font-medium">Cargando...</div>
       </div>
     </motion.div>
   )
@@ -59,14 +124,13 @@ export default function AdminPanel() {
       text: "Será redirigido a la página de inicio",
       icon: "warning",
       showCancelButton: true,
-     
+
       cancelButtonColor: "#d33",
-      confirmButtonColor: "#3085d6",
+      confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
       cancelButtonText: "Cancelar",
       confirmButtonText: "Sí, cerrar sesión",
     }).then((result) => {
       if (result.isConfirmed) {
- 
         router.push("/")
       }
     })
@@ -91,13 +155,14 @@ export default function AdminPanel() {
 
   const setupRealTimeListeners = () => {
     const collections = ["Alumnos", "Docentes", "Materias", "Laboratoristas", "Administrador"]
-
+  
     collections.forEach((collectionName) => {
       const collectionRef = collection(db, collectionName)
       onSnapshot(query(collectionRef), (snapshot) => {
         setStats((prevStats) => ({
           ...prevStats,
-          [`total${collectionName}`]: snapshot.size,
+          // Usar "totalAdministradores" cuando collectionName es "Administrador"
+          [collectionName === "Administrador" ? "totalAdministradores" : `total${collectionName}`]: snapshot.size,
         }))
       })
     })
@@ -108,31 +173,25 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className={`min-h-screen ${currentColors.background} transition-all duration-300`}>
-      <header className={`${currentColors.headerBackground} shadow-md p-4`}>
+    <div
+      className={`min-h-screen ${theme === "dark" ? "dark bg-[#0c1f1a]" : "bg-[#f0fff4]"} transition-colors duration-300`}
+    >
+      <header
+        className={`${theme === "dark" ? colors.dark.headerBackground : colors.light.headerBackground} shadow-md p-4`}
+      >
         <div className="flex items-center justify-between">
-          <h1 className={`text-2xl font-semibold ${currentColors.titleText}`}>Panel de Administrador</h1>
+          <h1 className="text-2xl font-semibold text-white">Panel de Administrador</h1>
           <div className="flex items-center space-x-4">
-            <label className="inline-flex items-center relative">
-              <input className="peer hidden" type="checkbox" checked={theme === "dark"} onChange={toggleDarkMode} />
-              <div className="relative w-[110px] h-[50px] bg-white peer-checked:bg-zinc-500 rounded-full after:absolute after:content-[''] after:w-[40px] after:h-[40px] after:bg-gradient-to-r from-orange-500 to-yellow-400 peer-checked:after:from-zinc-900 peer-checked:after:to-zinc-900 after:rounded-full after:top-[5px] after:left-[5px] active:after:w-[50px] peer-checked:after:left-[105px] peer-checked:after:translate-x-[-100%] shadow-sm duration-300 after:duration-300 after:shadow-md"></div>
-              <svg
-                height="0"
-                width="100"
-                viewBox="0 0 24 24"
-                className="fill-white peer-checked:opacity-60 absolute w-6 h-6 left-[13px]"
-              >
-                <path d="M12,17c-2.76,0-5-2.24-5-5s2.24-5,5-5,5,2.24,5,5-2.24,5-5,5ZM13,0h-2V5h2V0Zm0,19h-2v5h2v-5ZM5,11H0v2H5v-2Zm19,0h-5v2h5v-2Zm-2.81-6.78l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54ZM7.76,17.66l-1.41-1.41-3.54,3.54,1.41,1.41,3.54-3.54Zm0-11.31l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Zm13.44,13.44l-3.54-3.54-1.41,1.41,3.54,3.54,1.41-1.41Z" />
-              </svg>
-              <svg
-                height="512"
-                width="512"
-                viewBox="0 0 24 24"
-                className="fill-black opacity-60 peer-checked:opacity-70 peer-checked:fill-white absolute w-6 h-6 right-[13px]"
-              >
-                <path d="M12.009,24A12.067,12.067,0,0,1,.075,10.725,12.121,12.121,0,0,1,10.1.152a13,13,0,0,1,5.03.206,2.5,2.5,0,0,1,1.8,1.8,2.47,2.47,0,0,1-.7,2.425c-4.559,4.168-4.165,10.645.807,14.412h0a2.5,2.5,0,0,1-.7,4.319A13.875,13.875,0,0,1,12.009,24Zm.074-22a10.776,10.776,0,0,0-1.675.127,10.1,10.1,0,0,0-8.344,8.8A9.928,9.928,0,0,0,4.581,18.7a10.473,10.473,0,0,0,11.093,2.734.5.5,0,0,0,.138-.856h0C9.883,16.1,9.417,8.087,14.865,3.124a.459.459,0,0,0,.127-.465.491.491,0,0,0-.356-.362A10.68,10.68,0,0,0,12.083,2ZM20.5,12a1,1,0,0,1-.97-.757l-.358-1.43L17.74,9.428a1,1,0,0,1,.035-1.94l1.4-.325.351-1.406a1,1,0,0,1,1.94,0l.355,1.418,1.418.355a1,1,0,0,1,0,1.94l-1.418.355-.355,1.418A1,1,0,0,1,20.5,12ZM16,14a1,1,0,0,0,2,0A1,1,0,0,0,16,14Zm6,4a1,1,0,0,0,2,0A1,1,0,0,0,22,18Z" />
-              </svg>
-            </label>
+            <button
+              onClick={toggleDarkMode}
+              className={`p-3 rounded-full transition-all duration-300 ${
+                theme === "dark"
+                  ? "bg-[#1C4A3F] text-white hover:bg-[#153731]"
+                  : "bg-[#1BB827] text-white hover:bg-[#18a423]"
+              }`}
+            >
+              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
           </div>
         </div>
       </header>
@@ -167,4 +226,3 @@ export default function AdminPanel() {
     </div>
   )
 }
-

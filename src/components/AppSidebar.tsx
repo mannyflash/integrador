@@ -202,8 +202,13 @@ export function AppSidebar({
         icon: "success",
       })
 
-      onPracticaAdded()
+      // Actualizar las prácticas en tiempo real
       fetchPracticas(selectedMateria)
+
+      // Llamar a onPracticaAdded para actualizar las prácticas en lista-asistencias
+      if (onPracticaAdded) {
+        onPracticaAdded()
+      }
     } catch (error) {
       console.error("Error al agregar la práctica:", error)
       await Swal.fire({
@@ -262,7 +267,13 @@ export function AppSidebar({
           icon: "success",
         })
 
+        // Actualizar las prácticas en tiempo real
         fetchPracticas(selectedMateria)
+
+        // Llamar a onPracticaAdded para actualizar las prácticas en lista-asistencias
+        if (onPracticaAdded) {
+          onPracticaAdded()
+        }
       } catch (error) {
         console.error("Error al actualizar la práctica:", error)
         await Swal.fire({
@@ -298,7 +309,13 @@ export function AppSidebar({
           icon: "success",
         })
 
+        // Actualizar las prácticas en tiempo real
         fetchPracticas(selectedMateria)
+
+        // Llamar a onPracticaAdded para actualizar las prácticas en lista-asistencias
+        if (onPracticaAdded) {
+          onPracticaAdded()
+        }
       } catch (error) {
         console.error("Error al eliminar la práctica:", error)
         await Swal.fire({
