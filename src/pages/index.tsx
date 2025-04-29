@@ -357,7 +357,7 @@ Hora de inicio: ${data.HoraInicio}`,
             return
           }
 
-          // Check for duplicate equipo, except for personal equipment
+          //verificar equipo repetido, excepto el personal
           if (equipo !== "personal") {
             const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
             const equipoSnapshot = await getDocs(equipoQuery)
@@ -1278,4 +1278,3 @@ Hora de inicio: ${data.HoraInicio}`,
     </div>
   )
 }
-

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "out",
+    "public": "src",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -10,27 +10,7 @@
       {
         "source": "**",
         "destination": "/index.html"
+            }
+          ]
+        }
       }
-    ],
-    "headers": [
-      {
-        "source": "/sw.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "**/*.{js,html,css,png,jpg,gif,svg,webp}",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "max-age=604800"
-          }
-        ]
-      }
-    ]
-  }
-}
