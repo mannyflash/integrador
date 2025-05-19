@@ -268,18 +268,19 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
           doc.setTextColor(128, 0, 64) // Color guinda/vino
           const [materia, docente] = data.cell.text.toString().split("\n")
           if (materia) {
-            doc.setFontSize(8)
+            doc.setFontSize(7)
             doc.setFont("helvetica", "bold")
             doc.text(materia, data.cell.x + data.cell.width / 2, data.cell.y + 5, {
               align: "center",
+              maxWidth: data.cell.width - 4,
             })
           }
           if (docente) {
             doc.setFontSize(6)
             doc.setFont("helvetica", "normal")
-            doc.text(docente, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height - 3, {
+            doc.text(docente.replace("- ", ""), data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height - 3, {
               align: "center",
-              maxWidth: data.cell.width - 2,
+              maxWidth: data.cell.width - 4,
             })
           }
         }
@@ -288,14 +289,16 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
 
     // Agregar pie de página con firmas
     const finalY = (doc as any).lastAutoTable.finalY || 220
-    const signatureY = finalY + 20
+    // Eliminar las siguientes lineas
+    // const signatureY = finalY + 20
 
     // Líneas de firma
-    doc.line(margin, signatureY, margin + 70, signatureY)
-    doc.text("FIRMA DOCENTE", margin + 35, signatureY + 5, { align: "center" })
+    // Eliminar las siguientes lineas
+    // doc.line(margin, signatureY, margin + 70, signatureY)
+    // doc.text("FIRMA DOCENTE", margin + 35, signatureY + 5, { align: "center" })
 
-    doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
-    doc.text("FIRMA ENCARGADO LABORATORIO", pageWidth - margin - 35, signatureY + 5, { align: "center" })
+    // doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
+    // doc.text("FIRMA ENCARGADO LABORATORIO", pageWidth - margin - 35, signatureY + 5, { align: "center" })
 
     // Guardar el PDF con nombre formateado
     const fechaActual = new Date().toLocaleDateString().replace(/\//g, "-")
@@ -324,7 +327,7 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
             <Button
               key={`${dia}-${hora}`}
               variant="outline"
-              className={`h-full min-h-[80px] w-full ${
+              className={`h-full min-h-[80px] w-full p-1 ${
                 esModoOscuro
                   ? "border-gray-700 hover:bg-[#1d5631]/20 bg-[#1d5631]/10"
                   : "border-[#800040]/20 hover:bg-[#fff0f5] bg-white"
@@ -332,9 +335,13 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
               onClick={() => seleccionarFranja(dia, hora)}
             >
               {franja ? (
-                <div className="text-xs">
-                  <p className={`font-semibold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>{franja.materia}</p>
-                  <p className={esModoOscuro ? "text-gray-300" : "text-[#800040]/80"}>{franja.docente}</p>
+                <div className="text-xs w-full flex flex-col items-center justify-center">
+                  <p className={`font-semibold mb-1 text-center ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
+                    {franja.materia}
+                  </p>
+                  <div className={`text-center ${esModoOscuro ? "text-gray-300" : "text-[#800040]/80"}`}>
+                    {franja.docente}
+                  </div>
                 </div>
               ) : (
                 <span className={esModoOscuro ? "text-gray-400" : "text-[#800040]/60"}>Haga clic para agregar</span>
@@ -542,4 +549,3 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
 }
 
 export default VistaHorario
-

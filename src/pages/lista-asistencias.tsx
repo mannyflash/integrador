@@ -48,6 +48,7 @@ import { AppSidebar } from "../components/AppSidebar"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { logAction } from "../lib/logging"
 import * as XLSX from "xlsx"
+import { verificarYLimpiarAsistenciasHuerfanas } from "../lib/cleanup"
 declare module "jspdf" {
   interface jsPDF {
     autoTable: (options: any) => jsPDF
@@ -201,6 +202,10 @@ export default function ListaAsistencias() {
         return
       }
       setMaestroId(storedMaestroId)
+      // Verificar y limpiar asistencias huérfanas
+      verificarYLimpiarAsistenciasHuerfanas()
+        .then(() => console.log("Verificación de asistencias huérfanas completada"))
+        .catch((error) => console.error("Error en verificación de asistencias huérfanas:", error))
       fetchMaterias(storedMaestroId)
       fetchMaestroInfo(storedMaestroId)
       const unsubscribeAsistencias = onSnapshot(query(collection(db, "Asistencias")), (snapshot) => {
@@ -223,6 +228,133 @@ export default function ListaAsistencias() {
     }
     checkAuth()
   }, [router])
+
+  // Añadir este efecto después del useEffect que verifica la autenticación
+  useEffect(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      // Si hay una clase iniciada, finalizarla automáticamente
+      if (claseIniciada) {
+        // Guardar el ID del maestro y la información de la práctica para usarlos en el cierre
+        const maestroActual = maestroId
+        const practicaActual = selectedPractica
+        const materiaActual = selectedMateriaId
+        const horaInicioActual = horaInicio
+        const asistenciasActuales = asistencias
+        const maestroInfoActual = maestroInfo
+        const materiasActuales = materias
+
+        // Finalizar la clase automáticamente
+        const horaActual = new Date().toLocaleTimeString()
+
+        try {
+          const estadoRef = doc(db, "EstadoClase", "actual")
+
+          // Guardar en historial
+          const historicalRef = collection(db, "HistoricalAttendance")
+          await addDoc(historicalRef, {
+            practica: practicaActual?.Titulo || "Clase finalizada automáticamente",
+            materia: materiasActuales.find((m) => m.id === materiaActual)?.nombre || "No especificada",
+            fecha: serverTimestamp(),
+            horaInicio: horaInicioActual,
+            horaFin: horaActual,
+            asistencias: asistenciasActuales,
+            maestroNombre: maestroInfoActual?.Nombre || "",
+            maestroApellido: maestroInfoActual?.Apellido || "",
+            finalizadaAutomaticamente: true,
+          })
+
+          // Limpiar el documento "actual"
+          await setDoc(estadoRef, {
+            iniciada: false,
+            horaFin: horaActual,
+            finalizadaAutomaticamente: true,
+          })
+
+          // Guardar información de la clase
+          const classInfoRef = collection(db, "ClassInformation")
+          await addDoc(classInfoRef, {
+            materia: materiasActuales.find((m) => m.id === materiaActual)?.nombre || "No especificada",
+            practica: practicaActual?.Titulo || "Clase finalizada automáticamente",
+            fecha: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }),
+            totalAsistencias: asistenciasActuales.length,
+            maestroId: maestroActual,
+            maestroNombre: maestroInfoActual?.Nombre || "",
+            maestroApellido: maestroInfoActual?.Apellido || "",
+            horaInicio: horaInicioActual,
+            horaFin: horaActual,
+            finalizadaAutomaticamente: true,
+            alumnos: asistenciasActuales.map((a) => ({
+              id: a.AlumnoId,
+              nombre: a.Nombre,
+              apellido: a.Apellido,
+              equipo: a.Equipo,
+              carrera: a.Carrera,
+              grupo: a.Grupo,
+              semestre: a.Semestre,
+              turno: a.Turno,
+            })),
+          })
+
+          // Eliminar todas las asistencias
+          try {
+            const asistenciasSnapshot = await getDocs(collection(db, "Asistencias"))
+
+            if (!asistenciasSnapshot.empty) {
+              const batch = writeBatch(db)
+
+              asistenciasSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref)
+              })
+
+              await batch.commit()
+              console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`)
+              await logAction(
+                "Finalizar Clase Automáticamente",
+                `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`,
+              )
+            }
+          } catch (error) {
+            console.error("Error al eliminar asistencias automáticamente:", error)
+            await logAction("Error", `Error al eliminar asistencias automáticamente: ${error}`)
+          }
+
+          // Resetear el estado de los equipos
+          const equipoRef = doc(db, "Numero de equipos", "equipos")
+          const equipoDoc = await getDoc(equipoRef)
+
+          if (equipoDoc.exists()) {
+            const equiposData = equipoDoc.data()
+            const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => ({
+              ...eq,
+              enUso: false,
+            }))
+
+            await setDoc(equipoRef, { Equipos: equiposActualizados })
+          }
+
+          // Registrar la acción en el log
+          await logAction(
+            "Finalizar Clase Automáticamente",
+            `Clase finalizada automáticamente para ${practicaActual?.Titulo || "No especificada"} a las ${horaActual} debido al cierre del navegador.`,
+          )
+
+          // Eliminar el ID del maestro del localStorage
+          localStorage.removeItem("maestroId")
+        } catch (error) {
+          console.error("Error al finalizar la clase automáticamente:", error)
+        }
+      }
+    }
+
+    // Registrar el evento beforeunload
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Limpiar el evento cuando el componente se desmonte
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [claseIniciada, maestroId, selectedPractica, selectedMateriaId, horaInicio, asistencias, maestroInfo, materias])
+
   useEffect(() => {
     document.body.classList.toggle("dark", theme === "dark")
     applyTheme(theme)
@@ -395,12 +527,47 @@ export default function ListaAsistencias() {
           horaFin: horaActual,
         })
 
-        const batch = writeBatch(db)
-        asistencias.forEach((asistencia) => {
-          const asistenciaRef = doc(db, "Asistencias", asistencia.id)
-          batch.delete(asistenciaRef)
-        })
-        await batch.commit()
+        // Eliminar todas las asistencias de la colección "Asistencias"
+        try {
+          // Primero, obtener todas las asistencias actuales
+          const asistenciasSnapshot = await getDocs(collection(db, "Asistencias"))
+
+          if (!asistenciasSnapshot.empty) {
+            const batch = writeBatch(db)
+
+            // Añadir cada documento al batch para eliminación
+            asistenciasSnapshot.docs.forEach((doc) => {
+              const asistenciaRef = doc.ref
+              batch.delete(asistenciaRef)
+            })
+
+            // Ejecutar el batch
+            await batch.commit()
+            console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias`)
+            await logAction(
+              "Finalizar Clase",
+              `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias`,
+            )
+          } else {
+            console.log("No hay asistencias para eliminar")
+            await logAction("Finalizar Clase", "No había asistencias para eliminar")
+          }
+        } catch (error) {
+          console.error("Error al eliminar las asistencias:", error)
+          await logAction("Error", `Error al eliminar las asistencias: ${error}`)
+
+          // Intentar eliminar las asistencias una por una como fallback
+          try {
+            for (const asistencia of asistencias) {
+              await deleteDoc(doc(db, "Asistencias", asistencia.id))
+            }
+            console.log("Asistencias eliminadas individualmente como fallback")
+            await logAction("Finalizar Clase", "Asistencias eliminadas individualmente como fallback")
+          } catch (secondError) {
+            console.error("Error en el fallback de eliminación de asistencias:", secondError)
+            await logAction("Error", `Error en el fallback de eliminación de asistencias: ${secondError}`)
+          }
+        }
 
         const classInfoRef = collection(db, "ClassInformation")
         await addDoc(classInfoRef, {
@@ -1089,6 +1256,39 @@ export default function ListaAsistencias() {
                     <FilePlus2 className="w-5 h-5 mr-2" />
                     Exportar a Excel
                   </Button>
+                  <Button
+                    onClick={() => {
+                      swal({
+                        title: "Verificar y limpiar asistencias",
+                        text: "¿Desea forzar la limpieza incluso si se detecta una clase activa?",
+                        icon: "warning",
+                        buttons: ["No, solo verificar", "Sí, forzar limpieza"],
+                        dangerMode: true,
+                      }).then((forzarLimpieza) => {
+                        verificarYLimpiarAsistenciasHuerfanas(forzarLimpieza)
+                          .then(() => {
+                            swal({
+                              title: "Limpieza completada",
+                              text: "Se ha verificado y limpiado cualquier registro de asistencia huérfano",
+                              icon: "success",
+                            })
+                          })
+                          .catch((error) => {
+                            swal({
+                              title: "Error",
+                              text: "No se pudo completar la limpieza: " + error.message,
+                              icon: "error",
+                            })
+                          })
+                      })
+                    }}
+                    className={`py-3 rounded-xl text-base font-medium transition-all duration-300 ${
+                      theme === "dark" ? colors.dark.buttonTertiary : colors.light.buttonTertiary
+                    }`}
+                  >
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    Verificar y Limpiar
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1234,4 +1434,3 @@ export default function ListaAsistencias() {
     </SidebarProvider>
   )
 }
-

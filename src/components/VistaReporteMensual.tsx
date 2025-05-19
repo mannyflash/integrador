@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   FileSpreadsheet,
   FileText,
@@ -24,10 +23,12 @@ import {
   Filter,
   ChevronDown,
   BarChart3,
-  PieChart,
   Info,
   CheckCircle2,
   AlertCircle,
+  Sliders,
+  Download,
+  Eye,
 } from "lucide-react"
 import { format, parse, isValid, startOfMonth, endOfMonth, isWithinInterval, subMonths } from "date-fns"
 import { es } from "date-fns/locale"
@@ -165,12 +166,25 @@ export default function VistaReporteMensual({
   const [loading, setLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
-  const [activeTab, setActiveTab] = useState("reporte")
+  const [activeTab, setActiveTab] = useState("datos")
   const [notification, setNotification] = useState<{
     show: boolean
     message: string
     type: "success" | "error"
   }>({ show: false, message: "", type: "success" })
+
+  // Nuevos estados para el formato ITSPP
+  const [nombreResponsable, setNombreResponsable] = useState("B.P.")
+  const [division, setDivision] = useState("DIVISIÓN DE INGENIERÍA EN SISTEMAS COMPUTACIONALES")
+  const [subdireccion, setSubdireccion] = useState("SUBDIRECCIÓN ACADÉMICA")
+  const [laboratorio, setLaboratorio] = useState("LABORATORIO DE REDES")
+  const [showConfiguracion, setShowConfiguracion] = useState(false)
+
+  // Lista de docentes y materias para filtros
+  const [docentesList, setDocentesList] = useState<string[]>([])
+  const [materiasList, setMateriasList] = useState<string[]>([])
+  const [selectedDocente, setSelectedDocente] = useState<string>("")
+  const [selectedMateria, setSelectedMateria] = useState<string>("")
 
   const reportTableRef = useRef<HTMLDivElement>(null)
 
@@ -209,6 +223,14 @@ export default function VistaReporteMensual({
       })
 
       setAllPractices(datosInfoClase)
+
+      // Extraer lista de docentes y materias para los filtros
+      const docentes = Array.from(new Set(datosInfoClase.map((p) => `${p.maestroNombre} ${p.maestroApellido}`)))
+      const materias = Array.from(new Set(datosInfoClase.map((p) => p.materia)))
+
+      setDocentesList(docentes)
+      setMateriasList(materias)
+
       await logAction("fetch_records", `Fetched ${datosInfoClase.length} practice records`)
       showNotification(`Se cargaron ${datosInfoClase.length} registros correctamente`, "success")
 
@@ -236,15 +258,27 @@ export default function VistaReporteMensual({
       )
     }
 
-    // Apply text filters
-    if (filters.docente) {
-      filtered = filtered.filter((practice) =>
-        `${practice.maestroNombre} ${practice.maestroApellido}`.toLowerCase().includes(filters.docente.toLowerCase()),
+    // Apply docente filter from dropdown
+    if (selectedDocente) {
+      filtered = filtered.filter(
+        (practice) => `${practice.maestroNombre} ${practice.maestroApellido}` === selectedDocente,
       )
     }
+    // Apply materia filter from dropdown
+    else if (selectedMateria) {
+      filtered = filtered.filter((practice) => practice.materia === selectedMateria)
+    }
+    // Apply text filters if dropdown filters are not used
+    else {
+      if (filters.docente) {
+        filtered = filtered.filter((practice) =>
+          `${practice.maestroNombre} ${practice.maestroApellido}`.toLowerCase().includes(filters.docente.toLowerCase()),
+        )
+      }
 
-    if (filters.materia) {
-      filtered = filtered.filter((practice) => practice.materia.toLowerCase().includes(filters.materia.toLowerCase()))
+      if (filters.materia) {
+        filtered = filtered.filter((practice) => practice.materia.toLowerCase().includes(filters.materia.toLowerCase()))
+      }
     }
 
     if (filters.grupoSemestre) {
@@ -287,6 +321,22 @@ export default function VistaReporteMensual({
         to: selectedOption.to,
         preset,
       })
+    }
+  }
+
+  // Manejar cambio de docente
+  const handleDocenteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedDocente(e.target.value)
+    if (e.target.value) {
+      setSelectedMateria("")
+    }
+  }
+
+  // Manejar cambio de materia
+  const handleMateriaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedMateria(e.target.value)
+    if (e.target.value) {
+      setSelectedDocente("")
     }
   }
 
@@ -352,7 +402,32 @@ export default function VistaReporteMensual({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
-  // Function to export to Excel with mejoras
+  // Agrupar prácticas por docente y materia para el formato ITSPP
+  const practicasPorDocenteMateria = filteredPractices.reduce(
+    (acc, practice) => {
+      const docenteKey = `${practice.maestroNombre} ${practice.maestroApellido}`
+      const materiaKey = practice.materia
+
+      if (!acc[docenteKey]) {
+        acc[docenteKey] = {}
+      }
+
+      if (!acc[docenteKey][materiaKey]) {
+        acc[docenteKey][materiaKey] = {
+          practicas: [],
+          totalAlumnos: 0,
+        }
+      }
+
+      acc[docenteKey][materiaKey].practicas.push(practice)
+      acc[docenteKey][materiaKey].totalAlumnos += practice.totalAsistencias
+
+      return acc
+    },
+    {} as Record<string, Record<string, { practicas: InfoClase[]; totalAlumnos: number }>>,
+  )
+
+  // Function to export to Excel with formato ITSPP
   const exportToExcel = async () => {
     try {
       setExportLoading("excel")
@@ -374,122 +449,59 @@ export default function VistaReporteMensual({
       const toDate = dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }) : "Fin"
       const periodoTexto = `${fromDate} al ${toDate}`
 
-      // HOJA 1: RESUMEN EJECUTIVO
-      const resumenData = [
+      // Crear datos para la hoja en formato ITSPP
+      const reporteData = [
         ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"],
-        ["REPORTE DE USO DEL LABORATORIO DE PROGRAMACIÓN"],
-        [`PERÍODO: ${periodoTexto.toUpperCase()}`],
+        [division],
+        [subdireccion],
+        [laboratorio],
         [""],
-        ["RESUMEN EJECUTIVO"],
+        ["PERIODO:", periodoTexto.toUpperCase()],
         [""],
-        ["Indicador", "Valor", "Observaciones"],
-        ["Total de prácticas realizadas", totalPractices, "Prácticas registradas en el sistema"],
-        ["Total de estudiantes atendidos", totalStudents, "Suma de todas las asistencias"],
-        ["Promedio de estudiantes por práctica", averageStudents, "Indicador de ocupación"],
-        ["Materias diferentes impartidas", Object.keys(materiaStats).length, "Diversidad de contenidos"],
-        ["Docentes participantes", Object.keys(docenteStats).length, "Personal académico involucrado"],
-        [""],
-        ["MATERIAS CON MAYOR NÚMERO DE PRÁCTICAS"],
-        ["Materia", "Prácticas", "Estudiantes"],
+        ["FECHA", "DOCENTE", "MATERIA", "PRÁCTICA", "GRUPO Y SEMESTRE", "NUM. DE ALUMNOS"],
       ]
 
-      // Agregar top materias
-      topMaterias.forEach(([materia, stats]) => {
-        resumenData.push([materia, stats.count, stats.students])
-      })
-
-      resumenData.push([""], ["DOCENTES CON MAYOR ACTIVIDAD"], ["Docente", "Prácticas", "Estudiantes"])
-
-      // Agregar top docentes
-      topDocentes.forEach(([docente, stats]) => {
-        resumenData.push([docente, stats.count, stats.students])
-      })
-
-      // Crear hoja de resumen
-      const resumenSheet = utils.aoa_to_sheet(resumenData)
-
-      // Aplicar estilos a la hoja de resumen (mediante ancho de columnas)
-      resumenSheet["!cols"] = [
-        { wch: 40 }, // A
-        { wch: 15 }, // B
-        { wch: 40 }, // C
-      ]
-
-      // Agregar la hoja al libro
-      utils.book_append_sheet(workbook, resumenSheet, "Resumen Ejecutivo")
-
-      // HOJA 2: DATOS DETALLADOS
-      const detallesData = [
-        ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"],
-        ["REPORTE DETALLADO DE PRÁCTICAS DE LABORATORIO"],
-        [`PERÍODO: ${periodoTexto.toUpperCase()}`],
-        [""],
-        ["Fecha", "Materia", "Práctica", "Docente", "Grupo", "Semestre", "Carrera", "Estudiantes"],
-      ]
-
-      // Agregar datos detallados de cada práctica
+      // Agregar datos de prácticas
       filteredPractices.forEach((practice) => {
-        const grupos = Array.from(new Set(practice.alumnos.map((a) => a.grupo))).join(", ")
-        const semestres = Array.from(new Set(practice.alumnos.map((a) => a.semestre))).join(", ")
-        const carreras = Array.from(new Set(practice.alumnos.map((a) => a.carrera))).join(", ")
+        const gruposSemestres = Array.from(new Set(practice.alumnos.map((a) => `${a.grupo} (${a.semestre})`))).join(
+          ", ",
+        )
 
-        detallesData.push([
+        reporteData.push([
           formatDate(practice.fecha),
+          `${practice.maestroNombre} ${practice.maestroApellido}`,
           practice.materia,
           practice.practica,
-          `${practice.maestroNombre} ${practice.maestroApellido}`,
-          grupos,
-          semestres,
-          carreras,
+          gruposSemestres,
           practice.totalAsistencias.toString(),
         ])
       })
 
-      // Crear hoja de detalles
-      const detallesSheet = utils.aoa_to_sheet(detallesData)
+      // Agregar totales
+      reporteData.push(
+        [""],
+        ["TOTAL DE PRÁCTICAS:", filteredPractices.length.toString()],
+        ["TOTAL DE ALUMNOS ATENDIDOS:", totalStudents.toString()],
+        ["PROMEDIO DE ALUMNOS POR PRÁCTICA:", averageStudents.toString()],
+        [""],
+        ["NOMBRE Y FIRMA DE RESPONSABLE DE LABORATORIO:", nombreResponsable],
+      )
 
-      // Aplicar estilos a la hoja de detalles (mediante ancho de columnas)
-      detallesSheet["!cols"] = [
-        { wch: 12 }, // Fecha
+      // Crear hoja
+      const sheet = utils.aoa_to_sheet(reporteData)
+
+      // Aplicar estilos a la hoja (mediante ancho de columnas)
+      sheet["!cols"] = [
+        { wch: 15 }, // Fecha
+        { wch: 25 }, // Docente
         { wch: 25 }, // Materia
         { wch: 30 }, // Práctica
-        { wch: 25 }, // Docente
-        { wch: 10 }, // Grupo
-        { wch: 10 }, // Semestre
-        { wch: 25 }, // Carrera
-        { wch: 12 }, // Estudiantes
+        { wch: 20 }, // Grupo/Semestre
+        { wch: 15 }, // Alumnos
       ]
 
       // Agregar la hoja al libro
-      utils.book_append_sheet(workbook, detallesSheet, "Datos Detallados")
-
-      // HOJA 3: ESTADÍSTICAS POR CARRERA
-      const carrerasData = [
-        ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"],
-        ["ESTADÍSTICAS DE ASISTENCIA POR CARRERA"],
-        [`PERÍODO: ${periodoTexto.toUpperCase()}`],
-        [""],
-        ["Carrera", "Estudiantes", "Porcentaje"],
-      ]
-
-      // Agregar datos de carreras
-      Object.entries(carreraStats).forEach(([carrera, count]) => {
-        const porcentaje = ((count / totalStudents) * 100).toFixed(2) + "%"
-        carrerasData.push([carrera, count.toString(), porcentaje])
-      })
-
-      // Crear hoja de estadísticas por carrera
-      const carrerasSheet = utils.aoa_to_sheet(carrerasData)
-
-      // Aplicar estilos a la hoja de carreras
-      carrerasSheet["!cols"] = [
-        { wch: 40 }, // Carrera
-        { wch: 15 }, // Estudiantes
-        { wch: 15 }, // Porcentaje
-      ]
-
-      // Agregar la hoja al libro
-      utils.book_append_sheet(workbook, carrerasSheet, "Estadísticas por Carrera")
+      utils.book_append_sheet(workbook, sheet, "Reporte Laboratorio")
 
       // Generate filename with date range
       const fromDateFilename = dateRange.from ? format(dateRange.from, "dd-MM-yyyy") : "inicio"
@@ -498,7 +510,7 @@ export default function VistaReporteMensual({
 
       // Guardar el archivo
       writeFile(workbook, filename)
-      await logAction("export_excel", `Exported ${filteredPractices.length} records to Excel with enhanced formatting`)
+      await logAction("export_excel", `Exported ${filteredPractices.length} records to Excel with ITSPP format`)
       showNotification(`Reporte exportado a Excel correctamente`, "success")
     } catch (error) {
       console.error("Error exporting to Excel:", error)
@@ -508,14 +520,19 @@ export default function VistaReporteMensual({
     }
   }
 
-  // Function to export to PDF with mejoras
+  // Function to export to PDF con formato ITSPP
   const exportToPDF = async () => {
     try {
       setExportLoading("pdf")
 
-      // Crear un nuevo documento PDF en formato HORIZONTAL
+      // Formatear fechas para el título
+      const fromDate = dateRange.from ? format(dateRange.from, "dd MMMM yyyy", { locale: es }).toUpperCase() : "INICIO"
+      const toDate = dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }).toUpperCase() : "FIN"
+      const periodoTexto = `${fromDate} AL ${toDate}`
+
+      // Crear un nuevo documento PDF
       const doc = new jsPDF({
-        orientation: "landscape", // Formato horizontal
+        orientation: "landscape",
         unit: "mm",
         format: "a4",
       })
@@ -528,202 +545,106 @@ export default function VistaReporteMensual({
         creator: "Instituto Tecnológico Superior",
       })
 
-      // Formatear fechas para el título
-      const fromDate = dateRange.from ? format(dateRange.from, "dd MMMM yyyy", { locale: es }) : "Inicio"
-      const toDate = dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }) : "Fin"
-
       // Configuración de página
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
       const margin = 10
-      const contentWidth = pageWidth - margin * 2
-      const headerHeight = 60 // Altura aproximada del encabezado
-      const rowHeight = 10 // Altura aproximada de cada fila
-      const footerHeight = 30 // Altura aproximada del pie de página
-      const contentHeight = pageHeight - headerHeight - footerHeight - margin * 2
-      const rowsPerPage = Math.floor(contentHeight / rowHeight)
 
-      // Función para añadir encabezado a cada página
-      const addHeader = (pageNum: number) => {
-        // Fondo del encabezado (gris oscuro en lugar de color)
-        doc.setFillColor(50, 50, 50)
-        doc.rect(margin, margin, contentWidth, headerHeight - margin, "F")
-
-        // Título y subtítulos
-        doc.setTextColor(255, 255, 255) // Texto blanco
-        doc.setFontSize(16)
-        doc.setFont("helvetica", "bold")
-        doc.text("Instituto Tecnológico Superior", pageWidth / 2, margin + 15, { align: "center" })
-
-        doc.setFontSize(14)
-        doc.text("Reporte de Uso de Laboratorio", pageWidth / 2, margin + 25, { align: "center" })
-
-        doc.setFontSize(10)
-        doc.text(`Período: ${fromDate} - ${toDate}`, pageWidth / 2, margin + 35, { align: "center" })
-
-        // Número de página
-        doc.setFontSize(8)
-        doc.text(`Página ${pageNum}`, pageWidth - margin - 10, pageHeight - margin, { align: "right" })
-
-        // Encabezados de tabla
-        const startY = margin + headerHeight - 10
-
-        // Fondo de encabezados de tabla (gris medio)
-        doc.setFillColor(80, 80, 80)
-        doc.rect(margin, startY, contentWidth, rowHeight, "F")
-
-        // Textos de encabezados
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-
-        const colWidths = [
-          contentWidth * 0.1, // Fecha
-          contentWidth * 0.2, // Docente
-          contentWidth * 0.2, // Materia
-          contentWidth * 0.25, // Práctica
-          contentWidth * 0.15, // Grupo/Semestre
-          contentWidth * 0.1, // Alumnos
-        ]
-
-        let currentX = margin
-
-        // Encabezados de columnas
-        doc.text("FECHA", currentX + colWidths[0] / 2, startY + 6, { align: "center" })
-        currentX += colWidths[0]
-
-        doc.text("DOCENTE", currentX + colWidths[1] / 2, startY + 6, { align: "center" })
-        currentX += colWidths[1]
-
-        doc.text("MATERIA", currentX + colWidths[2] / 2, startY + 6, { align: "center" })
-        currentX += colWidths[2]
-
-        doc.text("NOMBRE PRÁCTICA", currentX + colWidths[3] / 2, startY + 6, { align: "center" })
-        currentX += colWidths[3]
-
-        doc.text("GRUPO Y SEMESTRE", currentX + colWidths[4] / 2, startY + 6, { align: "center" })
-        currentX += colWidths[4]
-
-        doc.text("ALUMNOS", currentX + colWidths[5] / 2, startY + 6, { align: "center" })
-
-        return { startY: startY + rowHeight, colWidths }
+      // Añadir logos
+      // Añadir logos con manejo de errores
+      try {
+        // Logo TecNM en la esquina superior izquierda
+        doc.addImage("/FondoItspp.png", "PNG", 5, 5, 40, 40)
+      } catch (error) {
+        console.warn("No se pudo cargar la imagen FondoItspp.png:", error)
+        // Continuar sin la imagen
       }
 
-      // Función para añadir pie de página con resumen
-      const addFooter = (lastPage = false) => {
-        if (lastPage) {
-          const footerY = pageHeight - footerHeight - margin
-
-          // Resumen
-          doc.setFillColor(240, 240, 240)
-          doc.rect(margin, footerY, contentWidth, footerHeight - margin, "F")
-
-          // Texto del resumen
-          doc.setTextColor(0, 0, 0)
-          doc.setFontSize(10)
-          doc.setFont("helvetica", "bold")
-
-          // Estadísticas en tres columnas
-          const colWidth = contentWidth / 3
-
-          // Total prácticas
-          doc.text("Total de prácticas:", margin + 10, footerY + 12)
-          doc.text(totalPractices.toString(), margin + colWidth - 20, footerY + 12, { align: "right" })
-
-          // Total alumnos
-          doc.text("Total de alumnos:", margin + colWidth + 10, footerY + 12)
-          doc.text(totalStudents.toString(), margin + colWidth * 2 - 20, footerY + 12, { align: "right" })
-
-          // Promedio alumnos
-          doc.text("Promedio de alumnos:", margin + colWidth * 2 + 10, footerY + 12)
-          doc.text(averageStudents.toString(), margin + colWidth * 3 - 20, footerY + 12, { align: "right" })
-        }
+      try {
+        // Logo ITSPP en la esquina superior derecha
+        doc.addImage("/LogoSistemas.png", "PNG", pageWidth - 70, 10, 50, 40)
+      } catch (error) {
+        console.warn("No se pudo cargar la imagen LogoSistemas.png:", error)
       }
 
-      // Iniciar primera página
-      let pageNum = 1
-      const { startY, colWidths } = addHeader(pageNum)
-      let currentY = startY
+      // Encabezado
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO", pageWidth / 2, 20, { align: "center" })
 
-      // Dibujar filas de datos
-      for (let i = 0; i < filteredPractices.length; i++) {
-        const practice = filteredPractices[i]
+      doc.setFontSize(10)
+      doc.text(division, pageWidth / 2, 26, { align: "center" })
+      doc.text(subdireccion, pageWidth / 2, 32, { align: "center" })
+      doc.text(laboratorio, pageWidth / 2, 38, { align: "center" })
 
-        // Verificar si necesitamos una nueva página
-        if (currentY + rowHeight > pageHeight - footerHeight - margin) {
-          // Añadir pie de página a la página actual
-          addFooter(false)
+      // Periodo
+      doc.setFontSize(10)
+      doc.text("PERIODO:", 20, 50)
+      doc.text(periodoTexto, 70, 50)
 
-          // Añadir nueva página
-          doc.addPage()
-          pageNum++
-          const headerInfo = addHeader(pageNum)
-          currentY = headerInfo.startY
-        }
+      // Calcular promedio de alumnos
+      const promedioAlumnos = totalPractices > 0 ? (totalStudents / totalPractices).toFixed(1) : "0"
 
-        // Alternar colores de fondo para las filas (blanco y gris claro)
-        if (i % 2 === 0) {
-          doc.setFillColor(255, 255, 255) // Filas pares: blanco
-        } else {
-          doc.setFillColor(240, 240, 240) // Filas impares: gris claro
-        }
-        doc.rect(margin, currentY, contentWidth, rowHeight, "F")
+      // Crear tabla con los datos
+      const tableColumn = ["FECHA", "DOCENTE", "MATERIA", "PRÁCTICA", "GRUPO Y SEMESTRE", "NUM. DE ALUMNOS"]
 
-        // Dibujar líneas de la tabla
-        doc.setDrawColor(200, 200, 200)
-        doc.setLineWidth(0.1)
+      // Preparar datos para la tabla
+      const tableData = filteredPractices.map((practice) => [
+        formatDate(practice.fecha),
+        `${practice.maestroNombre} ${practice.maestroApellido}`,
+        practice.materia,
+        practice.practica,
+        Array.from(new Set(practice.alumnos.map((a) => `${a.grupo} (${a.semestre})`))).join(", "),
+        practice.totalAsistencias.toString(),
+      ])
 
-        // Línea horizontal inferior
-        doc.line(margin, currentY + rowHeight, margin + contentWidth, currentY + rowHeight)
+      // Configurar la tabla
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableData,
+        startY: 60,
+        theme: "grid",
+        styles: {
+          fontSize: 8,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [255, 255, 255], // Cambiar a blanco
+          textColor: [0, 0, 0], // Cambiar a negro
+          fontStyle: "bold",
+          halign: "center",
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // Fecha
+          1: { cellWidth: 40 }, // Docente
+          2: { cellWidth: 40 }, // Materia
+          3: { cellWidth: 50 }, // Práctica
+          4: { cellWidth: 40 }, // Grupo y Semestre
+          5: { cellWidth: 20, halign: "center" }, // Num. de Alumnos
+        },
+        alternateRowStyles: {
+          fillColor: [255, 255, 255], // Cambiar a blanco
+        },
+      })
 
-        // Líneas verticales
-        let currentX = margin
-        for (let j = 0; j < colWidths.length; j++) {
-          currentX += colWidths[j]
-          doc.line(currentX, currentY, currentX, currentY + rowHeight)
-        }
+      // Agregar información de totales y promedio
+      const finalY = (doc as any).lastAutoTable.finalY + 10
 
-        // Texto de las celdas
-        doc.setTextColor(0, 0, 0)
-        doc.setFontSize(8)
-        doc.setFont("helvetica", "normal")
+      doc.text("PROMEDIO DE NÚMERO DE ALUMNOS:", 20, finalY)
+      doc.text(promedioAlumnos, 100, finalY)
 
-        currentX = margin
+      doc.text("NÚMERO TOTAL DE PRÁCTICAS:", 20, finalY + 7)
+      doc.text(totalPractices.toString(), 100, finalY + 7)
 
-        // Fecha
-        doc.text(formatDate(practice.fecha), currentX + colWidths[0] / 2, currentY + 6, { align: "center" })
-        currentX += colWidths[0]
+      // Firma del responsable
+      doc.text("NOMBRE Y FIRMA DE RESPONSABLE DE LABORATORIO", pageWidth / 2, finalY + 30, { align: "center" })
+      doc.line(pageWidth / 2 - 40, finalY + 50, pageWidth / 2 + 40, finalY + 50)
+      doc.text(nombreResponsable, pageWidth / 2, finalY + 60, { align: "center" })
 
-        // Docente
-        const docenteText = `${practice.maestroNombre} ${practice.maestroApellido}`
-        doc.text(docenteText, currentX + 3, currentY + 6, { align: "left", maxWidth: colWidths[1] - 6 })
-        currentX += colWidths[1]
+      // Sello de educación (simulado con texto)
+      doc.setFontSize(8)
+      doc.text("SELLO EDUCACIÓN", 50, pageHeight - 20)
 
-        // Materia
-        doc.text(practice.materia, currentX + 3, currentY + 6, { align: "left", maxWidth: colWidths[2] - 6 })
-        currentX += colWidths[2]
-
-        // Práctica
-        doc.text(practice.practica, currentX + 3, currentY + 6, { align: "left", maxWidth: colWidths[3] - 6 })
-        currentX += colWidths[3]
-
-        // Grupo y Semestre
-        const grupoSemestre = Array.from(new Set(practice.alumnos.map((a) => `${a.grupo} (${a.semestre})`))).join(", ")
-        doc.text(grupoSemestre, currentX + colWidths[4] / 2, currentY + 6, {
-          align: "center",
-          maxWidth: colWidths[4] - 6,
-        })
-        currentX += colWidths[4]
-
-        // Alumnos
-        doc.text(practice.totalAsistencias.toString(), currentX + colWidths[5] / 2, currentY + 6, { align: "center" })
-
-        // Avanzar a la siguiente fila
-        currentY += rowHeight
-      }
-
-      // Añadir pie de página a la última página
-      addFooter(true)
 
       // Generar nombre de archivo
       const fromDateFilename = dateRange.from ? format(dateRange.from, "MM-yyyy") : "inicio"
@@ -732,10 +653,8 @@ export default function VistaReporteMensual({
 
       // Guardar el archivo
       doc.save(filename)
-      await logAction(
-        "export_pdf",
-        `Exported ${filteredPractices.length} records to PDF with exact frontend appearance`,
-      )
+
+      await logAction("export_pdf", `Exported ${filteredPractices.length} records to PDF with ITSPP format`)
       showNotification(`Reporte exportado a PDF correctamente`, "success")
     } catch (error) {
       console.error("Error exporting to PDF:", error)
@@ -743,6 +662,14 @@ export default function VistaReporteMensual({
     } finally {
       setExportLoading(null)
     }
+  }
+
+  // Limpiar filtros
+  const limpiarFiltros = () => {
+    setFilters({ docente: "", materia: "", grupoSemestre: "" })
+    setSelectedDocente("")
+    setSelectedMateria("")
+    handlePeriodChange("current")
   }
 
   // Load records on initial render
@@ -753,7 +680,7 @@ export default function VistaReporteMensual({
   // Apply filters when filter values change
   useEffect(() => {
     applyFilters()
-  }, [dateRange, filters])
+  }, [dateRange, filters, selectedDocente, selectedMateria])
 
   return (
     <div className="space-y-6">
@@ -782,13 +709,11 @@ export default function VistaReporteMensual({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle className="text-white text-xl md:text-2xl flex items-center gap-2">
-                <BarChart3 className="h-6 w-6" />
-                Reporte Mensual de Uso de Laboratorio
+                <FileText className="h-6 w-6" />
+                Generador de Reportes Mensuales
               </CardTitle>
-              <CardDescription className="text-white/80 mt-1 flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Período: {dateRange.from ? format(dateRange.from, "dd MMMM yyyy", { locale: es }) : "Inicio"} -
-                {dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }) : "Fin"}
+              <CardDescription className="text-white/80 mt-1">
+                Genera reportes mensuales de uso del laboratorio en formato ITSPP
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -798,95 +723,43 @@ export default function VistaReporteMensual({
                 disabled={loading}
               >
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                {loading ? "Cargando..." : "Actualizar"}
+                {loading ? "Cargando..." : "Actualizar datos"}
               </Button>
               <Button
                 className={`${esModoOscuro ? "bg-white/20 hover:bg-white/30" : "bg-white/20 hover:bg-white/30"} text-white transition-all duration-200 shadow-sm`}
-                onClick={() => setShowFilters(!showFilters)}
+                onClick={() => setShowConfiguracion(!showConfiguracion)}
               >
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros
+                <Sliders className="h-4 w-4 mr-2" />
+                Configuración
                 <ChevronDown
-                  className={`h-4 w-4 ml-1 transition-transform duration-200 ${showFilters ? "rotate-180" : ""}`}
+                  className={`h-4 w-4 ml-1 transition-transform duration-200 ${showConfiguracion ? "rotate-180" : ""}`}
                 />
               </Button>
             </div>
           </div>
         </CardHeader>
 
-        {/* Filtros */}
+        {/* Panel de configuración */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${showFilters ? "max-h-96" : "max-h-0"}`}
+          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            showConfiguracion ? "max-h-[300px]" : "max-h-0"
+          }`}
         >
           <div className={`p-4 ${esModoOscuro ? "bg-gray-800/50" : "bg-gray-50"} border-b`}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
-                <Label className={esModoOscuro ? "text-white" : "text-[#800040]"}>Período Predefinido</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {periodoOptions.map((option) => (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      variant={dateRange.preset === option.value ? "default" : "outline"}
-                      size="sm"
-                      className={`text-xs ${
-                        dateRange.preset === option.value
-                          ? esModoOscuro
-                            ? "bg-[#1d5631] text-white"
-                            : "bg-[#800040] text-white"
-                          : ""
-                      }`}
-                      onClick={() => handlePeriodChange(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+            <h3 className={`text-sm font-medium mb-3 ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
+              Configuración del Formato ITSPP
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="date-from" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
-                  <Calendar className="h-4 w-4 inline mr-2" />
-                  Fecha Inicio
-                </Label>
-                <Input
-                  id="date-from"
-                  type="date"
-                  value={dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : ""}
-                  onChange={handleDateFromChange}
-                  className={
-                    esModoOscuro
-                      ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
-                      : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date-to" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
-                  <Calendar className="h-4 w-4 inline mr-2" />
-                  Fecha Fin
-                </Label>
-                <Input
-                  id="date-to"
-                  type="date"
-                  value={dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : ""}
-                  onChange={handleDateToChange}
-                  className={
-                    esModoOscuro
-                      ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
-                      : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="filter-docente" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                <Label htmlFor="nombre-responsable" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
                   <User className="h-4 w-4 inline mr-2" />
-                  Docente
+                  Nombre del Responsable
                 </Label>
                 <Input
-                  id="filter-docente"
-                  placeholder="Filtrar por docente"
-                  value={filters.docente}
-                  onChange={(e) => setFilters({ ...filters, docente: e.target.value })}
+                  id="nombre-responsable"
+                  placeholder="Nombre del responsable"
+                  value={nombreResponsable}
+                  onChange={(e) => setNombreResponsable(e.target.value)}
                   className={
                     esModoOscuro
                       ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
@@ -895,15 +768,43 @@ export default function VistaReporteMensual({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="filter-materia" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
-                  <BookOpen className="h-4 w-4 inline mr-2" />
-                  Materia
+                <Label htmlFor="division" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                  División
                 </Label>
                 <Input
-                  id="filter-materia"
-                  placeholder="Filtrar por materia"
-                  value={filters.materia}
-                  onChange={(e) => setFilters({ ...filters, materia: e.target.value })}
+                  id="division"
+                  value={division}
+                  onChange={(e) => setDivision(e.target.value)}
+                  className={
+                    esModoOscuro
+                      ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                      : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subdireccion" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                  Subdirección
+                </Label>
+                <Input
+                  id="subdireccion"
+                  value={subdireccion}
+                  onChange={(e) => setSubdireccion(e.target.value)}
+                  className={
+                    esModoOscuro
+                      ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                      : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="laboratorio" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                  Laboratorio
+                </Label>
+                <Input
+                  id="laboratorio"
+                  value={laboratorio}
+                  onChange={(e) => setLaboratorio(e.target.value)}
                   className={
                     esModoOscuro
                       ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
@@ -915,502 +816,562 @@ export default function VistaReporteMensual({
           </div>
         </div>
 
-        <CardContent className="p-0">
-          <Tabs defaultValue="reporte" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-            <div className="px-6 pt-6">
-              <TabsList
-                className={`grid w-full grid-cols-2 ${esModoOscuro ? "bg-gray-800" : "bg-gray-100"} rounded-lg p-1`}
-              >
-                <TabsTrigger
-                  value="reporte"
-                  className="rounded-md transition-all duration-200 text-gray-700 data-[state=active]:bg-[#800040] data-[state=active]:text-white"
-                  style={{
-                    color: activeTab === "reporte" ? "white" : esModoOscuro ? "#d1d5db" : "#374151",
-                    backgroundColor: activeTab === "reporte" ? (esModoOscuro ? "#1d5631" : "#800040") : "transparent",
-                  }}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Reporte Detallado
-                </TabsTrigger>
-                <TabsTrigger
-                  value="estadisticas"
-                  className="rounded-md transition-all duration-200 text-gray-700 data-[state=active]:bg-[#800040] data-[state=active]:text-white"
-                  style={{
-                    color: activeTab === "estadisticas" ? "white" : esModoOscuro ? "#d1d5db" : "#374151",
-                    backgroundColor:
-                      activeTab === "estadisticas" ? (esModoOscuro ? "#1d5631" : "#800040") : "transparent",
-                  }}
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Estadísticas
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            {/* Acciones de exportación */}
-            <div className="flex justify-between items-center px-6 pt-4">
-              <Badge
-                variant="outline"
-                className={`${esModoOscuro ? "border-[#1d5631] text-[#2a7a45]" : "border-[#800040] text-[#800040]"} flex items-center`}
-              >
-                <Search className="h-3 w-3 mr-1" />
-                {filteredPractices.length} registros encontrados
-              </Badge>
-              <div className="flex gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Panel de filtros - Ocupa 4 columnas en pantallas medianas o más grandes */}
+            <Card className={`md:col-span-4 ${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-medium flex items-center gap-2">
+                  <Filter className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
+                  Filtros del Reporte
+                </CardTitle>
+                <CardDescription>Selecciona los filtros para generar el reporte</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Periodo */}
+                <div className="space-y-2">
+                  <Label className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                    <Calendar className="h-4 w-4 inline mr-2" />
+                    Período
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {periodoOptions.map((option) => (
                       <Button
-                        variant="outline"
-                        onClick={exportToExcel}
-                        disabled={filteredPractices.length === 0 || exportLoading !== null}
-                        className={`${
+                        key={option.value}
+                        type="button"
+                        variant={dateRange.preset === option.value ? "default" : "outline"}
+                        size="sm"
+                        className={`text-xs ${
+                          dateRange.preset === option.value
+                            ? esModoOscuro
+                              ? "bg-[#1d5631] text-white"
+                              : "bg-[#800040] text-white"
+                            : ""
+                        }`}
+                        onClick={() => handlePeriodChange(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Fechas personalizadas */}
+                {dateRange.preset === "custom" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="date-from" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                        Fecha Inicio
+                      </Label>
+                      <Input
+                        id="date-from"
+                        type="date"
+                        value={dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : ""}
+                        onChange={handleDateFromChange}
+                        className={
                           esModoOscuro
-                            ? "border-[#1d5631] text-[#1d5631] hover:bg-[#1d5631]/10"
-                            : "border-[#800040] text-[#800040] hover:bg-[#800040]/10"
-                        } transition-all duration-200`}
-                      >
-                        {exportLoading === "excel" ? (
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <FileSpreadsheet className="h-4 w-4 mr-2" />
-                        )}
-                        Excel
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Exportar datos a Excel</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                            ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                            : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="date-to" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                        Fecha Fin
+                      </Label>
+                      <Input
+                        id="date-to"
+                        type="date"
+                        value={dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : ""}
+                        onChange={handleDateToChange}
+                        className={
+                          esModoOscuro
+                            ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                            : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
 
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="default"
-                        onClick={exportToPDF}
-                        disabled={filteredPractices.length === 0 || exportLoading !== null}
-                        className={esModoOscuro ? "bg-[#1d5631] hover:bg-[#153d23]" : "bg-[#800040] hover:bg-[#5c002e]"}
-                      >
-                        {exportLoading === "pdf" ? (
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4 mr-2" />
-                        )}
-                        PDF
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Exportar datos a PDF</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            <TabsContent value="reporte" className="p-6 pt-4">
-              <div
-                ref={reportTableRef}
-                className={`rounded-lg border ${esModoOscuro ? "border-gray-700" : "border-gray-200"} overflow-hidden shadow-md`}
-              >
-                <div
-                  className={`${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground} text-white p-6 text-center`}
-                >
-                  <h2 className="text-2xl font-bold">Instituto Tecnológico Superior</h2>
-                  <p className="text-lg mt-1">Reporte de Uso de Laboratorio</p>
-                  <p className="text-sm mt-2 text-white/80">
-                    {dateRange.from ? format(dateRange.from, "dd MMMM yyyy", { locale: es }) : "Inicio"} -
-                    {dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }) : "Fin"}
-                  </p>
+                {/* Docente */}
+                <div className="space-y-2">
+                  <Label htmlFor="select-docente" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                    <User className="h-4 w-4 inline mr-2" />
+                    Docente
+                  </Label>
+                  <select
+                    id="select-docente"
+                    value={selectedDocente}
+                    onChange={handleDocenteChange}
+                    className={`w-full rounded-md ${
+                      esModoOscuro
+                        ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                        : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                    } h-10 px-3`}
+                  >
+                    <option value="">Todos los docentes</option>
+                    {docentesList.map((docente) => (
+                      <option key={docente} value={docente}>
+                        {docente}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
-                      <TableRow>
-                        <TableHead className="text-white font-medium">Fecha</TableHead>
-                        <TableHead className="text-white font-medium">Docente</TableHead>
-                        <TableHead className="text-white font-medium">Materia</TableHead>
-                        <TableHead className="text-white font-medium">Nombre de Práctica</TableHead>
-                        <TableHead className="text-white font-medium">Grupo y Semestre</TableHead>
-                        <TableHead className="text-white font-medium text-right">Número de Alumnos</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPractices.length > 0 ? (
-                        filteredPractices.map((practice, index) => (
-                          <TableRow
-                            key={practice.id}
-                            className={`
-                              ${
-                                index % 2 === 0
-                                  ? esModoOscuro
-                                    ? "bg-gray-800"
-                                    : "bg-white"
-                                  : esModoOscuro
-                                    ? "bg-[#1d5631]/10"
-                                    : "bg-[#fff0f5]"
-                              }
-                              ${esModoOscuro ? "hover:bg-[#1d5631]/20" : "hover:bg-[#fff0f5]/70"}
-                              transition-colors
-                            `}
-                          >
-                            <TableCell className="font-medium">
-                              <div className="flex items-center">
-                                <Calendar
-                                  className={`h-4 w-4 mr-2 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}
-                                />
-                                {formatDate(practice.fecha)}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <User
-                                  className={`h-4 w-4 mr-2 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}
-                                />
-                                {`${practice.maestroNombre} ${practice.maestroApellido}`}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center">
-                                <BookOpen
-                                  className={`h-4 w-4 mr-2 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}
-                                />
-                                {practice.materia}
-                              </div>
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate" title={practice.practica}>
-                              {practice.practica}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
-                              <div className="flex items-center">
-                                <School
-                                  className={`h-4 w-4 mr-2 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}
-                                />
-                                {Array.from(new Set(practice.alumnos.map((a) => `${a.grupo} (${a.semestre})`))).join(
-                                  ", ",
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge className={`${esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"} shadow-sm`}>
-                                <Users className="h-3 w-3 mr-1" />
-                                {practice.totalAsistencias}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-12">
-                            {loading ? (
-                              <div className="flex flex-col items-center justify-center">
-                                <RefreshCw
-                                  className={`h-10 w-10 animate-spin ${esModoOscuro ? "text-[#1d5631]" : "text-[#800040]"}`}
-                                />
-                                <p className="mt-4 text-lg">Cargando registros...</p>
-                                <p className="text-sm text-gray-500 mt-1">Esto puede tomar unos momentos</p>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center">
-                                <Search className={`h-10 w-10 ${esModoOscuro ? "text-[#1d5631]" : "text-[#800040]"}`} />
-                                <p className="mt-4 text-lg">No hay registros para mostrar</p>
-                                <p className="text-sm text-gray-500 mt-1">Intenta ajustar los filtros de búsqueda</p>
-                                <Button
-                                  variant="outline"
-                                  className="mt-4"
-                                  onClick={() => {
-                                    setFilters({ docente: "", materia: "", grupoSemestre: "" })
-                                    handlePeriodChange("last3")
-                                  }}
-                                >
-                                  Limpiar filtros
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                {/* Materia */}
+                <div className="space-y-2">
+                  <Label htmlFor="select-materia" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                    <BookOpen className="h-4 w-4 inline mr-2" />
+                    Materia
+                  </Label>
+                  <select
+                    id="select-materia"
+                    value={selectedMateria}
+                    onChange={handleMateriaChange}
+                    className={`w-full rounded-md ${
+                      esModoOscuro
+                        ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                        : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                    } h-10 px-3`}
+                  >
+                    <option value="">Todas las materias</option>
+                    {materiasList.map((materia) => (
+                      <option key={materia} value={materia}>
+                        {materia}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className={`p-6 border-t ${esModoOscuro ? "border-gray-700" : "border-gray-200"}`}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
-                      className={`p-6 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40 text-white" : "bg-[#fff0f5] text-[#800040]"} flex flex-col items-center justify-center shadow-sm transition-transform hover:scale-105 duration-200`}
+                {/* Grupo/Semestre */}
+                <div className="space-y-2">
+                  <Label htmlFor="filter-grupo-semestre" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                    <School className="h-4 w-4 inline mr-2" />
+                    Grupo o Semestre
+                  </Label>
+                  <Input
+                    id="filter-grupo-semestre"
+                    placeholder="Filtrar por grupo o semestre"
+                    value={filters.grupoSemestre}
+                    onChange={(e) => setFilters({ ...filters, grupoSemestre: e.target.value })}
+                    className={
+                      esModoOscuro
+                        ? "bg-gray-700 border-gray-600 text-white focus-visible:ring-[#1d5631]"
+                        : "bg-[#fff0f5] border-[#800040]/30 focus-visible:ring-[#800040]"
+                    }
+                  />
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex flex-col gap-2 pt-4">
+                  <Button variant="outline" onClick={limpiarFiltros} className="w-full">
+                    Limpiar filtros
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={exportToExcel}
+                      disabled={filteredPractices.length === 0 || exportLoading !== null}
+                      className={`${
+                        esModoOscuro
+                          ? "border-[#1d5631] text-[#1d5631] hover:bg-[#1d5631]/10"
+                          : "border-[#800040] text-[#800040] hover:bg-[#800040]/10"
+                      } transition-all duration-200`}
                     >
-                      <div className={`rounded-full p-3 mb-2 ${esModoOscuro ? "bg-[#1d5631]/30" : "bg-[#800040]/10"}`}>
+                      {exportLoading === "excel" ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                      )}
+                      Excel
+                    </Button>
+                    <Button
+                      variant="default"
+                      onClick={exportToPDF}
+                      disabled={filteredPractices.length === 0 || exportLoading !== null}
+                      className={esModoOscuro ? "bg-[#1d5631] hover:bg-[#153d23]" : "bg-[#800040] hover:bg-[#5c002e]"}
+                    >
+                      {exportLoading === "pdf" ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
+                      PDF
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Panel de resultados - Ocupa 8 columnas en pantallas medianas o más grandes */}
+            <div className="md:col-span-8 space-y-6">
+              {/* Tarjetas de resumen */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className={`text-sm font-medium ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                          Prácticas
+                        </p>
+                        <p className={`text-3xl font-bold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
+                          {totalPractices}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-full ${esModoOscuro ? "bg-[#1d5631]/20" : "bg-[#800040]/10"}`}>
                         <FileText className={`h-6 w-6 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
                       </div>
-                      <p className="text-sm font-medium">Total de prácticas</p>
-                      <p className={`text-3xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                        {totalPractices}
-                      </p>
                     </div>
-                    <div
-                      className={`p-6 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40 text-white" : "bg-[#fff0f5] text-[#800040]"} flex flex-col items-center justify-center shadow-sm transition-transform hover:scale-105 duration-200`}
-                    >
-                      <div className={`rounded-full p-3 mb-2 ${esModoOscuro ? "bg-[#1d5631]/30" : "bg-[#800040]/10"}`}>
+                  </CardContent>
+                </Card>
+
+                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className={`text-sm font-medium ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                          Estudiantes
+                        </p>
+                        <p className={`text-3xl font-bold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
+                          {totalStudents}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-full ${esModoOscuro ? "bg-[#1d5631]/20" : "bg-[#800040]/10"}`}>
                         <Users className={`h-6 w-6 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
                       </div>
-                      <p className="text-sm font-medium">Total de alumnos</p>
-                      <p className={`text-3xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                        {totalStudents}
-                      </p>
                     </div>
-                    <div
-                      className={`p-6 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40 text-white" : "bg-[#fff0f5] text-[#800040]"} flex flex-col items-center justify-center shadow-sm transition-transform hover:scale-105 duration-200`}
-                    >
-                      <div className={`rounded-full p-3 mb-2 ${esModoOscuro ? "bg-[#1d5631]/30" : "bg-[#800040]/10"}`}>
+                  </CardContent>
+                </Card>
+
+                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className={`text-sm font-medium ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                          Promedio
+                        </p>
+                        <p className={`text-3xl font-bold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
+                          {averageStudents}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-full ${esModoOscuro ? "bg-[#1d5631]/20" : "bg-[#800040]/10"}`}>
                         <BarChart3 className={`h-6 w-6 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
                       </div>
-                      <p className="text-sm font-medium">Promedio de alumnos</p>
-                      <p className={`text-3xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                        {averageStudents}
-                      </p>
                     </div>
-                  </div>
-                </div>
-
-                <div className={`p-6 border-t ${esModoOscuro ? "border-gray-700" : "border-gray-200"} text-center`}>
-                  <div className="mt-8 inline-block border-t border-gray-300 pt-4 w-64">
-                    <p className={esModoOscuro ? "text-gray-300" : "text-gray-600"}>
-                      Firma del Responsable de Laboratorio
-                    </p>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </TabsContent>
 
-            <TabsContent value="estadisticas" className="p-6 pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Materias con más prácticas */}
-                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
-                  <CardHeader
-                    className={`pb-2 ${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground} text-white rounded-t-lg`}
-                  >
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <BookOpen className="h-5 w-5" />
-                      Materias con más prácticas
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    {topMaterias.length > 0 ? (
-                      <div className="space-y-4">
-                        {topMaterias.map(([materia, stats], index) => (
-                          <div key={materia} className="flex items-center">
-                            <div className="w-8 text-center font-bold">{index + 1}</div>
-                            <div
-                              className={`flex-1 h-10 rounded-md flex items-center px-3 ${
-                                esModoOscuro
-                                  ? "bg-[#1d5631]/30 text-white font-medium"
-                                  : "bg-[#fff0f5] text-[#800040] font-medium"
-                              }`}
-                            >
-                              <span className="truncate">{materia}</span>
-                            </div>
-                            <div className="ml-2 text-right">
-                              <Badge className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
-                                {stats.count} prácticas
-                              </Badge>
-                              <div className={`text-xs mt-1 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
-                                {stats.students} alumnos
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center">
-                        <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-gray-500">No hay datos disponibles</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Docentes con más prácticas */}
-                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
-                  <CardHeader
-                    className={`pb-2 ${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground} text-white rounded-t-lg`}
-                  >
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <User className="h-5 w-5" />
-                      Docentes con más prácticas
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    {topDocentes.length > 0 ? (
-                      <div className="space-y-4">
-                        {topDocentes.map(([docente, stats], index) => (
-                          <div key={docente} className="flex items-center">
-                            <div className="w-8 text-center font-bold">{index + 1}</div>
-                            <div
-                              className={`flex-1 h-10 rounded-md flex items-center px-3 ${
-                                esModoOscuro
-                                  ? "bg-[#1d5631]/30 text-white font-medium"
-                                  : "bg-[#fff0f5] text-[#800040] font-medium"
-                              }`}
-                            >
-                              <span className="truncate">{docente}</span>
-                            </div>
-                            <div className="ml-2 text-right">
-                              <Badge className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
-                                {stats.count} prácticas
-                              </Badge>
-                              <div className={`text-xs mt-1 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
-                                {stats.students} alumnos
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center">
-                        <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-gray-500">No hay datos disponibles</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Carreras con más estudiantes */}
-                <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
-                  <CardHeader
-                    className={`pb-2 ${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground} text-white rounded-t-lg`}
-                  >
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <School className="h-5 w-5" />
-                      Carreras con más estudiantes
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    {topCarreras.length > 0 ? (
-                      <div className="space-y-4">
-                        {topCarreras.map(([carrera, count], index) => (
-                          <div key={carrera} className="flex items-center">
-                            <div className="w-8 text-center font-bold">{index + 1}</div>
-                            <div
-                              className={`flex-1 h-10 rounded-md flex items-center px-3 ${
-                                esModoOscuro
-                                  ? "bg-[#1d5631]/30 text-white font-medium"
-                                  : "bg-[#fff0f5] text-[#800040] font-medium"
-                              }`}
-                            >
-                              <span className="truncate">{carrera}</span>
-                            </div>
-                            <div className="ml-2 text-right">
-                              <Badge className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
-                                {count} estudiantes
-                              </Badge>
-                              <div className={`text-xs mt-1 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
-                                {((count / totalStudents) * 100).toFixed(1)}% del total
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center">
-                        <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                        <p className="text-gray-500">No hay datos disponibles</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Resumen del período */}
-                <Card
-                  className={`md:col-span-1 ${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}
+              {/* Tabs para datos y estadísticas */}
+              <Tabs defaultValue="datos" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+                <TabsList
+                  className={`grid w-full grid-cols-2 ${esModoOscuro ? "bg-gray-800" : "bg-gray-100"} rounded-lg p-1`}
                 >
-                  <CardHeader
-                    className={`pb-2 ${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground} text-white rounded-t-lg`}
+                  <TabsTrigger
+                    value="datos"
+                    className="rounded-md transition-all duration-200 text-gray-700 data-[state=active]:bg-[#800040] data-[state=active]:text-white"
+                    style={{
+                      color: activeTab === "datos" ? "white" : esModoOscuro ? "#d1d5db" : "#374151",
+                      backgroundColor: activeTab === "datos" ? (esModoOscuro ? "#1d5631" : "#800040") : "transparent",
+                    }}
                   >
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <PieChart className="h-5 w-5" />
-                      Resumen del período
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="space-y-4">
-                      <div
-                        className={`p-4 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40" : "bg-[#fff0f5]"} flex items-center justify-between`}
-                      >
-                        <div className="flex items-center">
-                          <div className={`rounded-full p-2 ${esModoOscuro ? "bg-[#1d5631]/60" : "bg-[#800040]/10"}`}>
-                            <FileText className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
-                          </div>
-                          <span className={`ml-3 font-medium ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
-                            Total de prácticas
-                          </span>
-                        </div>
-                        <span className={`text-xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                          {totalPractices}
-                        </span>
-                      </div>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Vista Previa
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="estadisticas"
+                    className="rounded-md transition-all duration-200 text-gray-700 data-[state=active]:bg-[#800040] data-[state=active]:text-white"
+                    style={{
+                      color: activeTab === "estadisticas" ? "white" : esModoOscuro ? "#d1d5db" : "#374151",
+                      backgroundColor:
+                        activeTab === "estadisticas" ? (esModoOscuro ? "#1d5631" : "#800040") : "transparent",
+                    }}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Estadísticas
+                  </TabsTrigger>
+                </TabsList>
 
-                      <div
-                        className={`p-4 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40" : "bg-[#fff0f5]"} flex items-center justify-between`}
-                      >
-                        <div className="flex items-center">
-                          <div className={`rounded-full p-2 ${esModoOscuro ? "bg-[#1d5631]/60" : "bg-[#800040]/10"}`}>
-                            <Users className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
-                          </div>
-                          <span className={`ml-3 font-medium ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
-                            Total de estudiantes
-                          </span>
-                        </div>
-                        <span className={`text-xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                          {totalStudents}
-                        </span>
+                <TabsContent value="datos" className="pt-4">
+                  <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg font-medium">Vista previa de datos</CardTitle>
+                        <Badge
+                          variant="outline"
+                          className={`${esModoOscuro ? "border-[#1d5631] text-[#2a7a45]" : "border-[#800040] text-[#800040]"} flex items-center`}
+                        >
+                          <Search className="h-3 w-3 mr-1" />
+                          {filteredPractices.length} registros
+                        </Badge>
                       </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
+                            <TableRow>
+                              <TableHead className="text-white font-medium">Fecha</TableHead>
+                              <TableHead className="text-white font-medium">Docente</TableHead>
+                              <TableHead className="text-white font-medium">Materia</TableHead>
+                              <TableHead className="text-white font-medium">Práctica</TableHead>
+                              <TableHead className="text-white font-medium text-right">Alumnos</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredPractices.length > 0 ? (
+                              filteredPractices.slice(0, 10).map((practice, index) => (
+                                <TableRow
+                                  key={practice.id}
+                                  className={`
+                                    ${
+                                      index % 2 === 0
+                                        ? esModoOscuro
+                                          ? "bg-gray-800"
+                                          : "bg-white"
+                                        : esModoOscuro
+                                          ? "bg-[#1d5631]/10"
+                                          : "bg-[#fff0f5]"
+                                    }
+                                    ${esModoOscuro ? "hover:bg-[#1d5631]/20" : "hover:bg-[#fff0f5]/70"}
+                                    transition-colors
+                                  `}
+                                >
+                                  <TableCell className="font-medium">{formatDate(practice.fecha)}</TableCell>
+                                  <TableCell>{`${practice.maestroNombre} ${practice.maestroApellido}`}</TableCell>
+                                  <TableCell>{practice.materia}</TableCell>
+                                  <TableCell className="max-w-[200px] truncate" title={practice.practica}>
+                                    {practice.practica}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Badge className={`${esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"} shadow-sm`}>
+                                      {practice.totalAsistencias}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={5} className="text-center py-12">
+                                  {loading ? (
+                                    <div className="flex flex-col items-center justify-center">
+                                      <RefreshCw
+                                        className={`h-10 w-10 animate-spin ${esModoOscuro ? "text-[#1d5631]" : "text-[#800040]"}`}
+                                      />
+                                      <p className="mt-4 text-lg">Cargando registros...</p>
+                                      <p className="text-sm text-gray-500 mt-1">Esto puede tomar unos momentos</p>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-center justify-center">
+                                      <Search
+                                        className={`h-10 w-10 ${esModoOscuro ? "text-[#1d5631]" : "text-[#800040]"}`}
+                                      />
+                                      <p className="mt-4 text-lg">No hay registros para mostrar</p>
+                                      <p className="text-sm text-gray-500 mt-1">
+                                        Intenta ajustar los filtros de búsqueda
+                                      </p>
+                                    </div>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {filteredPractices.length > 10 && (
+                        <div className="p-4 text-center text-sm text-gray-500">
+                          Mostrando 10 de {filteredPractices.length} registros. Exporta a Excel o PDF para ver todos.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
 
-                      <div
-                        className={`p-4 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40" : "bg-[#fff0f5]"} flex items-center justify-between`}
-                      >
-                        <div className="flex items-center">
-                          <div className={`rounded-full p-2 ${esModoOscuro ? "bg-[#1d5631]/60" : "bg-[#800040]/10"}`}>
-                            <BookOpen className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
-                          </div>
-                          <span className={`ml-3 font-medium ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
-                            Materias diferentes
-                          </span>
+                  {/* Vista previa del formato ITSPP */}
+                  {filteredPractices.length > 0 && (
+                    <Card className={`mt-6 ${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-lg font-medium">Vista previa del formato ITSPP</CardTitle>
+                          <Badge
+                            variant="outline"
+                            className={`${esModoOscuro ? "border-[#1d5631] text-[#2a7a45]" : "border-[#800040] text-[#800040]"} flex items-center`}
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            Exportar para ver completo
+                          </Badge>
                         </div>
-                        <span className={`text-xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                          {Object.keys(materiaStats).length}
-                        </span>
-                      </div>
+                      </CardHeader>
+                      <CardContent className="p-4">
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h2 className="text-center text-lg font-bold uppercase">
+                                Instituto Tecnológico Superior de Puerto Peñasco
+                              </h2>
+                              <p className="text-center text-xs font-medium mt-1">{division}</p>
+                              <p className="text-center text-xs font-medium">{subdireccion}</p>
+                              <p className="text-center text-xs font-medium">{laboratorio}</p>
+                            </div>
+                            <div className="w-24">
+                              <img src="/logo-itspp.png" alt="Logo ITSPP" className="h-12 w-auto" />
+                            </div>
+                          </div>
 
-                      <div
-                        className={`p-4 rounded-lg ${esModoOscuro ? "bg-[#1d5631]/40" : "bg-[#fff0f5]"} flex items-center justify-between`}
-                      >
-                        <div className="flex items-center">
-                          <div className={`rounded-full p-2 ${esModoOscuro ? "bg-[#1d5631]/60" : "bg-[#800040]/10"}`}>
-                            <User className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
+                          <div className="mt-4 text-xs">
+                            <div className="font-bold">
+                              PERIODO:{" "}
+                              {dateRange.from ? format(dateRange.from, "dd MMMM yyyy", { locale: es }) : "Inicio"} -{" "}
+                              {dateRange.to ? format(dateRange.to, "dd MMMM yyyy", { locale: es }) : "Fin"}
+                            </div>
                           </div>
-                          <span className={`ml-3 font-medium ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
-                            Docentes participantes
-                          </span>
+
+                          <div className="mt-4 overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-[#800040] text-white">
+                                  <th className="border border-gray-300 p-1">FECHA</th>
+                                  <th className="border border-gray-300 p-1">DOCENTE</th>
+                                  <th className="border border-gray-300 p-1">MATERIA</th>
+                                  <th className="border border-gray-300 p-1">PRÁCTICA</th>
+                                  <th className="border border-gray-300 p-1">GRUPO Y SEMESTRE</th>
+                                  <th className="border border-gray-300 p-1">NUM. DE ALUMNOS</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredPractices.slice(0, 3).map((practice, index) => (
+                                  <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-[#fff0f5]"}>
+                                    <td className="border border-gray-300 p-1">{formatDate(practice.fecha)}</td>
+                                    <td className="border border-gray-300 p-1">{`${practice.maestroNombre} ${practice.maestroApellido}`}</td>
+                                    <td className="border border-gray-300 p-1">{practice.materia}</td>
+                                    <td className="border border-gray-300 p-1">{practice.practica}</td>
+                                    <td className="border border-gray-300 p-1">
+                                      {Array.from(
+                                        new Set(practice.alumnos.map((a) => `${a.grupo} (${a.semestre})`)),
+                                      ).join(", ")}
+                                    </td>
+                                    <td className="border border-gray-300 p-1 text-center">
+                                      {practice.totalAsistencias}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="mt-4 text-center text-xs text-gray-500">
+                            <p>Vista previa limitada. Exporta a PDF o Excel para ver el reporte completo.</p>
+                          </div>
                         </div>
-                        <span className={`text-xl font-bold ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`}>
-                          {Object.keys(docenteStats).length}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="estadisticas" className="pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Materias con más prácticas */}
+                    <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg font-medium flex items-center gap-2">
+                          <BookOpen className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
+                          Materias con más prácticas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-4">
+                        {topMaterias.length > 0 ? (
+                          <div className="space-y-4">
+                            {topMaterias.map(([materia, stats], index) => (
+                              <div key={materia} className="flex items-center">
+                                <div className="w-8 text-center font-bold">{index + 1}</div>
+                                <div
+                                  className={`flex-1 h-10 rounded-md flex items-center px-3 ${
+                                    esModoOscuro
+                                      ? "bg-[#1d5631]/30 text-white font-medium"
+                                      : "bg-[#fff0f5] text-[#800040] font-medium"
+                                  }`}
+                                >
+                                  <span className="truncate">{materia}</span>
+                                </div>
+                                <div className="ml-2 text-right">
+                                  <Badge className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
+                                    {stats.count} prácticas
+                                  </Badge>
+                                  <div className={`text-xs mt-1 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                                    {stats.students} alumnos
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center">
+                            <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                            <p className="text-gray-500">No hay datos disponibles</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Docentes con más prácticas */}
+                    <Card className={`${esModoOscuro ? "bg-gray-800 border-gray-700" : "bg-white"} shadow-md`}>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg font-medium flex items-center gap-2">
+                          <User className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
+                          Docentes con más prácticas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-4">
+                        {topDocentes.length > 0 ? (
+                          <div className="space-y-4">
+                            {topDocentes.map(([docente, stats], index) => (
+                              <div key={docente} className="flex items-center">
+                                <div className="w-8 text-center font-bold">{index + 1}</div>
+                                <div
+                                  className={`flex-1 h-10 rounded-md flex items-center px-3 ${
+                                    esModoOscuro
+                                      ? "bg-[#1d5631]/30 text-white font-medium"
+                                      : "bg-[#fff0f5] text-[#800040] font-medium"
+                                  }`}
+                                >
+                                  <span className="truncate">{docente}</span>
+                                </div>
+                                <div className="ml-2 text-right">
+                                  <Badge className={esModoOscuro ? "bg-[#1d5631]" : "bg-[#800040]"}>
+                                    {stats.count} prácticas
+                                  </Badge>
+                                  <div className={`text-xs mt-1 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                                    {stats.students} alumnos
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-8 text-center">
+                            <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                            <p className="text-gray-500">No hay datos disponibles</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
         </CardContent>
 
         <CardFooter
           className={`p-4 ${esModoOscuro ? "bg-gray-800/50" : "bg-gray-50"} border-t flex justify-between items-center`}
         >
           <div className="text-sm text-gray-500">
-            Reporte generado el {format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}
+            Generador de reportes actualizado el {format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}
+          </div>
+          <div className="text-sm">
+            <Badge variant="outline" className="font-normal">
+              Formato ITSPP
+            </Badge>
           </div>
         </CardFooter>
       </Card>

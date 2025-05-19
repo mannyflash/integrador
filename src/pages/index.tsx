@@ -258,6 +258,79 @@ Hora de inicio: ${data.HoraInicio}`,
     }
   }, [])
 
+  // Añadir este efecto después del useEffect que verifica las clases
+  useEffect(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      // Verificar si hay una sesión de maestro activa
+      const storedMaestroId = localStorage.getItem("maestroId")
+      const storedLabTechId = localStorage.getItem("labTechId")
+
+      if (storedMaestroId || storedLabTechId) {
+        try {
+          // Verificar si hay una clase iniciada por este maestro
+          const estadoRef = doc(db, "EstadoClase", "actual")
+          const estadoDoc = await getDoc(estadoRef)
+
+          if (
+            estadoDoc.exists() &&
+            estadoDoc.data().iniciada === true &&
+            estadoDoc.data().maestroId === storedMaestroId
+          ) {
+            // Hay una clase activa iniciada por este maestro, finalizarla
+            const horaActual = new Date().toLocaleTimeString()
+
+            // Actualizar el estado de la clase
+            await setDoc(estadoRef, {
+              iniciada: false,
+              horaFin: horaActual,
+              finalizadaAutomaticamente: true,
+            })
+
+            // Resetear el estado de los equipos
+            await resetEquiposEnUso()
+
+            // Registrar la acción
+            console.log("Clase finalizada automáticamente debido al cierre del navegador")
+          }
+
+          // Verificar si hay una clase de invitado iniciada por este laboratorista
+          if (storedLabTechId) {
+            const estadoInvitadoRef = doc(db, "EstadoClaseInvitado", "actual")
+            const estadoInvitadoDoc = await getDoc(estadoInvitadoRef)
+
+            if (estadoInvitadoDoc.exists() && estadoInvitadoDoc.data().iniciada === true) {
+              // Finalizar la clase de invitado
+              await setDoc(estadoInvitadoRef, {
+                iniciada: false,
+                horaFin: new Date().toLocaleTimeString(),
+                finalizadaAutomaticamente: true,
+              })
+
+              // Resetear el estado de los equipos
+              await resetEquiposEnUso()
+
+              console.log("Clase de invitado finalizada automáticamente debido al cierre del navegador")
+            }
+          }
+
+          // Eliminar las sesiones
+          localStorage.removeItem("maestroId")
+          localStorage.removeItem("labTechId")
+        } catch (error) {
+          console.error("Error al finalizar la clase automáticamente:", error)
+        }
+      }
+    }
+
+    // Registrar el evento beforeunload
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Limpiar el evento cuando el componente se desmonte
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [])
+
   // Efecto separado para manejar los cambios en lastGuestClassStatus
   useEffect(() => {
     // Este efecto se ejecutará cuando cambie lastGuestClassStatus
@@ -357,7 +430,7 @@ Hora de inicio: ${data.HoraInicio}`,
             return
           }
 
-          //verificar equipo repetido, excepto el personal
+          // Check for duplicate equipo, except for personal equipment
           if (equipo !== "personal") {
             const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
             const equipoSnapshot = await getDocs(equipoQuery)

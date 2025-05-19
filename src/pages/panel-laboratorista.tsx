@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
+import { da } from "date-fns/locale"
 
 const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
@@ -98,19 +99,19 @@ const colors = {
 const menuItems = [
   {
     id: "reportes",
-    label: "Reportes de Clases",
+    label: "Reportes Diarios",
     icon: <BarChart2 className="h-5 w-5" />,
     description: "Visualiza y gestiona los reportes de clases",
   },
   {
     id: "practicas",
-    label: "Prácticas",
+    label: "Todas Las Prácticas",
     icon: <ClipboardList className="h-5 w-5" />,
     description: "Administra las prácticas de laboratorio",
   },
   {
     id: "horario",
-    label: "Horario Semanal",
+    label: "Horario Semestral",
     icon: <Calendar className="h-5 w-5" />,
     description: "Consulta y organiza el horario semanal",
   },
@@ -122,7 +123,7 @@ const menuItems = [
   },
   {
     id: "maestroInvitado",
-    label: "Maestro Invitado",
+    label: "Eventos Y C.Externas",
     icon: <UserPlus className="h-5 w-5" />,
     description: "Gestiona las clases de maestros invitados",
   },
