@@ -231,7 +231,7 @@ export default function VistaReporteMensual({
       setDocentesList(docentes)
       setMateriasList(materias)
 
-      await logAction("fetch_records", `Fetched ${datosInfoClase.length} practice records`)
+      await logAction("cargar_registros", `Se cargaron ${datosInfoClase.length} registros de prácticas`)
       showNotification(`Se cargaron ${datosInfoClase.length} registros correctamente`, "success")
 
       // Apply initial filtering
@@ -510,7 +510,7 @@ export default function VistaReporteMensual({
 
       // Guardar el archivo
       writeFile(workbook, filename)
-      await logAction("export_excel", `Exported ${filteredPractices.length} records to Excel with ITSPP format`)
+      await logAction("exportar_excel", `Se exportaron ${filteredPractices.length} registros a Excel con formato ITSPP`)
       showNotification(`Reporte exportado a Excel correctamente`, "success")
     } catch (error) {
       console.error("Error exporting to Excel:", error)
@@ -645,6 +645,13 @@ export default function VistaReporteMensual({
       doc.setFontSize(8)
       doc.text("SELLO EDUCACIÓN", 50, pageHeight - 20)
 
+      // Logo TecNM en la esquina inferior derecha
+      try {
+        doc.addImage("/FondoItspp.png", "PNG", pageWidth - 40, pageHeight - 30, 30, 20)
+      } catch (error) {
+        console.warn("No se pudo cargar la imagen FondoItspp.png en la parte inferior:", error)
+        // Continuar sin la imagen
+      }
 
       // Generar nombre de archivo
       const fromDateFilename = dateRange.from ? format(dateRange.from, "MM-yyyy") : "inicio"
@@ -654,7 +661,7 @@ export default function VistaReporteMensual({
       // Guardar el archivo
       doc.save(filename)
 
-      await logAction("export_pdf", `Exported ${filteredPractices.length} records to PDF with ITSPP format`)
+      await logAction("exportar_pdf", `Se exportaron ${filteredPractices.length} registros a PDF con formato ITSPP`)
       showNotification(`Reporte exportado a PDF correctamente`, "success")
     } catch (error) {
       console.error("Error exporting to PDF:", error)

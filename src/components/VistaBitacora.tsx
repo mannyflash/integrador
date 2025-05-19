@@ -99,13 +99,16 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
   const [isLoading, setIsLoading] = useState(true)
   const [uniqueActions, setUniqueActions] = useState<string[]>([])
   const [uniqueUsers, setUniqueUsers] = useState<string[]>([])
-  const [activeTab, setActiveTab] = useState("todos")
+  const [activeTab, setActiveTab] = useState("hoy")
 
   // Usar la paleta de colores según el modo
   const theme = esModoOscuro ? colors.dark : colors.light
 
   useEffect(() => {
-    fetchLogs()
+    // Al cargar, mostrar solo los registros del día actual
+    const today = new Date()
+    setDateFilter(today.toISOString().split("T")[0])
+    fetchLogsForToday()
   }, [])
 
   const fetchLogs = async () => {
@@ -135,6 +138,54 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
       }
     } catch (error) {
       console.error("Error fetching logs:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchLogsForToday = async () => {
+    setIsLoading(true)
+    try {
+      const logsRef = collection(db, "logs")
+
+      // Crear límites para el día actual (desde las 00:00:00 hasta las 23:59:59)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+
+      // Consulta con filtro por fecha actual
+      const q = query(
+        logsRef,
+        where("timestamp", ">=", today),
+        where("timestamp", "<", tomorrow),
+        orderBy("timestamp", "desc"),
+      )
+
+      const querySnapshot = await getDocs(q)
+      const logs = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as LogEntry[]
+
+      setLogEntries(logs)
+
+      // Extraer acciones y usuarios únicos para los filtros
+      const actions = [...new Set(logs.map((log) => log.action))]
+      const users = [...new Set(logs.map((log) => log.user))]
+      setUniqueActions(actions)
+      setUniqueUsers(users)
+
+      // Registrar la acción de visualización de bitácora
+      if (usuarioActual) {
+        await logAction(
+          "Visualización de Bitácora",
+          `${usuarioActual.nombre} (${usuarioActual.ocupacion}) consultó la bitácora del sistema para el día actual`,
+        )
+      }
+    } catch (error) {
+      console.error("Error fetching today's logs:", error)
     } finally {
       setIsLoading(false)
     }
@@ -214,18 +265,23 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
     if (value === "hoy") {
       const today = new Date()
       setDateFilter(today.toISOString().split("T")[0])
-      applyFilters()
+      fetchLogsForToday()
     } else if (value === "semana") {
       const today = new Date()
       const lastWeek = new Date(today)
       lastWeek.setDate(today.getDate() - 7)
-      // Aquí solo establecemos el filtro, pero necesitaríamos modificar la lógica de filtrado
-      // para manejar rangos de fechas
+      setDateFilter("") // Limpiar el filtro de fecha específica
+      // Implementar filtro para la última semana
+      // Por ahora, simplemente mostramos todos los registros
+      fetchLogs()
     } else if (value === "mes") {
       const today = new Date()
       const lastMonth = new Date(today)
       lastMonth.setMonth(today.getMonth() - 1)
-      // Similar al caso anterior
+      setDateFilter("") // Limpiar el filtro de fecha específica
+      // Implementar filtro para el último mes
+      // Por ahora, simplemente mostramos todos los registros
+      fetchLogs()
     } else if (value === "todos") {
       clearFilters()
     }
@@ -286,7 +342,7 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          <Tabs defaultValue="todos" value={activeTab} onValueChange={handleTabChange} className="mb-6">
+          <Tabs defaultValue="hoy" value={activeTab} onValueChange={handleTabChange} className="mb-6">
             <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger
                 value="todos"
@@ -542,4 +598,3 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
 }
 
 export default VistaBitacora
-
