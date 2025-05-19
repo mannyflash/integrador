@@ -1302,7 +1302,7 @@ Hora de inicio: ${data.HoraInicio}`,
                         >
                           Tipo de Usuario
                         </Label>
-                        <Select value={userType} onValueChange={setUserType}>
+                        <Select value={userType} onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}>
                           <SelectTrigger
                             className={`${
                               theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
