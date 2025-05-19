@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { User, UserCog, Computer, Moon, Sun, ChevronRight } from "lucide-react"
+import { User, UserCog, Computer, Moon, Sun } from "lucide-react"
 import { initializeApp } from "firebase/app"
 import {
   getFirestore,
@@ -21,10 +21,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ImageCarousel } from "../components/ImageCarousel"
 import { Sidebar } from "../components/Sidebar"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
@@ -416,69 +415,173 @@ Hora de inicio: ${data.HoraInicio}`,
             return
           }
 
-          // Check for duplicate matricula
-          const asistenciasRef = collection(db, asistenciasCollection)
-          const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
-          const matriculaSnapshot = await getDocs(matriculaQuery)
+          try {
+            // Check for duplicate matricula
+            const asistenciasRef = collection(db, asistenciasCollection)
+            const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
+            const matriculaSnapshot = await getDocs(matriculaQuery)
 
-          if (!matriculaSnapshot.empty) {
-            await swal({
-              title: "Atención",
-              text: "Ya has registrado tu asistencia.",
-              icon: "warning",
-            })
-            return
-          }
-
-          // Check for duplicate equipo, except for personal equipment
-          if (equipo !== "personal") {
-            const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
-            const equipoSnapshot = await getDocs(equipoQuery)
-
-            if (!equipoSnapshot.empty) {
+            if (!matriculaSnapshot.empty) {
               await swal({
                 title: "Atención",
-                text: "Este equipo ya ha sido registrado.",
+                text: "Ya has registrado tu asistencia.",
                 icon: "warning",
               })
               return
             }
+
+            // Check for duplicate equipo, except for personal equipment
+            if (equipo !== "personal") {
+              const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
+              const equipoSnapshot = await getDocs(equipoQuery)
+
+              if (!equipoSnapshot.empty) {
+                await swal({
+                  title: "Atención",
+                  text: "Este equipo ya ha sido registrado.",
+                  icon: "warning",
+                })
+                return
+              }
+            }
+
+            // Get all student data
+            const alumnoRef = doc(db, "Alumnos", matricula)
+            const alumnoSnap = await getDoc(alumnoRef)
+
+            if (alumnoSnap.exists()) {
+              const alumnoData = alumnoSnap.data()
+              const asistenciaRef = doc(collection(db, asistenciasCollection))
+
+              // Datos comunes para ambos tipos de asistencia
+              const commonData = {
+                AlumnoId: matricula,
+                Nombre: alumnoData.Nombre ?? "",
+                Apellido: alumnoData.Apellido ?? "",
+                Carrera: alumnoData.Carrera ?? "",
+                Grupo: alumnoData.Grupo ?? "",
+                Semestre: alumnoData.Semestre ?? "",
+                Turno: alumnoData.Turno ?? "",
+                Equipo: equipo,
+                Fecha: serverTimestamp(),
+              }
+
+              // Datos específicos según el tipo de clase
+              if (classInfo) {
+                // Para clase normal
+                await setDoc(asistenciaRef, {
+                  ...commonData,
+                  MaestroNombre: classInfo.maestroNombre || "",
+                  MaestroApellido: classInfo.maestroApellido || "",
+                  Materia: classInfo.materiaNombre || "",
+                  Practica: classInfo.practicaTitulo || "",
+                })
+              } else {
+                // Caso básico sin información adicional
+                await setDoc(asistenciaRef, commonData)
+              }
+
+              // Marcar el equipo como "en uso" si no es equipo personal
+              if (equipo !== "personal") {
+                try {
+                  const equipoRef = doc(db, "Numero de equipos", "equipos")
+                  const equipoDoc = await getDoc(equipoRef)
+
+                  if (equipoDoc.exists()) {
+                    const equiposData = equipoDoc.data()
+                    const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => {
+                      if (eq.id === equipo) {
+                        return { ...eq, enUso: true }
+                      }
+                      return eq
+                    })
+
+                    await setDoc(equipoRef, { Equipos: equiposActualizados })
+                  }
+                } catch (error) {
+                  console.error("Error al actualizar el estado del equipo:", error)
+                }
+              }
+
+              await swal({
+                title: "¡Asistencia registrada!",
+                text: "Tu asistencia se ha registrado correctamente.",
+                icon: "success",
+              })
+
+              setMatricula("")
+              setEquipo("")
+            } else {
+              await swal({
+                title: "Error",
+                text: "Matrícula no encontrada",
+                icon: "error",
+              })
+            }
+          } catch (error) {
+            console.error("Error al procesar la asistencia:", error)
+            await swal({
+              title: "Error",
+              text: `Error al procesar la asistencia: ${error instanceof Error ? error.message : "Error desconocido"}`,
+              icon: "error",
+            })
+          }
+        } else {
+          // Para clase invitada, verificar nombre, apellido y equipo
+          if (!nombre || !apellido || !equipo) {
+            await swal({
+              title: "Error",
+              text: "Por favor, completa todos los campos.",
+              icon: "error",
+            })
+            return
           }
 
-          // Get all student data
-          const alumnoRef = doc(db, "Alumnos", matricula)
-          const alumnoSnap = await getDoc(alumnoRef)
+          try {
+            // Check for duplicate equipo, except for personal equipment
+            if (equipo !== "personal") {
+              const asistenciasRef = collection(db, asistenciasCollection)
+              const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
+              const equipoSnapshot = await getDocs(equipoQuery)
 
-          if (alumnoSnap.exists()) {
-            const alumnoData = alumnoSnap.data()
+              if (!equipoSnapshot.empty) {
+                await swal({
+                  title: "Atención",
+                  text: "Este equipo ya ha sido registrado.",
+                  icon: "warning",
+                })
+                return
+              }
+            }
+
+            // Generar un ID único para el alumno invitado
+            const alumnoId = matriculaInvitado ? matriculaInvitado : `INV-${Date.now()}`
             const asistenciaRef = doc(collection(db, asistenciasCollection))
 
-            // Datos comunes para ambos tipos de asistencia
-            const commonData = {
-              AlumnoId: matricula,
-              Nombre: alumnoData.Nombre ?? "",
-              Apellido: alumnoData.Apellido ?? "",
-              Carrera: alumnoData.Carrera ?? "",
-              Grupo: alumnoData.Grupo ?? "",
-              Semestre: alumnoData.Semestre ?? "",
-              Turno: alumnoData.Turno ?? "",
+            // Datos para asistencia de invitado
+            const invitadoData = {
+              AlumnoId: alumnoId,
+              Nombre: nombre,
+              Apellido: apellido,
+              Carrera: "Externo",
+              Grupo: "Externo",
+              Semestre: "Externo",
+              Turno: "Externo",
               Equipo: equipo,
               Fecha: serverTimestamp(),
             }
 
-            // Datos específicos según el tipo de clase
-            if (classInfo) {
-              // Para clase normal
+            // Añadir datos específicos de la clase invitada
+            if (guestClassInfo) {
               await setDoc(asistenciaRef, {
-                ...commonData,
-                MaestroNombre: classInfo.maestroNombre,
-                MaestroApellido: classInfo.maestroApellido,
-                Materia: classInfo.materiaNombre,
-                Practica: classInfo.practicaTitulo,
+                ...invitadoData,
+                MaestroInvitado: guestClassInfo.MaestroInvitado || "",
+                Materia: guestClassInfo.Materia || "",
+                Practica: guestClassInfo.Practica || "",
+                Departamento: guestClassInfo.Departamento || "",
               })
             } else {
-              // Caso básico sin información adicional
-              await setDoc(asistenciaRef, commonData)
+              await setDoc(asistenciaRef, invitadoData)
             }
 
             // Marcar el equipo como "en uso" si no es equipo personal
@@ -505,108 +608,22 @@ Hora de inicio: ${data.HoraInicio}`,
 
             await swal({
               title: "¡Asistencia registrada!",
-              text: "Tu asistencia se ha registrado correctamente.",
+              text: `Tu asistencia se ha registrado correctamente para la clase con ${guestClassInfo?.MaestroInvitado || "el maestro invitado"}.`,
               icon: "success",
             })
 
-            setMatricula("")
+            setNombre("")
+            setApellido("")
             setEquipo("")
-          } else {
+            setMatriculaInvitado("")
+          } catch (error) {
+            console.error("Error al procesar la asistencia de invitado:", error)
             await swal({
               title: "Error",
-              text: "Matrícula no encontrada",
+              text: `Error al procesar la asistencia: ${error instanceof Error ? error.message : "Error desconocido"}`,
               icon: "error",
             })
           }
-        } else {
-          // Para clase invitada, verificar nombre, apellido y equipo
-          if (!nombre || !apellido || !equipo) {
-            await swal({
-              title: "Error",
-              text: "Por favor, completa todos los campos.",
-              icon: "error",
-            })
-            return
-          }
-
-          // Check for duplicate equipo, except for personal equipment
-          if (equipo !== "personal") {
-            const asistenciasRef = collection(db, asistenciasCollection)
-            const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
-            const equipoSnapshot = await getDocs(equipoQuery)
-
-            if (!equipoSnapshot.empty) {
-              await swal({
-                title: "Atención",
-                text: "Este equipo ya ha sido registrado.",
-                icon: "warning",
-              })
-              return
-            }
-          }
-
-          // Generar un ID único para el alumno invitado
-          const alumnoId = matriculaInvitado ? matriculaInvitado : `INV-${Date.now()}`
-          const asistenciaRef = doc(collection(db, asistenciasCollection))
-
-          // Datos para asistencia de invitado
-          const invitadoData = {
-            AlumnoId: alumnoId,
-            Nombre: nombre,
-            Apellido: apellido,
-            Carrera: "Externo",
-            Grupo: "Externo",
-            Semestre: "Externo",
-            Turno: "Externo",
-            Equipo: equipo,
-            Fecha: serverTimestamp(),
-          }
-
-          // Añadir datos específicos de la clase invitada
-          if (guestClassInfo) {
-            await setDoc(asistenciaRef, {
-              ...invitadoData,
-              MaestroInvitado: guestClassInfo.MaestroInvitado,
-              Materia: guestClassInfo.Materia,
-              Practica: guestClassInfo.Practica,
-              Departamento: guestClassInfo.Departamento,
-            })
-          } else {
-            await setDoc(asistenciaRef, invitadoData)
-          }
-
-          // Marcar el equipo como "en uso" si no es equipo personal
-          if (equipo !== "personal") {
-            try {
-              const equipoRef = doc(db, "Numero de equipos", "equipos")
-              const equipoDoc = await getDoc(equipoRef)
-
-              if (equipoDoc.exists()) {
-                const equiposData = equipoDoc.data()
-                const equiposActualizados = equiposData.Equipos.map((eq: Equipment) => {
-                  if (eq.id === equipo) {
-                    return { ...eq, enUso: true }
-                  }
-                  return eq
-                })
-
-                await setDoc(equipoRef, { Equipos: equiposActualizados })
-              }
-            } catch (error) {
-              console.error("Error al actualizar el estado del equipo:", error)
-            }
-          }
-
-          await swal({
-            title: "¡Asistencia registrada!",
-            text: `Tu asistencia se ha registrado correctamente para la clase con ${guestClassInfo?.MaestroInvitado || "el maestro invitado"}.`,
-            icon: "success",
-          })
-
-          setNombre("")
-          setApellido("")
-          setEquipo("")
-          setMatriculaInvitado("")
         }
       } else if (activeTab === "maestro") {
         if (!userMatricula || !password) {
@@ -663,7 +680,7 @@ Hora de inicio: ${data.HoraInicio}`,
       console.error("Error al procesar la solicitud:", error)
       await swal({
         title: "Error",
-        text: "Ha ocurrido un error. Por favor, intenta de nuevo.",
+        text: `Ha ocurrido un error: ${error instanceof Error ? error.message : "Error desconocido"}`,
         icon: "error",
       })
     }
@@ -689,20 +706,75 @@ Hora de inicio: ${data.HoraInicio}`,
         return
       }
 
+      console.log("Intentando iniciar sesión como administrador:", { adminEmail })
+
+      // Primero, intentamos buscar por matrícula directamente
       const adminRef = doc(db, "Administrador", adminEmail)
       const adminSnap = await getDoc(adminRef)
 
       if (!adminSnap.exists()) {
+        console.log("Administrador no encontrado por matrícula, buscando por email...")
+
+        // Si no se encuentra por matrícula, intentamos buscar por email
+        const adminQuery = query(collection(db, "Administrador"), where("Email", "==", adminEmail))
+        const querySnapshot = await getDocs(adminQuery)
+
+        if (querySnapshot.empty) {
+          console.log("Administrador no encontrado")
+          await swal({
+            title: "Administrador no encontrado",
+            text: "No existe un administrador con esa matrícula o correo electrónico.",
+            icon: "error",
+          })
+          return
+        }
+
+        // Si encontramos por email, usamos ese documento
+        const adminDoc = querySnapshot.docs[0]
+        const adminData = adminDoc.data()
+
+        if (!adminData || !adminData.Contraseña) {
+          console.log("Error en los datos del administrador")
+          await swal({
+            title: "Error",
+            text: "Error en los datos del administrador. Por favor, contacte al soporte técnico.",
+            icon: "error",
+          })
+          return
+        }
+
+        console.log("Verificando contraseña para administrador encontrado por email")
+        const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
+
+        if (!passwordMatch) {
+          console.log("Contraseña incorrecta para administrador")
+          await swal({
+            title: "Contraseña incorrecta",
+            text: "La contraseña ingresada no es correcta. Por favor, inténtalo de nuevo.",
+            icon: "error",
+          })
+          return
+        }
+
+        console.log("Inicio de sesión exitoso como administrador")
         await swal({
-          title: "Error",
-          text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
-          icon: "error",
+          title: "¡Bienvenido Administrador!",
+          text: `Inicio de sesión exitoso. Bienvenido ${adminData.Nombre} ${adminData.Apellido}`,
+          icon: "success",
         })
+
+        // Guardar el ID del administrador en localStorage
+        localStorage.setItem("adminId", adminDoc.id)
+
+        setIsAdminLoginOpen(false)
+        router.push("/AdminPanel")
         return
       }
 
+      // Si llegamos aquí, encontramos al administrador por matrícula
       const adminData = adminSnap.data()
       if (!adminData || !adminData.Contraseña) {
+        console.log("Error en los datos del administrador")
         await swal({
           title: "Error",
           text: "Error en los datos del administrador. Por favor, contacte al soporte técnico.",
@@ -711,22 +783,36 @@ Hora de inicio: ${data.HoraInicio}`,
         return
       }
 
+      console.log("Administrador encontrado por matrícula, verificando contraseña")
+      await swal({
+        title: "Administrador encontrado",
+        text: `Se encontró al administrador ${adminData.Nombre} ${adminData.Apellido}`,
+        icon: "info",
+      })
+
+      // Usar bcrypt.compare para comparar la contraseña ingresada con la hasheada
       const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
 
       if (!passwordMatch) {
+        console.log("Contraseña incorrecta para administrador")
         await swal({
-          title: "Error",
-          text: "Credenciales incorrectas. Por favor, inténtalo de nuevo.",
+          title: "Contraseña incorrecta",
+          text: "La contraseña ingresada no es correcta. Por favor, inténtalo de nuevo.",
           icon: "error",
         })
         return
       }
 
+      console.log("Inicio de sesión exitoso como administrador")
       await swal({
         title: "¡Bienvenido Administrador!",
-        text: "Inicio de sesión exitoso",
+        text: `Inicio de sesión exitoso. Bienvenido ${adminData.Nombre} ${adminData.Apellido}`,
         icon: "success",
       })
+
+      // Guardar el ID del administrador en localStorage
+      localStorage.setItem("adminId", adminEmail)
+
       setIsAdminLoginOpen(false)
       router.push("/AdminPanel")
     } catch (error) {
@@ -1154,23 +1240,6 @@ Hora de inicio: ${data.HoraInicio}`,
                           </div>
                         </>
                       )}
-
-                      <Button
-                        type="submit"
-                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
-                          theme === "dark" ? colors.dark.buttonPrimary : colors.light.buttonPrimary
-                        } transition-all duration-300 ${!(isClassStarted || isGuestClassStarted) ? "opacity-50 cursor-not-allowed" : ""}`}
-                        disabled={!(isClassStarted || isGuestClassStarted)}
-                      >
-                        {!(isClassStarted || isGuestClassStarted) ? (
-                          "No hay clases iniciadas"
-                        ) : (
-                          <>
-                            Registrar Asistencia
-                            <ChevronRight className="w-5 h-5" />
-                          </>
-                        )}
-                      </Button>
                     </form>
                   </TabsContent>
 
@@ -1178,54 +1247,24 @@ Hora de inicio: ${data.HoraInicio}`,
                     <form onSubmit={handleSubmit} className="space-y-5">
                       <div className="space-y-3">
                         <Label
-                          htmlFor="userType"
-                          className={`text-sm sm:text-base font-medium ${
-                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
-                          }`}
-                        >
-                          Tipo de Usuario
-                        </Label>
-                        <Select
-                          value={userType}
-                          onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}
-                        >
-                          <SelectTrigger
-                            className={`${
-                              theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
-                            } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
-                              theme === "dark" ? colors.dark.inputText : colors.light.inputText
-                            } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                          >
-                            <SelectValue placeholder="Selecciona tipo de usuario" />
-                          </SelectTrigger>
-                          <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
-                            <SelectItem value="maestro">Maestro</SelectItem>
-                            <SelectItem value="laboratorista">Laboratorista</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label
                           htmlFor="userMatricula"
                           className={`text-sm sm:text-base font-medium ${
                             theme === "dark" ? colors.dark.titleText : colors.light.titleText
                           }`}
                         >
-                          {userType === "maestro" ? "Número de Empleado" : "ID de Laboratorista"}
+                          Matrícula
                         </Label>
                         <Input
                           id="userMatricula"
                           type="text"
                           value={userMatricula}
-                          onChange={(e) => handleNumberInput(e, setUserMatricula)}
-                          placeholder={`Ingresa tu ${userType === "maestro" ? "número de empleado" : "ID de laboratorista"}`}
+                          onChange={(e) => setUserMatricula(e.target.value)}
+                          placeholder="Ingresa tu matrícula"
                           className={`${
                             theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
                           } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
                             theme === "dark" ? colors.dark.inputText : colors.light.inputText
                           } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                          maxLength={8}
                           required
                         />
                       </div>
@@ -1254,100 +1293,43 @@ Hora de inicio: ${data.HoraInicio}`,
                         />
                       </div>
 
-                      <Button
-                        type="submit"
-                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
-                          theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
-                        } transition-all duration-300`}
-                      >
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="userType"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
+                        >
+                          Tipo de Usuario
+                        </Label>
+                        <Select value={userType} onValueChange={setUserType}>
+                          <SelectTrigger
+                            className={`${
+                              theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                            } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                              theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                            } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                          >
+                            <SelectValue placeholder="Selecciona un tipo de usuario" />
+                          </SelectTrigger>
+                          <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                            <SelectItem value="maestro">Maestro</SelectItem>
+                            <SelectItem value="laboratorista">Laboratorista</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Button type="submit" className="w-full">
                         Iniciar Sesión
-                        <ChevronRight className="w-5 h-5" />
                       </Button>
                     </form>
                   </TabsContent>
                 </Tabs>
               </CardContent>
-
-              <CardFooter className={`p-4 ${theme === "dark" ? "bg-[#153731]" : "bg-[#f0fff4]"} text-center text-sm`}>
-                <p className={`w-full ${theme === "dark" ? "text-gray-300" : "text-[#1C4A3F]/70"}`}>
-                  Instituto Tecnológico Superior de Puerto Peñasco © {new Date().getFullYear()}
-                </p>
-              </CardFooter>
             </motion.div>
           </motion.div>
         </AnimatePresence>
       </Card>
-
-      <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
-        <DialogContent
-          className={`sm:max-w-md ${
-            theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"
-          } border-none shadow-lg rounded-2xl`}
-        >
-          <DialogHeader>
-            <DialogTitle className={`text-center text-xl ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}>
-              Acceso Administrador
-            </DialogTitle>
-            <DialogDescription className={`text-center ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-              Ingresa tus credenciales de administrador
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAdminLogin} className="space-y-5">
-            <div className="space-y-3">
-              <Label
-                htmlFor="adminEmail"
-                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
-              >
-                Correo Electrónico
-              </Label>
-              <Input
-                id="adminEmail"
-                type="email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                placeholder="Ingresa tu correo electrónico"
-                className={`${
-                  theme === "dark"
-                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
-                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
-                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                required
-              />
-            </div>
-
-            <div className="space-y-3">
-              <Label
-                htmlFor="adminPassword"
-                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
-              >
-                Contraseña
-              </Label>
-              <Input
-                id="adminPassword"
-                type="password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                placeholder="Ingresa tu contraseña"
-                className={`${
-                  theme === "dark"
-                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
-                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
-                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                required
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium ${
-                theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
-              } transition-all duration-300`}
-            >
-              Iniciar Sesión
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
