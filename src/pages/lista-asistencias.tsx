@@ -229,7 +229,69 @@ export default function ListaAsistencias() {
     checkAuth()
   }, [router])
 
-  // Añadir este efecto después del useEffect que verifica la autenticación
+  // Añadir esta función después del useEffect que verifica la autenticación
+  useEffect(() => {
+    const checkActiveClass = async () => {
+      try {
+        // Verificar si hay una clase activa en Firestore
+        const estadoRef = doc(db, "EstadoClase", "actual")
+        const estadoDoc = await getDoc(estadoRef)
+
+        if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
+          // Hay una clase activa, recuperar la información
+          const estadoData = estadoDoc.data()
+
+          // Establecer el estado de clase iniciada
+          setClaseIniciada(true)
+          setHoraInicio(estadoData.horaInicio || null)
+
+          // Recuperar información de la materia
+          if (estadoData.materiaId) {
+            setSelectedMateriaId(estadoData.materiaId)
+
+            // Cargar las prácticas de esta materia
+            try {
+              const practicasSnapshot = await getDocs(collection(db, "Materias", estadoData.materiaId, "Practicas"))
+              const practicasData = practicasSnapshot.docs.map((doc) => ({
+                id: doc.id,
+                ...(doc.data() as Omit<Practica, "id">),
+              }))
+              setPracticas(practicasData)
+
+              // Encontrar la práctica activa
+              if (estadoData.practica) {
+                const practicaActiva = practicasData.find((p) => p.id === estadoData.practica)
+                if (practicaActiva) {
+                  setSelectedPractica(practicaActiva)
+                } else if (estadoData.practicaTitulo) {
+                  // Si no encontramos la práctica por ID pero tenemos los datos, crear un objeto con la información disponible
+                  setSelectedPractica({
+                    id: estadoData.practica,
+                    Titulo: estadoData.practicaTitulo,
+                    Descripcion: estadoData.practicaDescripcion || "",
+                    Duracion: estadoData.practicaDuracion || "",
+                    fecha: estadoData.practicaFecha || "",
+                  })
+                }
+              }
+            } catch (error) {
+              console.error("Error al cargar prácticas de la clase activa:", error)
+            }
+          }
+
+          console.log("Se recuperó información de una clase activa")
+        }
+      } catch (error) {
+        console.error("Error al verificar clase activa:", error)
+      }
+    }
+
+    // Solo ejecutar si hay un maestroId (usuario autenticado)
+    if (maestroId) {
+      checkActiveClass()
+    }
+  }, [maestroId])
+
   useEffect(() => {
     const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
       // Si hay una clase iniciada, finalizarla automáticamente
@@ -385,6 +447,12 @@ export default function ListaAsistencias() {
           ...(doc.data() as Omit<Practica, "id">),
         }))
         setPracticas(practicasData)
+
+        // Solo resetear la práctica seleccionada si no hay una clase activa
+        if (!claseIniciada) {
+          setSelectedPractica(null)
+        }
+
         console.log("Prácticas actualizadas:", practicasData)
       } catch (error) {
         console.error("Error fetching practicas:", error)
@@ -395,7 +463,7 @@ export default function ListaAsistencias() {
         })
       }
     }
-  }, [selectedMateriaId])
+  }, [selectedMateriaId, claseIniciada])
   useEffect(() => {
     if (selectedMateriaId) {
       fetchPracticas()
@@ -412,7 +480,17 @@ export default function ListaAsistencias() {
       console.error("Error fetching maestro info:", error)
     }
   }
-  const handleMateriaChange = (materiaId: string) => {
+  const handleMateriaChange = async (materiaId: string) => {
+    // Si hay una clase activa, mostrar una advertencia y no permitir el cambio
+    if (claseIniciada) {
+      await swal({
+        title: "No se puede cambiar la materia",
+        text: "No puedes cambiar la materia mientras una clase está en progreso. Por favor, finaliza la clase primero.",
+        icon: "warning",
+      })
+      return
+    }
+
     // Si es la misma materia que ya está seleccionada, no hagas nada
     if (materiaId === selectedMateriaId) {
       return
