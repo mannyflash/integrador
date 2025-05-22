@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { User, UserCog, Computer, Moon, Sun } from "lucide-react"
+import { User, UserCog, Computer, Moon, Sun, ChevronRight } from "lucide-react"
 import { initializeApp } from "firebase/app"
 import {
   getFirestore,
@@ -21,9 +21,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { ImageCarousel } from "../components/ImageCarousel"
 import { Sidebar } from "../components/Sidebar"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
@@ -1066,31 +1067,7 @@ Hora de inicio: ${data.HoraInicio}`,
                       {/* Formulario para clase normal */}
                       {isClassStarted && !isGuestClassStarted && (
                         <>
-                          <div className="space-y-3">
-                            <Label
-                              htmlFor="matricula"
-                              className={`text-sm sm:text-base font-medium ${
-                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
-                              }`}
-                            >
-                              Matrícula
-                            </Label>
-                            <Input
-                              id="matricula"
-                              type="text"
-                              value={matricula}
-                              onChange={(e) => handleNumberInput(e, setMatricula)}
-                              placeholder="Ingresa tu matrícula"
-                              className={`${
-                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
-                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
-                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
-                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                              maxLength={8}
-                              required
-                            />
-                          </div>
-
+                          {/* PRIMERO: Selección de equipo */}
                           <div className="space-y-3">
                             <Label
                               htmlFor="equipo"
@@ -1126,12 +1103,75 @@ Hora de inicio: ${data.HoraInicio}`,
                               </SelectContent>
                             </Select>
                           </div>
+
+                          {/* SEGUNDO: Matrícula */}
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="matricula"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Matrícula
+                            </Label>
+                            <Input
+                              id="matricula"
+                              type="text"
+                              value={matricula}
+                              onChange={(e) => handleNumberInput(e, setMatricula)}
+                              placeholder="Ingresa tu matrícula"
+                              className={`${
+                                theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                              } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              maxLength={8}
+                              required
+                            />
+                          </div>
                         </>
                       )}
 
                       {/* Formulario para clase invitada */}
                       {isGuestClassStarted && !isClassStarted && (
                         <>
+                          {/* PRIMERO: Selección de equipo */}
+                          <div className="space-y-3">
+                            <Label
+                              htmlFor="equipo"
+                              className={`text-sm sm:text-base font-medium ${
+                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                              }`}
+                            >
+                              Equipo
+                            </Label>
+                            <Select value={equipo} onValueChange={setEquipo}>
+                              <SelectTrigger
+                                className={`${
+                                  theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                                } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                                  theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                              >
+                                <SelectValue placeholder="Selecciona un equipo" />
+                              </SelectTrigger>
+                              <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                                {equipmentList.map((equipment) => (
+                                  <SelectItem
+                                    key={equipment.id}
+                                    value={equipment.id}
+                                    disabled={equipment.fueraDeServicio || equipment.enUso}
+                                    className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
+                                  >
+                                    {equipment.id}
+                                    {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
+                                    {equipment.enUso ? " (En uso)" : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
                           <div className="space-y-3">
                             <Label
                               htmlFor="nombre"
@@ -1202,44 +1242,26 @@ Hora de inicio: ${data.HoraInicio}`,
                               } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
                             />
                           </div>
-
-                          <div className="space-y-3">
-                            <Label
-                              htmlFor="equipo"
-                              className={`text-sm sm:text-base font-medium ${
-                                theme === "dark" ? colors.dark.titleText : colors.light.titleText
-                              }`}
-                            >
-                              Equipo
-                            </Label>
-                            <Select value={equipo} onValueChange={setEquipo}>
-                              <SelectTrigger
-                                className={`${
-                                  theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
-                                } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
-                                  theme === "dark" ? colors.dark.inputText : colors.light.inputText
-                                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                              >
-                                <SelectValue placeholder="Selecciona un equipo" />
-                              </SelectTrigger>
-                              <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
-                                {equipmentList.map((equipment) => (
-                                  <SelectItem
-                                    key={equipment.id}
-                                    value={equipment.id}
-                                    disabled={equipment.fueraDeServicio || equipment.enUso}
-                                    className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
-                                  >
-                                    {equipment.id}
-                                    {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
-                                    {equipment.enUso ? " (En uso)" : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
                         </>
                       )}
+
+                      {/* Botón de registro de asistencia */}
+                      <Button
+                        type="submit"
+                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
+                          theme === "dark" ? colors.dark.buttonPrimary : colors.light.buttonPrimary
+                        } transition-all duration-300 ${!(isClassStarted || isGuestClassStarted) ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={!(isClassStarted || isGuestClassStarted)}
+                      >
+                        {!(isClassStarted || isGuestClassStarted) ? (
+                          "No hay clases iniciadas"
+                        ) : (
+                          <>
+                            Registrar Asistencia
+                            <ChevronRight className="w-5 h-5" />
+                          </>
+                        )}
+                      </Button>
                     </form>
                   </TabsContent>
 
@@ -1247,24 +1269,54 @@ Hora de inicio: ${data.HoraInicio}`,
                     <form onSubmit={handleSubmit} className="space-y-5">
                       <div className="space-y-3">
                         <Label
+                          htmlFor="userType"
+                          className={`text-sm sm:text-base font-medium ${
+                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
+                          }`}
+                        >
+                          Tipo de Usuario
+                        </Label>
+                        <Select
+                          value={userType}
+                          onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}
+                        >
+                          <SelectTrigger
+                            className={`${
+                              theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
+                            } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
+                              theme === "dark" ? colors.dark.inputText : colors.light.inputText
+                            } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                          >
+                            <SelectValue placeholder="Selecciona tipo de usuario" />
+                          </SelectTrigger>
+                          <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
+                            <SelectItem value="maestro">Maestro</SelectItem>
+                            <SelectItem value="laboratorista">Laboratorista</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label
                           htmlFor="userMatricula"
                           className={`text-sm sm:text-base font-medium ${
                             theme === "dark" ? colors.dark.titleText : colors.light.titleText
                           }`}
                         >
-                          Matrícula
+                          {userType === "maestro" ? "Número de Empleado" : "ID de Laboratorista"}
                         </Label>
                         <Input
                           id="userMatricula"
                           type="text"
                           value={userMatricula}
-                          onChange={(e) => setUserMatricula(e.target.value)}
-                          placeholder="Ingresa tu matrícula"
+                          onChange={(e) => handleNumberInput(e, setUserMatricula)}
+                          placeholder={`Ingresa tu ${userType === "maestro" ? "número de empleado" : "ID de laboratorista"}`}
                           className={`${
                             theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
                           } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
                             theme === "dark" ? colors.dark.inputText : colors.light.inputText
                           } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                          maxLength={8}
                           required
                         />
                       </div>
@@ -1293,43 +1345,100 @@ Hora de inicio: ${data.HoraInicio}`,
                         />
                       </div>
 
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="userType"
-                          className={`text-sm sm:text-base font-medium ${
-                            theme === "dark" ? colors.dark.titleText : colors.light.titleText
-                          }`}
-                        >
-                          Tipo de Usuario
-                        </Label>
-                        <Select value={userType} onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}>
-                          <SelectTrigger
-                            className={`${
-                              theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
-                            } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
-                              theme === "dark" ? colors.dark.inputText : colors.light.inputText
-                            } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                          >
-                            <SelectValue placeholder="Selecciona un tipo de usuario" />
-                          </SelectTrigger>
-                          <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
-                            <SelectItem value="maestro">Maestro</SelectItem>
-                            <SelectItem value="laboratorista">Laboratorista</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <Button type="submit" className="w-full">
+                      <Button
+                        type="submit"
+                        className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
+                          theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
+                        } transition-all duration-300`}
+                      >
                         Iniciar Sesión
+                        <ChevronRight className="w-5 h-5" />
                       </Button>
                     </form>
                   </TabsContent>
                 </Tabs>
               </CardContent>
+
+              <CardFooter className={`p-4 ${theme === "dark" ? "bg-[#153731]" : "bg-[#f0fff4]"} text-center text-sm`}>
+                <p className={`w-full ${theme === "dark" ? "text-gray-300" : "text-[#1C4A3F]/70"}`}>
+                  Instituto Tecnológico Superior de Puerto Peñasco © {new Date().getFullYear()}
+                </p>
+              </CardFooter>
             </motion.div>
           </motion.div>
         </AnimatePresence>
       </Card>
+
+      <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
+        <DialogContent
+          className={`sm:max-w-md ${
+            theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"
+          } border-none shadow-lg rounded-2xl`}
+        >
+          <DialogHeader>
+            <DialogTitle className={`text-center text-xl ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}>
+              Acceso Administrador
+            </DialogTitle>
+            <DialogDescription className={`text-center ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+              Ingresa tus credenciales de administrador
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdminLogin} className="space-y-5">
+            <div className="space-y-3">
+              <Label
+                htmlFor="adminEmail"
+                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
+              >
+                Matrícula o Correo Electrónico
+              </Label>
+              <Input
+                id="adminEmail"
+                type="text"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="Ingresa tu matrícula o correo"
+                className={`${
+                  theme === "dark"
+                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
+                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
+                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label
+                htmlFor="adminPassword"
+                className={`text-sm sm:text-base font-medium ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}
+              >
+                Contraseña
+              </Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Ingresa tu contraseña"
+                className={`${
+                  theme === "dark"
+                    ? "bg-[#153731] border-[#1BB827]/30 text-white"
+                    : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
+                } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium ${
+                theme === "dark" ? colors.dark.buttonSecondary : colors.light.buttonSecondary
+              } transition-all duration-300`}
+            >
+              Iniciar Sesión
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
