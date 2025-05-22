@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   writeBatch,
   getDoc,
+  getDocs,
 } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card"
@@ -175,6 +176,44 @@ export default function ListaAsistenciasInvitado() {
   const [horaFin, setHoraFin] = useState<string | null>(null)
   const [claseInfo, setClaseInfo] = useState<any>(null)
 
+  // Función para verificar si hay una clase activa y recuperar su información
+  const verificarClaseActiva = useCallback(async () => {
+    try {
+      const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
+      const estadoDoc = await getDoc(estadoRef)
+
+      if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
+        // Hay una clase activa, recuperar la información
+        const estadoData = estadoDoc.data()
+
+        // Actualizar el estado de clase iniciada
+        setClaseIniciada(true)
+        setHoraInicio(estadoData.HoraInicio || null)
+
+        // Si hay información de clase almacenada, usarla
+        const storedClaseInfo = localStorage.getItem("claseInfo")
+        if (storedClaseInfo) {
+          setClaseInfo(JSON.parse(storedClaseInfo))
+        } else {
+          // Si no hay información almacenada, crear un objeto con la información disponible
+          setClaseInfo({
+            nombreCompletoDocente: estadoData.MaestroInvitado || "Docente Invitado",
+            materia: estadoData.Materia || "No especificada",
+            practica: estadoData.Practica || "No especificada",
+            departamento: estadoData.Departamento || "No especificado",
+          })
+        }
+
+        console.log("Se recuperó la información de la clase invitada activa")
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al verificar clase invitada activa:", error)
+      return false
+    }
+  }, [])
+
   useEffect(() => {
     const checkAuth = async () => {
       const storedClaseInfo = localStorage.getItem("claseInfo")
@@ -196,6 +235,9 @@ export default function ListaAsistenciasInvitado() {
         Nombre: parsedClaseInfo.nombreCompletoDocente.split(" ")[0],
         Apellido: parsedClaseInfo.nombreCompletoDocente.split(" ")[1] || "",
       })
+
+      // Verificar si hay una clase activa
+      await verificarClaseActiva()
 
       // Update the query to only get relevant attendance records
       const unsubscribeAsistencias = onSnapshot(collection(db, "AsistenciasInvitado"), (snapshot) => {
@@ -226,7 +268,119 @@ export default function ListaAsistenciasInvitado() {
     }
 
     checkAuth()
-  }, [router])
+  }, [router, verificarClaseActiva])
+
+  // Añadir este efecto para manejar el cierre de la ventana o navegación
+  useEffect(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      // Si hay una clase iniciada, finalizarla automáticamente
+      if (claseIniciada) {
+        // Guardar la información de la clase para usarla en el cierre
+        const claseInfoActual = claseInfo
+        const horaInicioActual = horaInicio
+        const asistenciasActuales = asistencias
+
+        // Finalizar la clase automáticamente
+        const horaActual = new Date().toLocaleTimeString()
+
+        try {
+          const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
+
+          // Guardar en historial
+          const historicalRef = collection(db, "HistoricalAttendance")
+          await addDoc(historicalRef, {
+            practica: claseInfoActual?.practica || "Clase finalizada automáticamente",
+            materia: claseInfoActual?.materia || "No especificada",
+            departamento: claseInfoActual?.departamento || "No especificado",
+            fecha: serverTimestamp(),
+            horaInicio: horaInicioActual,
+            horaFin: horaActual,
+            asistencias: asistenciasActuales,
+            maestroNombre: claseInfoActual?.nombreCompletoDocente || "Docente Invitado",
+            tipoClase: "invitado",
+            finalizadaAutomaticamente: true,
+          })
+
+          // Limpiar el documento "actual"
+          await setDoc(estadoRef, {
+            iniciada: false,
+            horaFin: horaActual,
+            finalizadaAutomaticamente: true,
+          })
+
+          // Guardar información de la clase
+          const classInfoRef = collection(db, "ClassInformation")
+          await addDoc(classInfoRef, {
+            materia: claseInfoActual?.materia || "No especificada",
+            practica: claseInfoActual?.practica || "Clase finalizada automáticamente",
+            departamento: claseInfoActual?.departamento || "No especificado",
+            fecha: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }),
+            totalAsistencias: asistenciasActuales.length,
+            maestroNombre: claseInfoActual?.nombreCompletoDocente || "Docente Invitado",
+            horaInicio: horaInicioActual,
+            horaFin: horaActual,
+            tipoClase: "invitado",
+            finalizadaAutomaticamente: true,
+            alumnos: asistenciasActuales.map((a) => ({
+              id: a.AlumnoId,
+              nombre: a.Nombre,
+              apellido: a.Apellido,
+              equipo: a.Equipo,
+              carrera: a.Carrera || "Externo",
+              grupo: a.Grupo || "Externo",
+              semestre: a.Semestre || "Externo",
+              turno: a.Turno || "Externo",
+            })),
+          })
+
+          // Eliminar todas las asistencias
+          try {
+            const asistenciasSnapshot = await getDocs(collection(db, "AsistenciasInvitado"))
+
+            if (!asistenciasSnapshot.empty) {
+              const batch = writeBatch(db)
+
+              asistenciasSnapshot.docs.forEach((doc) => {
+                batch.delete(doc.ref)
+              })
+
+              await batch.commit()
+              console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`)
+              await logAction(
+                "Finalizar Clase Invitado Automáticamente",
+                `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`,
+              )
+            }
+          } catch (error) {
+            console.error("Error al eliminar asistencias automáticamente:", error)
+            await logAction("Error", `Error al eliminar asistencias automáticamente: ${error}`)
+          }
+
+          // Resetear el estado de los equipos
+          await resetEquiposEnUso()
+
+          // Registrar la acción en el log
+          await logAction(
+            "Finalizar Clase Invitado Automáticamente",
+            `Clase invitada finalizada automáticamente para ${claseInfoActual?.practica || "No especificada"} a las ${horaActual} debido al cierre del navegador.`,
+          )
+
+          // Eliminar la información de clase del localStorage
+          localStorage.removeItem("claseInfo")
+        } catch (error) {
+          console.error("Error al finalizar la clase automáticamente:", error)
+        }
+      }
+    }
+
+    // Registrar el evento beforeunload
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Limpiar el evento cuando el componente se desmonte
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [claseIniciada, claseInfo, horaInicio, asistencias])
 
   useEffect(() => {
     const checkClaseStatus = async () => {
@@ -337,12 +491,47 @@ export default function ListaAsistenciasInvitado() {
           horaFin: horaActual,
         })
 
-        const batch = writeBatch(db)
-        asistencias.forEach((asistencia) => {
-          const asistenciaRef = doc(db, "AsistenciasInvitado", asistencia.id)
-          batch.delete(asistenciaRef)
-        })
-        await batch.commit()
+        // Eliminar todas las asistencias de la colección "AsistenciasInvitado"
+        try {
+          // Primero, obtener todas las asistencias actuales
+          const asistenciasSnapshot = await getDocs(collection(db, "AsistenciasInvitado"))
+
+          if (!asistenciasSnapshot.empty) {
+            const batch = writeBatch(db)
+
+            // Añadir cada documento al batch para eliminación
+            asistenciasSnapshot.docs.forEach((doc) => {
+              const asistenciaRef = doc.ref
+              batch.delete(asistenciaRef)
+            })
+
+            // Ejecutar el batch
+            await batch.commit()
+            console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias invitado`)
+            await logAction(
+              "Finalizar Clase Invitado",
+              `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias invitado`,
+            )
+          } else {
+            console.log("No hay asistencias invitado para eliminar")
+            await logAction("Finalizar Clase Invitado", "No había asistencias invitado para eliminar")
+          }
+        } catch (error) {
+          console.error("Error al eliminar las asistencias invitado:", error)
+          await logAction("Error", `Error al eliminar las asistencias invitado: ${error}`)
+
+          // Intentar eliminar las asistencias una por una como fallback
+          try {
+            for (const asistencia of asistencias) {
+              await deleteDoc(doc(db, "AsistenciasInvitado", asistencia.id))
+            }
+            console.log("Asistencias invitado eliminadas individualmente como fallback")
+            await logAction("Finalizar Clase Invitado", "Asistencias invitado eliminadas individualmente como fallback")
+          } catch (secondError) {
+            console.error("Error en el fallback de eliminación de asistencias invitado:", secondError)
+            await logAction("Error", `Error en el fallback de eliminación de asistencias invitado: ${secondError}`)
+          }
+        }
 
         const classInfoRef = collection(db, "ClassInformation")
         await addDoc(classInfoRef, {
@@ -1051,4 +1240,3 @@ export default function ListaAsistenciasInvitado() {
     </div>
   )
 }
-
