@@ -785,12 +785,6 @@ Hora de inicio: ${data.HoraInicio}`,
       }
 
       console.log("Administrador encontrado por matrícula, verificando contraseña")
-      await swal({
-        title: "Administrador encontrado",
-        text: `Se encontró al administrador ${adminData.Nombre} ${adminData.Apellido}`,
-        icon: "info",
-      })
-
       // Usar bcrypt.compare para comparar la contraseña ingresada con la hasheada
       const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
 
