@@ -749,7 +749,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               ...equipo,
               estadoReparacion: nuevoEstado,
               fechaActualizacionEstado: new Date().toISOString(),
-              comentarioEstado: comentarioEstado.trim() || undefined,
+              ...(comentarioEstado.trim() && { comentarioEstado: comentarioEstado.trim() }),
               ultimaActualizacion: new Date().toISOString(),
             }
           : equipo,
