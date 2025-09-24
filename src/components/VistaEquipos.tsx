@@ -14,13 +14,10 @@ import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { motion, AnimatePresence } from "framer-motion"
 import swal from "sweetalert"
 import { db } from "../pages/panel-laboratorista"
 import { toast } from "../hooks/use-toast"
-import { AlertTriangle, Wrench, CheckCircle2, Activity } from "lucide-react"
 
 interface Equipo {
   id: string
@@ -28,11 +25,6 @@ interface Equipo {
   enUso?: boolean
   ultimaActualizacion?: string
   notas?: string
-  // Nuevos campos para el estado de reparación
-  estadoReparacion?: "reportado" | "en_proceso" | "resuelto"
-  fechaActualizacionEstado?: string
-  comentarioEstado?: string
-  notificacionAdminId?: string // ID de la notificación enviada al admin
 }
 
 const colors = {
@@ -92,28 +84,6 @@ const colors = {
   },
 }
 
-// Configuración de estados de equipos
-const estadosEquipo = {
-  reportado: {
-    icon: <AlertTriangle className="h-3 w-3" />,
-    color: "bg-red-500",
-    label: "Reportado",
-    description: "Problema reportado, pendiente de revisión",
-  },
-  en_proceso: {
-    icon: <Wrench className="h-3 w-3" />,
-    color: "bg-yellow-500",
-    label: "En Proceso",
-    description: "Siendo reparado por el departamento de sistemas",
-  },
-  resuelto: {
-    icon: <CheckCircle2 className="h-3 w-3" />,
-    color: "bg-green-500",
-    label: "Resuelto",
-    description: "Problema solucionado, equipo disponible",
-  },
-}
-
 // Función para crear notificaciones para el administrador
 const crearNotificacionAdmin = async (
   tipo: string,
@@ -123,7 +93,7 @@ const crearNotificacionAdmin = async (
   datos?: any,
 ) => {
   try {
-    const docRef = await addDoc(collection(db, "NotificacionesAdmin"), {
+    await addDoc(collection(db, "NotificacionesAdmin"), {
       tipo,
       titulo,
       mensaje,
@@ -135,28 +105,8 @@ const crearNotificacionAdmin = async (
       estadoEquipo: tipo === "equipo" && datos?.accion === "deshabilitar_equipo" ? "reportado" : undefined,
     })
     console.log("Notificación creada para el administrador:", titulo)
-    return docRef.id // Retornar el ID de la notificación creada
   } catch (error) {
     console.error("Error al crear notificación:", error)
-    return null
-  }
-}
-
-// Función para actualizar el estado de una notificación existente
-const actualizarEstadoNotificacionAdmin = async (
-  notificacionId: string,
-  nuevoEstado: "reportado" | "en_proceso" | "resuelto",
-  comentario?: string,
-) => {
-  try {
-    await updateDoc(doc(db, "NotificacionesAdmin", notificacionId), {
-      estadoEquipo: nuevoEstado,
-      fechaActualizacionEstado: serverTimestamp(),
-      comentarioEstado: comentario || null,
-    })
-    console.log("Estado de notificación actualizado:", notificacionId, nuevoEstado)
-  } catch (error) {
-    console.error("Error al actualizar estado de notificación:", error)
   }
 }
 
@@ -181,12 +131,6 @@ export default function VistaEquipos({
   const [razonDeshabilitacion, setRazonDeshabilitacion] = useState("")
   const [enviandoReporte, setEnviandoReporte] = useState(false)
 
-  // Estados para el diálogo de cambio de estado
-  const [dialogoEstadoAbierto, setDialogoEstadoAbierto] = useState(false)
-  const [equipoParaEstado, setEquipoParaEstado] = useState<Equipo | null>(null)
-  const [nuevoEstado, setNuevoEstado] = useState<"reportado" | "en_proceso" | "resuelto">("reportado")
-  const [comentarioEstado, setComentarioEstado] = useState("")
-
   const modoColor = esModoOscuro ? colors.dark : colors.light
 
   const cargarEquipos = () => {
@@ -206,10 +150,6 @@ export default function VistaEquipos({
               ultimaActualizacion: equipo.ultimaActualizacion || new Date().toISOString(),
               notas: equipo.notas || "",
               enUso: equipo.enUso || false,
-              estadoReparacion: equipo.estadoReparacion || undefined,
-              fechaActualizacionEstado: equipo.fechaActualizacionEstado || undefined,
-              comentarioEstado: equipo.comentarioEstado || undefined,
-              notificacionAdminId: equipo.notificacionAdminId || undefined,
             }))
 
             setEquipos(equiposCompletos)
@@ -222,6 +162,8 @@ export default function VistaEquipos({
           }
         },
         (error) => {
+          console.error("Error al escuchar cambios en equipos:", error)
+          setCargando(false)
           console.error("Error al escuchar cambios en equipos:", error)
           setCargando(false)
           logAction("Error", `Error al escuchar cambios en equipos: ${error}`)
@@ -583,8 +525,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               notas: equipo.notas
                 ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`
                 : `[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`,
-              estadoReparacion: "reportado", // Estado inicial
-              fechaActualizacionEstado: new Date().toISOString(),
             }
           : equipo,
       )
@@ -593,8 +533,10 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         Equipos: equiposActualizados,
       })
 
+      setEquipos(equiposActualizados)
+
       // Crear notificación DETALLADA para el administrador con estado inicial "reportado"
-      const notificacionId = await crearNotificacionAdmin(
+      await crearNotificacionAdmin(
         "equipo",
         `🚨EQUIPO #${equipoADeshabilitar.id} FUERA DE SERVICIO`,
         `URGENTE: El equipo #${equipoADeshabilitar.id} ha sido deshabilitado y requiere atención inmediata del departamento de sistemas. Se ha enviado un reporte automático por correo.`,
@@ -611,26 +553,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
           accion: "deshabilitar_equipo",
         },
       )
-
-      // Actualizar el equipo con el ID de la notificación
-      if (notificacionId) {
-        const equiposConNotificacion = equiposActualizados.map((equipo) =>
-          equipo.id === equipoADeshabilitar.id
-            ? {
-                ...equipo,
-                notificacionAdminId: notificacionId,
-              }
-            : equipo,
-        )
-
-        await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-          Equipos: equiposConNotificacion,
-        })
-
-        setEquipos(equiposConNotificacion)
-      } else {
-        setEquipos(equiposActualizados)
-      }
 
       // Enviar reporte por correo
       await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
@@ -673,9 +595,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               notas: equipo.notas
                 ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`
                 : `[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`,
-              estadoReparacion: "resuelto", // Marcar como resuelto al reactivar
-              fechaActualizacionEstado: new Date().toISOString(),
-              comentarioEstado: "Equipo reactivado y disponible para uso",
             }
           : equipo,
       )
@@ -685,15 +604,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
       })
 
       setEquipos(equiposActualizados)
-
-      // Si hay una notificación asociada, actualizar su estado
-      if (equipoAnterior?.notificacionAdminId) {
-        await actualizarEstadoNotificacionAdmin(
-          equipoAnterior.notificacionAdminId,
-          "resuelto",
-          "Equipo reactivado y disponible para uso",
-        )
-      }
 
       // Crear notificación DETALLADA para el administrador
       await crearNotificacionAdmin(
@@ -727,71 +637,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         icon: "error",
       })
       await logAction("Error", `Error al reactivar el equipo #${id}: ${error}`)
-    }
-  }
-
-  // Función para abrir el diálogo de cambio de estado
-  const abrirDialogoEstado = (equipo: Equipo) => {
-    setEquipoParaEstado(equipo)
-    setNuevoEstado(equipo.estadoReparacion || "reportado")
-    setComentarioEstado(equipo.comentarioEstado || "")
-    setDialogoEstadoAbierto(true)
-  }
-
-  // Función para actualizar el estado de reparación
-  const actualizarEstadoReparacion = async () => {
-    if (!equipoParaEstado) return
-
-    try {
-      const equiposActualizados = equipos.map((equipo) =>
-        equipo.id === equipoParaEstado.id
-          ? {
-              ...equipo,
-              estadoReparacion: nuevoEstado,
-              fechaActualizacionEstado: new Date().toISOString(),
-              ...(comentarioEstado.trim() && { comentarioEstado: comentarioEstado.trim() }),
-              ultimaActualizacion: new Date().toISOString(),
-            }
-          : equipo,
-      )
-
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-        Equipos: equiposActualizados,
-      })
-
-      setEquipos(equiposActualizados)
-
-      // Actualizar la notificación del administrador si existe
-      if (equipoParaEstado.notificacionAdminId) {
-        await actualizarEstadoNotificacionAdmin(
-          equipoParaEstado.notificacionAdminId,
-          nuevoEstado,
-          comentarioEstado.trim() || undefined,
-        )
-      }
-
-      setDialogoEstadoAbierto(false)
-      setEquipoParaEstado(null)
-      setComentarioEstado("")
-
-      await logAction(
-        "Actualizar Estado Reparación",
-        `Estado del equipo #${equipoParaEstado.id} cambiado a "${estadosEquipo[nuevoEstado].label}"`,
-      )
-
-      await swal({
-        title: "¡Estado actualizado!",
-        text: `El estado del equipo #${equipoParaEstado.id} se ha cambiado a "${estadosEquipo[nuevoEstado].label}"`,
-        icon: "success",
-      })
-    } catch (error) {
-      console.error("Error al actualizar estado de reparación:", error)
-      await swal({
-        title: "Error",
-        text: "Ha ocurrido un error al actualizar el estado del equipo.",
-        icon: "error",
-      })
-      await logAction("Error", `Error al actualizar estado del equipo #${equipoParaEstado.id}: ${error}`)
     }
   }
 
@@ -1075,7 +920,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                     <TableHead className="font-semibold">ID</TableHead>
                     <TableHead className="font-semibold">Estado</TableHead>
                     <TableHead className="font-semibold">En Uso</TableHead>
-                    <TableHead className="font-semibold">Estado Reparación</TableHead>
                     <TableHead className="font-semibold">Última Actualización</TableHead>
                     <TableHead className="font-semibold">Notas</TableHead>
                     <TableHead className="font-semibold text-right">Acciones</TableHead>
@@ -1129,25 +973,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                             <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>No</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          {equipo.estadoReparacion ? (
-                            <Badge
-                              variant="outline"
-                              className={`${
-                                equipo.estadoReparacion === "resuelto"
-                                  ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/30"
-                                  : equipo.estadoReparacion === "en_proceso"
-                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/30"
-                                    : "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/30"
-                              }`}
-                            >
-                              {estadosEquipo[equipo.estadoReparacion].icon}
-                              <span className="ml-1">{estadosEquipo[equipo.estadoReparacion].label}</span>
-                            </Badge>
-                          ) : (
-                            <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>-</span>
-                          )}
-                        </TableCell>
                         <TableCell className={esModoOscuro ? "text-gray-300" : "text-gray-700"}>
                           {equipo.ultimaActualizacion ? formatearFecha(equipo.ultimaActualizacion) : "N/A"}
                         </TableCell>
@@ -1190,32 +1015,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-
-                            {/* Botón para cambiar estado de reparación (solo si está fuera de servicio) */}
-                            {equipo.fueraDeServicio && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => abrirDialogoEstado(equipo)}
-                                      className={`${
-                                        esModoOscuro
-                                          ? "bg-blue-600 hover:bg-blue-700 text-white"
-                                          : "bg-blue-600 hover:bg-blue-700 text-white"
-                                      }`}
-                                    >
-                                      <Activity className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Actualizar Estado de Reparación</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-
                             <Button
                               size="sm"
                               variant={equipo.fueraDeServicio ? "default" : "destructive"}
@@ -1411,84 +1210,6 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               )}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Diálogo para cambiar estado de reparación */}
-      <Dialog open={dialogoEstadoAbierto} onOpenChange={setDialogoEstadoAbierto}>
-        <DialogContent className={`${esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-white"} max-w-md`}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Activity className="h-5 w-5" />
-              <span>Actualizar Estado de Reparación</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          {equipoParaEstado && (
-            <div className="space-y-4">
-              <div className={`p-3 rounded-lg ${esModoOscuro ? "bg-[#3a3a3a]" : "bg-gray-50"}`}>
-                <h4 className="font-medium mb-2">Información del Equipo:</h4>
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <span className="font-medium">Equipo:</span> #{equipoParaEstado.id}
-                  </p>
-                  <p>
-                    <span className="font-medium">Estado actual:</span>{" "}
-                    {equipoParaEstado.estadoReparacion
-                      ? estadosEquipo[equipoParaEstado.estadoReparacion].label
-                      : "Sin estado"}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="estado">Nuevo Estado *</Label>
-                <Select value={nuevoEstado} onValueChange={(value: any) => setNuevoEstado(value)}>
-                  <SelectTrigger className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={esModoOscuro ? "bg-[#3a3a3a] text-white" : ""}>
-                    {Object.entries(estadosEquipo).map(([key, config]) => (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center space-x-2">
-                          <div className={`p-1 rounded-full ${config.color} text-white`}>{config.icon}</div>
-                          <div>
-                            <p className="font-medium">{config.label}</p>
-                            <p className="text-xs opacity-70">{config.description}</p>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="comentario">Comentario (opcional)</Label>
-                <Textarea
-                  id="comentario"
-                  value={comentarioEstado}
-                  onChange={(e) => setComentarioEstado(e.target.value)}
-                  placeholder="Agregar detalles sobre el progreso de la reparación..."
-                  className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}
-                  rows={3}
-                />
-              </div>
-
-              <div className="flex space-x-2">
-                <Button onClick={() => setDialogoEstadoAbierto(false)} variant="outline" className="flex-1">
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={actualizarEstadoReparacion}
-                  className={`flex-1 ${esModoOscuro ? colors.dark.buttonPrimary : colors.light.buttonPrimary}`}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Actualizar Estado
-                </Button>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>
