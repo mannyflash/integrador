@@ -49,11 +49,13 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { logAction } from "../lib/logging"
 import * as XLSX from "xlsx"
 import { verificarYLimpiarAsistenciasHuerfanas } from "../lib/cleanup"
+
 declare module "jspdf" {
   interface jsPDF {
     autoTable: (options: any) => jsPDF
   }
 }
+
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
   authDomain: "integrador-7b39d.firebaseapp.com",
@@ -63,8 +65,34 @@ const firebaseConfig = {
   appId: "1:780966021686:web:485712fb7509339c6ae697",
   measurementId: "G-FGB03PFM7Z",
 }
+
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
+
+// Función para crear notificaciones para el administrador
+const crearNotificacionAdmin = async (
+  tipo: string,
+  titulo: string,
+  mensaje: string,
+  prioridad: string,
+  datos?: any,
+) => {
+  try {
+    await addDoc(collection(db, "NotificacionesAdmin"), {
+      tipo,
+      titulo,
+      mensaje,
+      fecha: serverTimestamp(),
+      leida: false,
+      prioridad,
+      datos: datos || null,
+    })
+    console.log("Notificación creada para el administrador:", titulo)
+  } catch (error) {
+    console.error("Error al crear notificación:", error)
+  }
+}
+
 interface Practica {
   id: string
   Titulo: string
@@ -189,6 +217,58 @@ export default function ListaAsistencias() {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [horaInicio, setHoraInicio] = useState<string | null>(null)
   const [horaFin, setHoraFin] = useState<string | null>(null)
+
+  // Función para verificar si hay una clase activa y recuperar su información
+  const verificarClaseActiva = useCallback(async () => {
+    try {
+      const estadoRef = doc(db, "EstadoClase", "actual")
+      const estadoDoc = await getDoc(estadoRef)
+
+      if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
+        // Hay una clase activa, recuperar la información
+        const estadoData = estadoDoc.data()
+
+        // Actualizar el estado de clase iniciada
+        setClaseIniciada(true)
+        setHoraInicio(estadoData.horaInicio || null)
+
+        // Recuperar información de la materia
+        if (estadoData.materiaId) {
+          setSelectedMateriaId(estadoData.materiaId)
+
+          // Cargar las prácticas de esta materia
+          const practicasSnapshot = await getDocs(collection(db, "Materias", estadoData.materiaId, "Practicas"))
+          const practicasData = practicasSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<Practica, "id">),
+          }))
+          setPracticas(practicasData)
+
+          // Encontrar la práctica seleccionada
+          if (estadoData.practica) {
+            const practicaDoc = await getDoc(
+              doc(db, "Materias", estadoData.materiaId, "Practicas", estadoData.practica),
+            )
+            if (practicaDoc.exists()) {
+              const practicaData = {
+                id: practicaDoc.id,
+                ...(practicaDoc.data() as Omit<Practica, "id">),
+              }
+              setSelectedPractica(practicaData)
+            }
+          }
+        }
+
+        console.log("Se recuperó la información de la clase activa")
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al verificar clase activa:", error)
+      return false
+    }
+  }, [])
+
   useEffect(() => {
     const checkAuth = async () => {
       const storedMaestroId = localStorage.getItem("maestroId")
@@ -206,6 +286,10 @@ export default function ListaAsistencias() {
       verificarYLimpiarAsistenciasHuerfanas()
         .then(() => console.log("Verificación de asistencias huérfanas completada"))
         .catch((error) => console.error("Error en verificación de asistencias huérfanas:", error))
+
+      // Verificar si hay una clase activa
+      await verificarClaseActiva()
+
       fetchMaterias(storedMaestroId)
       fetchMaestroInfo(storedMaestroId)
       const unsubscribeAsistencias = onSnapshot(query(collection(db, "Asistencias")), (snapshot) => {
@@ -227,71 +311,9 @@ export default function ListaAsistencias() {
       }
     }
     checkAuth()
-  }, [router])
+  }, [router, verificarClaseActiva])
 
-  // Añadir esta función después del useEffect que verifica la autenticación
-  useEffect(() => {
-    const checkActiveClass = async () => {
-      try {
-        // Verificar si hay una clase activa en Firestore
-        const estadoRef = doc(db, "EstadoClase", "actual")
-        const estadoDoc = await getDoc(estadoRef)
-
-        if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
-          // Hay una clase activa, recuperar la información
-          const estadoData = estadoDoc.data()
-
-          // Establecer el estado de clase iniciada
-          setClaseIniciada(true)
-          setHoraInicio(estadoData.horaInicio || null)
-
-          // Recuperar información de la materia
-          if (estadoData.materiaId) {
-            setSelectedMateriaId(estadoData.materiaId)
-
-            // Cargar las prácticas de esta materia
-            try {
-              const practicasSnapshot = await getDocs(collection(db, "Materias", estadoData.materiaId, "Practicas"))
-              const practicasData = practicasSnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...(doc.data() as Omit<Practica, "id">),
-              }))
-              setPracticas(practicasData)
-
-              // Encontrar la práctica activa
-              if (estadoData.practica) {
-                const practicaActiva = practicasData.find((p) => p.id === estadoData.practica)
-                if (practicaActiva) {
-                  setSelectedPractica(practicaActiva)
-                } else if (estadoData.practicaTitulo) {
-                  // Si no encontramos la práctica por ID pero tenemos los datos, crear un objeto con la información disponible
-                  setSelectedPractica({
-                    id: estadoData.practica,
-                    Titulo: estadoData.practicaTitulo,
-                    Descripcion: estadoData.practicaDescripcion || "",
-                    Duracion: estadoData.practicaDuracion || "",
-                    fecha: estadoData.practicaFecha || "",
-                  })
-                }
-              }
-            } catch (error) {
-              console.error("Error al cargar prácticas de la clase activa:", error)
-            }
-          }
-
-          console.log("Se recuperó información de una clase activa")
-        }
-      } catch (error) {
-        console.error("Error al verificar clase activa:", error)
-      }
-    }
-
-    // Solo ejecutar si hay un maestroId (usuario autenticado)
-    if (maestroId) {
-      checkActiveClass()
-    }
-  }, [maestroId])
-
+  // Añadir este efecto después del useEffect que verifica la autenticación
   useEffect(() => {
     const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
       // Si hay una clase iniciada, finalizarla automáticamente
@@ -380,7 +402,7 @@ export default function ListaAsistencias() {
             await logAction("Error", `Error al eliminar asistencias automáticamente: ${error}`)
           }
 
-          // Resetear el estado de los equipos
+          // Resetear el estado "enUso" de todos los equipos
           const equipoRef = doc(db, "Numero de equipos", "equipos")
           const equipoDoc = await getDoc(equipoRef)
 
@@ -393,6 +415,34 @@ export default function ListaAsistencias() {
 
             await setDoc(equipoRef, { Equipos: equiposActualizados })
           }
+
+          // Crear notificación para el administrador sobre clase finalizada automáticamente
+          await crearNotificacionAdmin(
+            "asistencia",
+            "⚠️ Clase Finalizada Automáticamente",
+            `La clase de ${practicaActual?.Titulo || "No especificada"} del maestro ${maestroInfoActual?.Nombre} ${maestroInfoActual?.Apellido} fue finalizada automáticamente debido al cierre del navegador.`,
+            "media",
+            {
+              maestroNombre: `${maestroInfoActual?.Nombre} ${maestroInfoActual?.Apellido}`,
+              maestroId: maestroActual,
+              practica: practicaActual?.Titulo || "No especificada",
+              practicaDescripcion: practicaActual?.Descripcion || "Sin descripción",
+              materia: materiasActuales.find((m) => m.id === materiaActual)?.nombre || "No especificada",
+              materiaId: materiaActual,
+              totalAsistencias: asistenciasActuales.length,
+              horaInicio: horaInicioActual,
+              horaFin: horaActual,
+              duracionClase: horaInicioActual ? `${horaInicioActual} - ${horaActual}` : "No disponible",
+              fecha: new Date().toLocaleDateString("es-MX"),
+              finalizadaAutomaticamente: true,
+              razonFinalizacion: "Cierre del navegador",
+              tipoClase: "Regular",
+              estado: "Finalizada Automáticamente",
+              equiposLiberados: true,
+              historialGuardado: true,
+              accion: "finalizar_automaticamente",
+            },
+          )
 
           // Registrar la acción en el log
           await logAction(
@@ -437,6 +487,7 @@ export default function ListaAsistencias() {
       })
     }
   }
+
   const fetchPracticas = useCallback(async () => {
     if (selectedMateriaId) {
       try {
@@ -446,13 +497,12 @@ export default function ListaAsistencias() {
           id: doc.id,
           ...(doc.data() as Omit<Practica, "id">),
         }))
-        setPracticas(practicasData)
 
-        // Solo resetear la práctica seleccionada si no hay una clase activa
-        if (!claseIniciada) {
-          setSelectedPractica(null)
+        // Solo actualizar las prácticas si no hay una práctica seleccionada
+        // o si la práctica seleccionada no está en la lista nueva
+        if (!selectedPractica || !practicasData.some((p) => p.id === selectedPractica.id)) {
+          setPracticas(practicasData)
         }
-
         console.log("Prácticas actualizadas:", practicasData)
       } catch (error) {
         console.error("Error fetching practicas:", error)
@@ -463,7 +513,8 @@ export default function ListaAsistencias() {
         })
       }
     }
-  }, [selectedMateriaId, claseIniciada])
+  }, [selectedMateriaId, selectedPractica])
+
   useEffect(() => {
     if (selectedMateriaId) {
       fetchPracticas()
@@ -480,17 +531,7 @@ export default function ListaAsistencias() {
       console.error("Error fetching maestro info:", error)
     }
   }
-  const handleMateriaChange = async (materiaId: string) => {
-    // Si hay una clase activa, mostrar una advertencia y no permitir el cambio
-    if (claseIniciada) {
-      await swal({
-        title: "No se puede cambiar la materia",
-        text: "No puedes cambiar la materia mientras una clase está en progreso. Por favor, finaliza la clase primero.",
-        icon: "warning",
-      })
-      return
-    }
-
+  const handleMateriaChange = (materiaId: string) => {
     // Si es la misma materia que ya está seleccionada, no hagas nada
     if (materiaId === selectedMateriaId) {
       return
@@ -572,6 +613,30 @@ export default function ListaAsistencias() {
         })
 
         setHoraInicio(horaActual)
+
+        // Crear notificación DETALLADA para el administrador
+        await crearNotificacionAdmin(
+          "asistencia",
+          `📚 Clase Regular Iniciada: "${selectedPractica.Titulo}"`,
+          `El maestro ${maestroInfo?.Nombre} ${maestroInfo?.Apellido} ha iniciado una clase regular. Los estudiantes pueden registrar su asistencia desde la página principal.`,
+          "baja",
+          {
+            maestroNombre: `${maestroInfo?.Nombre} ${maestroInfo?.Apellido}`,
+            maestroId: maestroId,
+            practica: selectedPractica.Titulo,
+            practicaDescripcion: selectedPractica.Descripcion,
+            practicaDuracion: selectedPractica.Duracion,
+            materia: materias.find((m) => m.id === selectedMateriaId)?.nombre,
+            materiaId: selectedMateriaId,
+            horaInicio: horaActual,
+            fecha: new Date().toLocaleDateString("es-MX"),
+            tipoClase: "Regular",
+            estado: "Iniciada",
+            ubicacion: "Laboratorio de Cómputo",
+            accion: "iniciar_clase_regular",
+          },
+        )
+
         await swal({
           title: "Clase iniciada",
           text: `Los alumnos ahora pueden registrar su asistencia para la practica: ${selectedPractica.Titulo}. Hora de inicio: ${horaActual}`,
@@ -672,6 +737,35 @@ export default function ListaAsistencias() {
 
         // Resetear el estado "enUso" de todos los equipos cuando finaliza la clase
         await resetEquiposEnUso()
+
+        // Calcular duración de la clase
+        const duracionClase = horaInicio && horaActual ? `${horaInicio} - ${horaActual}` : "No disponible"
+
+        // Crear notificación DETALLADA para el administrador sobre clase finalizada
+        await crearNotificacionAdmin(
+          "asistencia",
+          `✅ Clase Regular Finalizada: "${selectedPractica.Titulo}"`,
+          `La clase "${selectedPractica.Titulo}" del maestro ${maestroInfo?.Nombre} ${maestroInfo?.Apellido} ha finalizado exitosamente. Se han registrado ${asistencias.length} asistencias.`,
+          "baja",
+          {
+            maestroNombre: `${maestroInfo?.Nombre} ${maestroInfo?.Apellido}`,
+            maestroId: maestroId,
+            practica: selectedPractica.Titulo,
+            practicaDescripcion: selectedPractica.Descripcion,
+            materia: materias.find((m) => m.id === selectedMateriaId)?.nombre,
+            materiaId: selectedMateriaId,
+            totalAsistencias: asistencias.length,
+            horaInicio: horaInicio,
+            horaFin: horaActual,
+            duracionClase: duracionClase,
+            fecha: new Date().toLocaleDateString("es-MX"),
+            tipoClase: "Regular",
+            estado: "Finalizada",
+            equiposLiberados: true,
+            historialGuardado: true,
+            accion: "finalizar_clase_regular",
+          },
+        )
 
         // Limpiar campos y restablecer el estado
         limpiarCampos()

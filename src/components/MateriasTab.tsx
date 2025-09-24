@@ -19,6 +19,7 @@ import {
   Plus,
   Save,
   Ban,
+  Calendar,
 } from "lucide-react"
 import {
   collection,
@@ -39,12 +40,19 @@ interface Materia {
   NombreMateria: string
   MaestroID: string
   Semestre: string
+  CicloEscolar: string
   [key: string]: any
 }
 
 interface Docente {
   ID: string
   NombreCompleto: string
+}
+
+interface CicloEscolar {
+  valor: string
+  etiqueta: string
+  activo: boolean
 }
 
 export function MateriasTab({
@@ -59,16 +67,80 @@ export function MateriasTab({
     NombreMateria: "",
     MaestroID: "",
     Semestre: "",
+    CicloEscolar: "",
   })
   const [editando, setEditando] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [semestreFilter, setSemestreFilter] = useState("todos")
+  const [añoFilter, setAñoFilter] = useState("todos")
+  const [periodoFilter, setPeriodoFilter] = useState("todos")
+
+  // Función para generar los dos ciclos escolares del año actual
+  const generarCiclosEscolares = (): CicloEscolar[] => {
+    const fechaActual = new Date()
+    const añoActual = fechaActual.getFullYear()
+    const mesActual = fechaActual.getMonth() + 1 // getMonth() devuelve 0-11
+
+    const ciclos: CicloEscolar[] = []
+
+    // Primer Semestre: Agosto-Diciembre del año escolar actual
+    const añoEscolarInicio = mesActual >= 8 ? añoActual : añoActual - 1
+    const añoEscolarFin = añoEscolarInicio + 1
+
+    ciclos.push({
+      valor: `${añoEscolarInicio}-${añoEscolarFin}-1`,
+      etiqueta: `Ciclo escolar ${añoEscolarInicio}-${añoEscolarFin} (agosto-diciembre)`,
+      activo: mesActual >= 8 && mesActual <= 12,
+    })
+
+    // Segundo Semestre: Enero-Julio del año escolar actual
+    ciclos.push({
+      valor: `${añoEscolarInicio}-${añoEscolarFin}-2`,
+      etiqueta: `Ciclo escolar ${añoEscolarInicio}-${añoEscolarFin} (enero-julio)`,
+      activo: mesActual >= 1 && mesActual <= 7,
+    })
+
+    return ciclos
+  }
+
+  // Función para obtener años únicos de las materias existentes
+  const obtenerAñosDisponibles = (): string[] => {
+    const años = new Set<string>()
+
+    // Agregar años de materias existentes
+    materias.forEach((materia) => {
+      if (materia.CicloEscolar) {
+        const match = materia.CicloEscolar.match(/(\d{4})-(\d{4})/)
+        if (match) {
+          años.add(`${match[1]}-${match[2]}`)
+        }
+      }
+    })
+
+    // Agregar año actual
+    const fechaActual = new Date()
+    const añoActual = fechaActual.getFullYear()
+    const mesActual = fechaActual.getMonth() + 1
+    const añoEscolarInicio = mesActual >= 8 ? añoActual : añoActual - 1
+    const añoEscolarFin = añoEscolarInicio + 1
+    años.add(`${añoEscolarInicio}-${añoEscolarFin}`)
+
+    return Array.from(años).sort((a, b) => b.localeCompare(a)) // Más reciente primero
+  }
+
+  const ciclosEscolares = generarCiclosEscolares()
+  const cicloActual = ciclosEscolares.find((ciclo) => ciclo.activo)?.valor || ciclosEscolares[0]?.valor || ""
+  const añosDisponibles = obtenerAñosDisponibles()
 
   useEffect(() => {
     cargarMaterias()
     cargarDocentes()
-  }, [])
+    // Establecer el ciclo escolar actual por defecto
+    if (!datosMateria.CicloEscolar && cicloActual) {
+      setDatosMateria((prev) => ({ ...prev, CicloEscolar: cicloActual }))
+    }
+  }, [cicloActual])
 
   const cargarMaterias = async () => {
     setIsLoading(true)
@@ -80,6 +152,7 @@ export function MateriasTab({
         NombreMateria: doc.data().NombreMateria || "",
         MaestroID: doc.data().MaestroID || "",
         Semestre: doc.data().Semestre || "",
+        CicloEscolar: doc.data().CicloEscolar || "",
         ...doc.data(),
       })) as Materia[]
       setMaterias(materiasData)
@@ -117,32 +190,36 @@ export function MateriasTab({
   const manejarEnvio = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     try {
-      const { ID, NombreMateria, ...restoDatosMateria } = datosMateria
+      const { ID, NombreMateria, CicloEscolar, ...restoDatosMateria } = datosMateria
 
       if (!editando) {
-        // Check if the subject name already exists when adding a new subject
+        // Check if the subject name already exists in the same school cycle when adding a new subject
         const materiasRef = collection(db, "Materias")
-        const nombreMateriaQuery = query(materiasRef, where("NombreMateria", "==", NombreMateria))
+        const nombreMateriaQuery = query(
+          materiasRef,
+          where("NombreMateria", "==", NombreMateria),
+          where("CicloEscolar", "==", CicloEscolar),
+        )
         const nombreMateriaQuerySnapshot = await getDocs(nombreMateriaQuery)
 
         if (!nombreMateriaQuerySnapshot.empty) {
           await Swal.fire({
             title: "Error",
-            text: "Ya existe una materia con este nombre. Por favor, use un nombre diferente.",
+            text: "Ya existe una materia con este nombre en el mismo ciclo escolar. Por favor, use un nombre diferente.",
             icon: "error",
           })
           return
         }
 
         const nuevoID = doc(collection(db, "Materias")).id
-        await setDoc(doc(db, "Materias", nuevoID), { NombreMateria, ...restoDatosMateria })
+        await setDoc(doc(db, "Materias", nuevoID), { NombreMateria, CicloEscolar, ...restoDatosMateria })
         await Swal.fire({
           title: "¡Éxito!",
           text: "Materia agregada correctamente",
           icon: "success",
         })
       } else {
-        await updateDoc(doc(db, "Materias", ID), { NombreMateria, ...restoDatosMateria })
+        await updateDoc(doc(db, "Materias", ID), { NombreMateria, CicloEscolar, ...restoDatosMateria })
         await Swal.fire({
           title: "¡Éxito!",
           text: "Materia actualizada correctamente",
@@ -150,7 +227,7 @@ export function MateriasTab({
         })
         setEditando(false)
       }
-      setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "" })
+      setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual })
       cargarMaterias()
     } catch (error) {
       console.error("Error al agregar/actualizar materia:", error)
@@ -192,7 +269,7 @@ export function MateriasTab({
   }
 
   const cancelarEdicion = () => {
-    setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "" })
+    setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual })
     setEditando(false)
   }
 
@@ -203,13 +280,30 @@ export function MateriasTab({
         (docentes.find((d) => d.ID === materia.MaestroID)?.NombreCompleto || "")
           .toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
-        materia.Semestre.includes(searchTerm)
+        materia.Semestre.includes(searchTerm) ||
+        materia.CicloEscolar.includes(searchTerm)
 
       const matchesSemestre = semestreFilter === "todos" || materia.Semestre === semestreFilter
 
-      return matchesSearch && matchesSemestre
+      // Filtro por año
+      let matchesAño = true
+      if (añoFilter !== "todos") {
+        matchesAño = materia.CicloEscolar.includes(añoFilter)
+      }
+
+      // Filtro por período
+      let matchesPeriodo = true
+      if (periodoFilter !== "todos") {
+        if (periodoFilter === "agosto-diciembre") {
+          matchesPeriodo = materia.CicloEscolar.endsWith("-1")
+        } else if (periodoFilter === "enero-julio") {
+          matchesPeriodo = materia.CicloEscolar.endsWith("-2")
+        }
+      }
+
+      return matchesSearch && matchesSemestre && matchesAño && matchesPeriodo
     })
-  }, [materias, searchTerm, semestreFilter, docentes])
+  }, [materias, searchTerm, semestreFilter, añoFilter, periodoFilter, docentes])
 
   const headerBgClass = isDarkMode
     ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]"
@@ -252,6 +346,42 @@ export function MateriasTab({
                 />
               </div>
             </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="cicloEscolar"
+                className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+              >
+                <Calendar className="h-4 w-4" /> Ciclo Escolar
+              </Label>
+              <Select
+                value={datosMateria.CicloEscolar}
+                onValueChange={(value) => setDatosMateria({ ...datosMateria, CicloEscolar: value })}
+              >
+                <SelectTrigger
+                  id="cicloEscolar"
+                  className={`${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"} pl-10`}
+                >
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <SelectValue placeholder="Selecciona un ciclo escolar" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  {ciclosEscolares.map((ciclo) => (
+                    <SelectItem key={ciclo.valor} value={ciclo.valor}>
+                      <div className="flex items-center gap-2">
+                        {ciclo.etiqueta}
+                        {ciclo.activo && (
+                          <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full">Actual</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label
                 htmlFor="maestroMateria"
@@ -324,7 +454,7 @@ export function MateriasTab({
               </Button>
 
               {editando && (
-                <Button type="button" onClick={cancelarEdicion} variant="outline" className="gap-2">
+                <Button type="button" onClick={cancelarEdicion} variant="outline" className="gap-2 bg-transparent">
                   <Ban className="h-4 w-4" />
                   Cancelar
                 </Button>
@@ -355,37 +485,76 @@ export function MateriasTab({
               <span className="sr-only">Actualizar</span>
             </Button>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 mt-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar materias..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white/10 text-white border-white/20 placeholder:text-gray-300"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+          <div className="flex flex-col gap-2 mt-2">
+            {/* Primera fila de filtros */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar materias..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white/10 text-white border-white/20 placeholder:text-gray-300"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Select value={semestreFilter} onValueChange={setSemestreFilter}>
+                <SelectTrigger className="w-[180px] bg-white/10 text-white border-white/20">
+                  <SelectValue placeholder="Filtrar por semestre" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todos">Todos los semestres</SelectItem>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((semestre) => (
+                    <SelectItem key={semestre} value={semestre.toString()}>
+                      {semestre}º Semestre
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={semestreFilter} onValueChange={setSemestreFilter}>
-              <SelectTrigger className="w-[180px] bg-white/10 text-white border-white/20">
-                <SelectValue placeholder="Filtrar por semestre" />
-              </SelectTrigger>
-              <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
-                <SelectItem value="todos">Todos los semestres</SelectItem>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((semestre) => (
-                  <SelectItem key={semestre} value={semestre.toString()}>
-                    {semestre}º Semestre
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+            {/* Segunda fila de filtros - Año y Período */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Select
+                value={añoFilter}
+                onValueChange={(value) => {
+                  setAñoFilter(value)
+                  if (value === "todos") {
+                    setPeriodoFilter("todos")
+                  }
+                }}
+              >
+                <SelectTrigger className="flex-1 bg-white/10 text-white border-white/20">
+                  <SelectValue placeholder="Filtrar por año escolar" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todos">Todos los años</SelectItem>
+                  {añosDisponibles.map((año) => (
+                    <SelectItem key={año} value={año}>
+                      {año}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={periodoFilter} onValueChange={setPeriodoFilter} disabled={añoFilter === "todos"}>
+                <SelectTrigger className="flex-1 bg-white/10 text-white border-white/20 disabled:opacity-50">
+                  <SelectValue placeholder="Filtrar por período" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todos">Todos los períodos</SelectItem>
+                  <SelectItem value="agosto-diciembre">Agosto - Diciembre</SelectItem>
+                  <SelectItem value="enero-julio">Enero - Julio</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -405,6 +574,7 @@ export function MateriasTab({
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Nombre</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Maestro</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Semestre</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Ciclo Escolar</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -428,6 +598,17 @@ export function MateriasTab({
                         >
                           {materia.Semestre}º Semestre
                         </span>
+                      </TableCell>
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {ciclosEscolares.find((c) => c.valor === materia.CicloEscolar)?.etiqueta ||
+                              materia.CicloEscolar}
+                          </span>
+                          {ciclosEscolares.find((c) => c.valor === materia.CicloEscolar)?.activo && (
+                            <span className="text-xs text-green-500 font-medium">Actual</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2 opacity-70 group-hover:opacity-100 transition-opacity">
@@ -469,18 +650,20 @@ export function MateriasTab({
               <BookOpen className="h-12 w-12 mb-2 opacity-20" />
               <h3 className="text-lg font-medium mb-1">No hay materias</h3>
               <p className="text-sm max-w-md">
-                {searchTerm || semestreFilter !== "todos"
+                {searchTerm || semestreFilter !== "todos" || añoFilter !== "todos" || periodoFilter !== "todos"
                   ? "No se encontraron materias con los filtros aplicados. Intenta con otros criterios de búsqueda."
                   : "No hay materias registradas. Agrega una nueva materia usando el formulario."}
               </p>
-              {(searchTerm || semestreFilter !== "todos") && (
+              {(searchTerm || semestreFilter !== "todos" || añoFilter !== "todos" || periodoFilter !== "todos") && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-4"
+                  className="mt-4 bg-transparent"
                   onClick={() => {
                     setSearchTerm("")
                     setSemestreFilter("todos")
+                    setAñoFilter("todos")
+                    setPeriodoFilter("todos")
                   }}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />

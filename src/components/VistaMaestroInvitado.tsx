@@ -84,6 +84,30 @@ interface VistaMaestroInvitadoProps {
   logAction: (action: string, details: string) => Promise<void>
 }
 
+// Función para crear notificaciones para el administrador
+const crearNotificacionAdmin = async (
+  tipo: string,
+  titulo: string,
+  mensaje: string,
+  prioridad: string,
+  datos?: any,
+) => {
+  try {
+    await addDoc(collection(db, "NotificacionesAdmin"), {
+      tipo,
+      titulo,
+      mensaje,
+      fecha: serverTimestamp(),
+      leida: false,
+      prioridad,
+      datos: datos || null,
+    })
+    console.log("Notificación creada para el administrador:", titulo)
+  } catch (error) {
+    console.error("Error al crear notificación:", error)
+  }
+}
+
 // Definición de colores para mantener consistencia
 const colors = {
   light: {
@@ -321,6 +345,28 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
         }),
       )
 
+      // Crear notificación DETALLADA para el administrador
+      await crearNotificacionAdmin(
+        "maestro_invitado",
+        `👨‍🏫 Clase de Maestro Invitado Iniciada`,
+        `El maestro invitado ${nombreMaestroSeleccionado} del departamento de ${departamento} ha iniciado una clase especial. Los estudiantes pueden registrar su asistencia.`,
+        "media",
+        {
+          maestroNombre: nombreMaestroSeleccionado,
+          maestroId: maestroSeleccionado,
+          departamento: departamento,
+          materia: materia,
+          practica: practica,
+          grupo: grupo,
+          horaInicio: new Date().toLocaleTimeString(),
+          fecha: new Date().toLocaleDateString("es-MX"),
+          tipoClase: "Maestro Invitado",
+          estado: "Iniciada",
+          ubicacion: "Laboratorio de Cómputo",
+          accion: "iniciar_clase_invitado",
+        },
+      )
+
       toast.success("Clase iniciada con éxito")
       await logAction("Iniciar Clase", `Clase iniciada por ${nombreMaestroSeleccionado} para ${materia} - ${practica}`)
       router.push("/lista-asistenciasInvitado")
@@ -361,6 +407,29 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
         resultados: resultadosEvento,
         createdAt: serverTimestamp(),
       })
+
+      // Crear notificación DETALLADA para el administrador
+      await crearNotificacionAdmin(
+        "evento",
+        `🎯 Nuevo Evento Registrado: "${nombreEvento}"`,
+        `Se ha registrado un nuevo evento en el laboratorio. El evento está programado y requiere seguimiento para su correcta ejecución.`,
+        "media",
+        {
+          nombreEvento: nombreEvento,
+          tipoEvento: tipoEvento,
+          organizador: organizadorEvento,
+          participantes: Number.parseInt(participantesEvento),
+          fecha: fechaEvento,
+          hora: horaEvento,
+          duracion: duracionEvento,
+          descripcion: descripcionEvento || "Sin descripción adicional",
+          fechaRegistro: new Date().toLocaleDateString("es-MX"),
+          horaRegistro: new Date().toLocaleTimeString("es-MX"),
+          estado: "Programado",
+          ubicacion: "Laboratorio de Cómputo",
+          accion: "registrar_evento",
+        },
+      )
 
       // Limpiar el formulario
       setNombreEvento("")
@@ -1030,4 +1099,3 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
     </motion.div>
   )
 }
-

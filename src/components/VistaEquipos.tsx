@@ -1,36 +1,26 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { doc, updateDoc, setDoc, onSnapshot } from "firebase/firestore"
+import { doc, updateDoc, setDoc, onSnapshot, addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import {
-  Laptop,
-  AlertTriangle,
-  CheckCircle,
-  RefreshCw,
-  Plus,
-  Settings,
-  Info,
-  HelpCircle,
-  AlertCircle,
-  XCircle,
-} from "lucide-react"
+import { Laptop, CheckCircle, RefreshCw, Plus, Settings, Info, HelpCircle, XCircle, AlertCircle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { motion, AnimatePresence } from "framer-motion"
 import swal from "sweetalert"
 import { db } from "../pages/panel-laboratorista"
-import { toast } from "@/hooks/use-toast"
-
+import { toast } from "../hooks/use-toast"
+import { AlertTriangle, Wrench, CheckCircle2, Activity } from "lucide-react"
 
 interface Equipo {
   id: string
@@ -38,9 +28,13 @@ interface Equipo {
   enUso?: boolean
   ultimaActualizacion?: string
   notas?: string
+  // Nuevos campos para el estado de reparación
+  estadoReparacion?: "reportado" | "en_proceso" | "resuelto"
+  fechaActualizacionEstado?: string
+  comentarioEstado?: string
+  notificacionAdminId?: string // ID de la notificación enviada al admin
 }
 
-// Modificar la definición de colores para incorporar el color gris
 const colors = {
   light: {
     primary: "#800040", // Guinda/vino como color principal en modo claro
@@ -98,6 +92,74 @@ const colors = {
   },
 }
 
+// Configuración de estados de equipos
+const estadosEquipo = {
+  reportado: {
+    icon: <AlertTriangle className="h-3 w-3" />,
+    color: "bg-red-500",
+    label: "Reportado",
+    description: "Problema reportado, pendiente de revisión",
+  },
+  en_proceso: {
+    icon: <Wrench className="h-3 w-3" />,
+    color: "bg-yellow-500",
+    label: "En Proceso",
+    description: "Siendo reparado por el departamento de sistemas",
+  },
+  resuelto: {
+    icon: <CheckCircle2 className="h-3 w-3" />,
+    color: "bg-green-500",
+    label: "Resuelto",
+    description: "Problema solucionado, equipo disponible",
+  },
+}
+
+// Función para crear notificaciones para el administrador
+const crearNotificacionAdmin = async (
+  tipo: string,
+  titulo: string,
+  mensaje: string,
+  prioridad: string,
+  datos?: any,
+) => {
+  try {
+    const docRef = await addDoc(collection(db, "NotificacionesAdmin"), {
+      tipo,
+      titulo,
+      mensaje,
+      fecha: serverTimestamp(),
+      leida: false,
+      prioridad,
+      datos: datos || null,
+      // Agregar estado inicial para equipos
+      estadoEquipo: tipo === "equipo" && datos?.accion === "deshabilitar_equipo" ? "reportado" : undefined,
+    })
+    console.log("Notificación creada para el administrador:", titulo)
+    return docRef.id // Retornar el ID de la notificación creada
+  } catch (error) {
+    console.error("Error al crear notificación:", error)
+    return null
+  }
+}
+
+// Función para actualizar el estado de una notificación existente
+const actualizarEstadoNotificacionAdmin = async (
+  notificacionId: string,
+  nuevoEstado: "reportado" | "en_proceso" | "resuelto",
+  comentario?: string,
+) => {
+  try {
+    await updateDoc(doc(db, "NotificacionesAdmin", notificacionId), {
+      estadoEquipo: nuevoEstado,
+      fechaActualizacionEstado: serverTimestamp(),
+      comentarioEstado: comentario || null,
+    })
+    console.log("Estado de notificación actualizado:", notificacionId, nuevoEstado)
+  } catch (error) {
+    console.error("Error al actualizar estado de notificación:", error)
+  }
+}
+
 export default function VistaEquipos({
   esModoOscuro,
   logAction,
@@ -114,6 +176,16 @@ export default function VistaEquipos({
   const [cargando, setCargando] = useState(true)
   const [activeTab, setActiveTab] = useState("todos")
   const [equiposAnteriores, setEquiposAnteriores] = useState<Equipo[]>([])
+  const [dialogoDeshabilitarAbierto, setDialogoDeshabilitarAbierto] = useState(false)
+  const [equipoADeshabilitar, setEquipoADeshabilitar] = useState<Equipo | null>(null)
+  const [razonDeshabilitacion, setRazonDeshabilitacion] = useState("")
+  const [enviandoReporte, setEnviandoReporte] = useState(false)
+
+  // Estados para el diálogo de cambio de estado
+  const [dialogoEstadoAbierto, setDialogoEstadoAbierto] = useState(false)
+  const [equipoParaEstado, setEquipoParaEstado] = useState<Equipo | null>(null)
+  const [nuevoEstado, setNuevoEstado] = useState<"reportado" | "en_proceso" | "resuelto">("reportado")
+  const [comentarioEstado, setComentarioEstado] = useState("")
 
   const modoColor = esModoOscuro ? colors.dark : colors.light
 
@@ -134,6 +206,10 @@ export default function VistaEquipos({
               ultimaActualizacion: equipo.ultimaActualizacion || new Date().toISOString(),
               notas: equipo.notas || "",
               enUso: equipo.enUso || false,
+              estadoReparacion: equipo.estadoReparacion || undefined,
+              fechaActualizacionEstado: equipo.fechaActualizacionEstado || undefined,
+              comentarioEstado: equipo.comentarioEstado || undefined,
+              notificacionAdminId: equipo.notificacionAdminId || undefined,
             }))
 
             setEquipos(equiposCompletos)
@@ -225,46 +301,6 @@ export default function VistaEquipos({
     setEquiposFiltrados(equiposFiltrados)
   }
 
-  const toggleFueraDeServicio = async (id: string) => {
-    try {
-      const equiposActualizados = equipos.map((equipo) =>
-        equipo.id === id
-          ? {
-              ...equipo,
-              fueraDeServicio: !equipo.fueraDeServicio,
-              ultimaActualizacion: new Date().toISOString(),
-            }
-          : equipo,
-      )
-
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-        Equipos: equiposActualizados,
-      })
-
-      setEquipos(equiposActualizados)
-
-      const nuevoEstado = equiposActualizados.find((e) => e.id === id)?.fueraDeServicio
-        ? "fuera de servicio"
-        : "en servicio"
-
-      await swal({
-        title: "¡Éxito!",
-        text: `Estado del equipo ${id} actualizado a ${nuevoEstado}`,
-        icon: "success",
-      })
-
-      await logAction("Actualizar Equipo", `Estado del equipo ${id} actualizado a ${nuevoEstado}`)
-    } catch (error) {
-      console.error("Error al actualizar el equipo:", error)
-      await swal({
-        title: "Error",
-        text: "Ha ocurrido un error al actualizar el equipo.",
-        icon: "error",
-      })
-      await logAction("Error", `Error al actualizar el equipo ${id}: ${error}`)
-    }
-  }
-
   const agregarEquipos = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -273,12 +309,14 @@ export default function VistaEquipos({
         throw new Error("Cantidad inválida")
       }
 
+      const equiposAnteriores = equipos.length
+
       const nuevosEquipos = Array.from({ length: cantidad }, (_, i) => ({
         id: (i + 1).toString(),
         fueraDeServicio: false,
         enUso: false,
         ultimaActualizacion: new Date().toISOString(),
-        notas: "",
+        notas: `Equipo agregado el ${new Date().toLocaleString("es-MX")}`,
       }))
 
       await setDoc(doc(db, "Numero de equipos", "equipos"), { Equipos: nuevosEquipos })
@@ -286,13 +324,33 @@ export default function VistaEquipos({
       setCantidadEquipos("")
       setDialogoAbierto(false)
 
+      // Crear notificación DETALLADA para el administrador
+      await crearNotificacionAdmin(
+        "sistema",
+        `🔧 Configuración de Equipos Actualizada`,
+        `Se ha actualizado la configuración del laboratorio con ${cantidad} equipos nuevos, reemplazando la configuración anterior de ${equiposAnteriores} equipos.`,
+        "media",
+        {
+          cantidadEquipos: cantidad,
+          equiposAnteriores: equiposAnteriores,
+          accion: "actualizar_equipos",
+          fecha: new Date().toLocaleString("es-MX"),
+          rangoEquipos: `#1 - #${cantidad}`,
+          configuracionAnterior: `${equiposAnteriores} equipos`,
+          configuracionNueva: `${cantidad} equipos`,
+        },
+      )
+
       await swal({
         title: "¡Éxito!",
-        text: `${cantidad} equipos agregados correctamente, reemplazando los anteriores`,
+        text: `${cantidad} equipos agregados correctamente, reemplazando los ${equiposAnteriores} anteriores`,
         icon: "success",
       })
 
-      await logAction("Agregar Equipos", `Se agregaron ${cantidad} equipos nuevos, reemplazando los anteriores`)
+      await logAction(
+        "Agregar Equipos",
+        `Se agregaron ${cantidad} equipos nuevos, reemplazando los ${equiposAnteriores} anteriores`,
+      )
     } catch (error) {
       console.error("Error al agregar equipos:", error)
       await swal({
@@ -314,6 +372,8 @@ export default function VistaEquipos({
     if (!equipoSeleccionado) return
 
     try {
+      const notasAnteriores = equipoSeleccionado.notas || "Sin notas previas"
+
       const equiposActualizados = equipos.map((equipo) =>
         equipo.id === equipoSeleccionado.id
           ? {
@@ -331,13 +391,50 @@ export default function VistaEquipos({
       setEquipos(equiposActualizados)
       setDialogoNotasAbierto(false)
 
+      // Crear notificación DETALLADA si las notas indican un problema
+      const palabrasProblema = ["problema", "falla", "error", "dañado", "roto", "no funciona", "defecto"]
+      const tieneProblema = palabrasProblema.some((palabra) => notas.toLowerCase().includes(palabra))
+
+      if (tieneProblema) {
+        await crearNotificacionAdmin(
+          "equipo",
+          `⚠️ Problema Reportado en Equipo #${equipoSeleccionado.id}`,
+          `Se han actualizado las notas del equipo #${equipoSeleccionado.id} con un posible problema que requiere atención. Revisar las notas para más detalles.`,
+          "media",
+          {
+            equipoId: equipoSeleccionado.id,
+            notas: notas,
+            notasAnteriores: notasAnteriores,
+            problemaDetectado: true,
+            fechaActualizacion: new Date().toLocaleString("es-MX"),
+            requiereRevision: true,
+            accion: "actualizar_notas_problema",
+          },
+        )
+      } else {
+        // Notificación normal para actualización de notas
+        await crearNotificacionAdmin(
+          "equipo",
+          `📝 Notas Actualizadas - Equipo #${equipoSeleccionado.id}`,
+          `Se han actualizado las notas del equipo #${equipoSeleccionado.id} con información adicional.`,
+          "baja",
+          {
+            equipoId: equipoSeleccionado.id,
+            notas: notas.substring(0, 200) + (notas.length > 200 ? "..." : ""),
+            notasAnteriores: notasAnteriores,
+            fechaActualizacion: new Date().toLocaleString("es-MX"),
+            accion: "actualizar_notas",
+          },
+        )
+      }
+
       await swal({
         title: "¡Éxito!",
-        text: `Notas del equipo ${equipoSeleccionado.id} actualizadas`,
+        text: `Notas del equipo #${equipoSeleccionado.id} actualizadas`,
         icon: "success",
       })
 
-      await logAction("Actualizar Notas", `Notas del equipo ${equipoSeleccionado.id} actualizadas`)
+      await logAction("Actualizar Notas", `Notas del equipo #${equipoSeleccionado.id} actualizadas`)
     } catch (error) {
       console.error("Error al actualizar las notas:", error)
       await swal({
@@ -345,7 +442,7 @@ export default function VistaEquipos({
         text: "Ha ocurrido un error al actualizar las notas.",
         icon: "error",
       })
-      await logAction("Error", `Error al actualizar las notas del equipo ${equipoSeleccionado.id}: ${error}`)
+      await logAction("Error", `Error al actualizar las notas del equipo #${equipoSeleccionado.id}: ${error}`)
     }
   }
 
@@ -355,6 +452,346 @@ export default function VistaEquipos({
       return fecha.toLocaleDateString() + " " + fecha.toLocaleTimeString()
     } catch (error) {
       return "Fecha desconocida"
+    }
+  }
+
+  const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
+    try {
+      setEnviandoReporte(true)
+
+      const datosReporte = {
+        equipoId: equipo.id,
+        accion: "deshabilitado",
+        fecha: new Date().toLocaleString("es-MX"),
+        usuario: usuario,
+        razonDeshabilitacion: razon,
+        notasEquipo: equipo.notas || "Sin notas adicionales",
+        estadoAnterior: "En servicio",
+        estadoNuevo: "Fuera de servicio",
+        correoDestino: "sistemas@universidad.edu", // Cambiar por el correo real
+        asunto: `REPORTE URGENTE - Equipo ${equipo.id} Fuera de Servicio`,
+        mensaje: `
+REPORTE AUTOMÁTICO DE EQUIPO DESHABILITADO
+
+═══════════════════════════════════════════════════════════════
+INFORMACIÓN DEL EQUIPO
+═══════════════════════════════════════════════════════════════
+• Equipo ID: ${equipo.id}
+• Fecha y hora: ${new Date().toLocaleString("es-MX")}
+• Usuario responsable: ${usuario}
+• Estado anterior: En servicio
+• Estado nuevo: Fuera de servicio
+
+═══════════════════════════════════════════════════════════════
+RAZÓN DE LA DESHABILITACIÓN
+═══════════════════════════════════════════════════════════════
+${razon}
+
+═══════════════════════════════════════════════════════════════
+NOTAS ADICIONALES DEL EQUIPO
+═══════════════════════════════════════════════════════════════
+${equipo.notas || "Sin notas adicionales"}
+
+═══════════════════════════════════════════════════════════════
+ACCIONES REQUERIDAS
+═══════════════════════════════════════════════════════════════
+1. Revisar físicamente el equipo ${equipo.id}
+2. Diagnosticar el problema reportado: "${razon}"
+3. Realizar las reparaciones necesarias
+4. Notificar al laboratorio cuando esté listo para reactivación
+5. Actualizar el estado en el sistema una vez reparado
+
+⚠️  ATENCIÓN: Este equipo NO debe ser utilizado hasta completar la revisión técnica.
+
+═══════════════════════════════════════════════════════════════
+Sistema de Gestión de Laboratorio - Reporte Automático
+Generado el: ${new Date().toLocaleString("es-MX")}
+═══════════════════════════════════════════════════════════════
+      `,
+      }
+
+      // URL del Google Apps Script Web App (debes crear uno y reemplazar esta URL)
+      const googleScriptURL = "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"
+
+      const response = await fetch(googleScriptURL, {
+        method: "POST",
+        mode: "no-cors", // Necesario para Google Apps Script
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(datosReporte),
+      })
+
+      console.log("Reporte enviado exitosamente al departamento de sistemas")
+      await logAction("Envío de Reporte", `Reporte de equipo ${equipo.id} deshabilitado enviado por correo`)
+
+      toast({
+        title: "Reporte enviado",
+        description: `Se ha notificado al departamento de sistemas sobre el equipo ${equipo.id}`,
+        variant: "default",
+      })
+
+      return true
+    } catch (error) {
+      console.error("Error al enviar el reporte por correo:", error)
+      await logAction("Error de Reporte", `Error al enviar reporte de equipo ${equipo.id}: ${error}`)
+
+      toast({
+        title: "Error al enviar reporte",
+        description: "No se pudo enviar el reporte al departamento de sistemas. El cambio se guardó correctamente.",
+        variant: "destructive",
+      })
+
+      return false
+    } finally {
+      setEnviandoReporte(false)
+    }
+  }
+
+  const iniciarDeshabilitacion = (id: string) => {
+    const equipo = equipos.find((e) => e.id === id)
+    if (!equipo) return
+
+    if (equipo.fueraDeServicio) {
+      // Si está fuera de servicio, reactivar directamente
+      reactivarEquipo(id)
+    } else {
+      // Si está en servicio, abrir diálogo para deshabilitar
+      setEquipoADeshabilitar(equipo)
+      setRazonDeshabilitacion("")
+      setDialogoDeshabilitarAbierto(true)
+    }
+  }
+
+  const confirmarDeshabilitacion = async () => {
+    if (!equipoADeshabilitar || !razonDeshabilitacion.trim()) {
+      toast({
+        title: "Información requerida",
+        description: "Por favor, especifique la razón de la deshabilitación",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const equiposActualizados = equipos.map((equipo) =>
+        equipo.id === equipoADeshabilitar.id
+          ? {
+              ...equipo,
+              fueraDeServicio: true,
+              ultimaActualizacion: new Date().toISOString(),
+              notas: equipo.notas
+                ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`
+                : `[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`,
+              estadoReparacion: "reportado", // Estado inicial
+              fechaActualizacionEstado: new Date().toISOString(),
+            }
+          : equipo,
+      )
+
+      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+        Equipos: equiposActualizados,
+      })
+
+      // Crear notificación DETALLADA para el administrador con estado inicial "reportado"
+      const notificacionId = await crearNotificacionAdmin(
+        "equipo",
+        `🚨EQUIPO #${equipoADeshabilitar.id} FUERA DE SERVICIO`,
+        `URGENTE: El equipo #${equipoADeshabilitar.id} ha sido deshabilitado y requiere atención inmediata del departamento de sistemas. Se ha enviado un reporte automático por correo.`,
+        "alta",
+        {
+          equipoId: equipoADeshabilitar.id,
+          razon: razonDeshabilitacion,
+          fechaDeshabilitacion: new Date().toLocaleString("es-MX"),
+          estadoAnterior: "En servicio",
+          estadoNuevo: "Fuera de servicio",
+          notasAnteriores: equipoADeshabilitar.notas || "Sin notas previas",
+          requiereAtencion: true,
+          reporteEnviado: true,
+          accion: "deshabilitar_equipo",
+        },
+      )
+
+      // Actualizar el equipo con el ID de la notificación
+      if (notificacionId) {
+        const equiposConNotificacion = equiposActualizados.map((equipo) =>
+          equipo.id === equipoADeshabilitar.id
+            ? {
+                ...equipo,
+                notificacionAdminId: notificacionId,
+              }
+            : equipo,
+        )
+
+        await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+          Equipos: equiposConNotificacion,
+        })
+
+        setEquipos(equiposConNotificacion)
+      } else {
+        setEquipos(equiposActualizados)
+      }
+
+      // Enviar reporte por correo
+      await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
+
+      setDialogoDeshabilitarAbierto(false)
+      setEquipoADeshabilitar(null)
+      setRazonDeshabilitacion("")
+
+      await swal({
+        title: "¡Equipo Deshabilitado!",
+        text: `El equipo #${equipoADeshabilitar.id} ha sido marcado como fuera de servicio y se ha enviado un reporte al departamento de sistemas.`,
+        icon: "success",
+      })
+
+      await logAction(
+        "Deshabilitar Equipo",
+        `Equipo #${equipoADeshabilitar.id} deshabilitado. Razón: ${razonDeshabilitacion}`,
+      )
+    } catch (error) {
+      console.error("Error al deshabilitar el equipo:", error)
+      await swal({
+        title: "Error",
+        text: "Ha ocurrido un error al deshabilitar el equipo.",
+        icon: "error",
+      })
+      await logAction("Error", `Error al deshabilitar el equipo #${equipoADeshabilitar.id}: ${error}`)
+    }
+  }
+
+  const reactivarEquipo = async (id: string) => {
+    try {
+      const equipoAnterior = equipos.find((e) => e.id === id)
+
+      const equiposActualizados = equipos.map((equipo) =>
+        equipo.id === id
+          ? {
+              ...equipo,
+              fueraDeServicio: false,
+              ultimaActualizacion: new Date().toISOString(),
+              notas: equipo.notas
+                ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`
+                : `[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`,
+              estadoReparacion: "resuelto", // Marcar como resuelto al reactivar
+              fechaActualizacionEstado: new Date().toISOString(),
+              comentarioEstado: "Equipo reactivado y disponible para uso",
+            }
+          : equipo,
+      )
+
+      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+        Equipos: equiposActualizados,
+      })
+
+      setEquipos(equiposActualizados)
+
+      // Si hay una notificación asociada, actualizar su estado
+      if (equipoAnterior?.notificacionAdminId) {
+        await actualizarEstadoNotificacionAdmin(
+          equipoAnterior.notificacionAdminId,
+          "resuelto",
+          "Equipo reactivado y disponible para uso",
+        )
+      }
+
+      // Crear notificación DETALLADA para el administrador
+      await crearNotificacionAdmin(
+        "equipo",
+        `✅ Equipo #${id} Reactivado y Disponible`,
+        `El equipo #${id} ha sido reactivado exitosamente y está disponible para uso nuevamente. El problema anterior ha sido resuelto.`,
+        "baja",
+        {
+          equipoId: id,
+          accion: "reactivar_equipo",
+          fecha: new Date().toLocaleString("es-MX"),
+          estadoAnterior: "Fuera de servicio",
+          estadoNuevo: "En servicio",
+          notasAnteriores: equipoAnterior?.notas || "Sin notas previas",
+          disponibleParaUso: true,
+        },
+      )
+
+      await swal({
+        title: "¡Éxito!",
+        text: `El equipo #${id} ha sido reactivado y está disponible para uso.`,
+        icon: "success",
+      })
+
+      await logAction("Reactivar Equipo", `Equipo #${id} reactivado y disponible para uso`)
+    } catch (error) {
+      console.error("Error al reactivar el equipo:", error)
+      await swal({
+        title: "Error",
+        text: "Ha ocurrido un error al reactivar el equipo.",
+        icon: "error",
+      })
+      await logAction("Error", `Error al reactivar el equipo #${id}: ${error}`)
+    }
+  }
+
+  // Función para abrir el diálogo de cambio de estado
+  const abrirDialogoEstado = (equipo: Equipo) => {
+    setEquipoParaEstado(equipo)
+    setNuevoEstado(equipo.estadoReparacion || "reportado")
+    setComentarioEstado(equipo.comentarioEstado || "")
+    setDialogoEstadoAbierto(true)
+  }
+
+  // Función para actualizar el estado de reparación
+  const actualizarEstadoReparacion = async () => {
+    if (!equipoParaEstado) return
+
+    try {
+      const equiposActualizados = equipos.map((equipo) =>
+        equipo.id === equipoParaEstado.id
+          ? {
+              ...equipo,
+              estadoReparacion: nuevoEstado,
+              fechaActualizacionEstado: new Date().toISOString(),
+              comentarioEstado: comentarioEstado.trim() || undefined,
+              ultimaActualizacion: new Date().toISOString(),
+            }
+          : equipo,
+      )
+
+      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+        Equipos: equiposActualizados,
+      })
+
+      setEquipos(equiposActualizados)
+
+      // Actualizar la notificación del administrador si existe
+      if (equipoParaEstado.notificacionAdminId) {
+        await actualizarEstadoNotificacionAdmin(
+          equipoParaEstado.notificacionAdminId,
+          nuevoEstado,
+          comentarioEstado.trim() || undefined,
+        )
+      }
+
+      setDialogoEstadoAbierto(false)
+      setEquipoParaEstado(null)
+      setComentarioEstado("")
+
+      await logAction(
+        "Actualizar Estado Reparación",
+        `Estado del equipo #${equipoParaEstado.id} cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+      )
+
+      await swal({
+        title: "¡Estado actualizado!",
+        text: `El estado del equipo #${equipoParaEstado.id} se ha cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+        icon: "success",
+      })
+    } catch (error) {
+      console.error("Error al actualizar estado de reparación:", error)
+      await swal({
+        title: "Error",
+        text: "Ha ocurrido un error al actualizar el estado del equipo.",
+        icon: "error",
+      })
+      await logAction("Error", `Error al actualizar estado del equipo #${equipoParaEstado.id}: ${error}`)
     }
   }
 
@@ -384,7 +821,7 @@ export default function VistaEquipos({
               <div className={`text-2xl font-bold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
                 {estadisticas.total}
               </div>
-              <Laptop className={`h-5 w-5 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
+              <Laptop className={`h-5 w-5 mr-2 ${esModoOscuro ? "text-[#2a7a45]" : "text-[#800040]"}`} />
             </div>
             <p className={`text-xs mt-1 ${esModoOscuro ? "text-gray-300" : "text-[#74726f]"}`}>
               Equipos registrados en el sistema
@@ -422,7 +859,7 @@ export default function VistaEquipos({
               <div className={`text-2xl font-bold ${esModoOscuro ? "text-white" : "text-[#800040]"}`}>
                 {estadisticas.fueraDeServicio}
               </div>
-              <AlertTriangle className={`h-5 w-5 ${esModoOscuro ? "text-amber-400" : "text-amber-500"}`} />
+              <AlertCircle className={`h-5 w-5 ${esModoOscuro ? "text-amber-400" : "text-amber-500"}`} />
             </div>
             <p className={`text-xs mt-1 ${esModoOscuro ? "text-gray-300" : "text-[#74726f]"}`}>
               Equipos no disponibles
@@ -452,7 +889,7 @@ export default function VistaEquipos({
 
       {/* Filtros y acciones */}
       <Card className={`border-none shadow-md ${esModoOscuro ? "bg-[#1d5631]/20" : "bg-white"}`}>
-        <CardHeader className={`${esModoOscuro ? colors.dark.headerBackground : colors.light.headerBackground}`}>
+        <CardHeader className={esModoOscuro ? modoColor.headerBackground : modoColor.headerBackground}>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold text-white">Gestión de Equipos</CardTitle>
             <Dialog open={dialogoAbierto} onOpenChange={setDialogoAbierto}>
@@ -533,9 +970,6 @@ export default function VistaEquipos({
                   placeholder="Buscar por ID o notas..."
                   className={`${esModoOscuro ? "bg-[#3a3a3a] border-[#1d5631]/30 text-white" : "bg-[#f8f8f8] border-[#800040]/30 text-[#800040]"} pl-10`}
                 />
-                <Search
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}
-                />
               </div>
             </div>
             <div className="flex-1">
@@ -604,7 +1038,7 @@ export default function VistaEquipos({
         </CardContent>
       </Card>
 
-      {/* Tabla de equipos */}
+      {/*Tabla de equipos */}
       <Card className={`border-none shadow-md ${esModoOscuro ? "bg-[#1d5631]/20" : "bg-white"}`}>
         <CardHeader className={`pb-2 ${esModoOscuro ? "border-b border-gray-700" : "border-b"}`}>
           <div className="flex justify-between items-center">
@@ -641,6 +1075,7 @@ export default function VistaEquipos({
                     <TableHead className="font-semibold">ID</TableHead>
                     <TableHead className="font-semibold">Estado</TableHead>
                     <TableHead className="font-semibold">En Uso</TableHead>
+                    <TableHead className="font-semibold">Estado Reparación</TableHead>
                     <TableHead className="font-semibold">Última Actualización</TableHead>
                     <TableHead className="font-semibold">Notas</TableHead>
                     <TableHead className="font-semibold text-right">Acciones</TableHead>
@@ -668,7 +1103,7 @@ export default function VistaEquipos({
                               variant="outline"
                               className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/30"
                             >
-                              <AlertTriangle className="mr-1 h-3 w-3" />
+                              <AlertCircle className="mr-1 h-3 w-3" />
                               Fuera de Servicio
                             </Badge>
                           ) : (
@@ -692,6 +1127,25 @@ export default function VistaEquipos({
                             </Badge>
                           ) : (
                             <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>No</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {equipo.estadoReparacion ? (
+                            <Badge
+                              variant="outline"
+                              className={`${
+                                equipo.estadoReparacion === "resuelto"
+                                  ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/30"
+                                  : equipo.estadoReparacion === "en_proceso"
+                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/30"
+                                    : "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/30"
+                              }`}
+                            >
+                              {estadosEquipo[equipo.estadoReparacion].icon}
+                              <span className="ml-1">{estadosEquipo[equipo.estadoReparacion].label}</span>
+                            </Badge>
+                          ) : (
+                            <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>-</span>
                           )}
                         </TableCell>
                         <TableCell className={esModoOscuro ? "text-gray-300" : "text-gray-700"}>
@@ -736,10 +1190,36 @@ export default function VistaEquipos({
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+
+                            {/* Botón para cambiar estado de reparación (solo si está fuera de servicio) */}
+                            {equipo.fueraDeServicio && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => abrirDialogoEstado(equipo)}
+                                      className={`${
+                                        esModoOscuro
+                                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                          : "bg-blue-600 hover:bg-blue-700 text-white"
+                                      }`}
+                                    >
+                                      <Activity className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Actualizar Estado de Reparación</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+
                             <Button
                               size="sm"
                               variant={equipo.fueraDeServicio ? "default" : "destructive"}
-                              onClick={() => toggleFueraDeServicio(equipo.id)}
+                              onClick={() => iniciarDeshabilitacion(equipo.id)}
                               className={
                                 equipo.fueraDeServicio
                                   ? esModoOscuro
@@ -851,28 +1331,166 @@ export default function VistaEquipos({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo para deshabilitar equipo */}
+      <Dialog open={dialogoDeshabilitarAbierto} onOpenChange={setDialogoDeshabilitarAbierto}>
+        <DialogContent className={esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-white"}>
+          <DialogHeader>
+            <DialogTitle className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+              Deshabilitar Equipo {equipoADeshabilitar?.id}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 rounded-lg">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                    ¡Atención! Este equipo será marcado como fuera de servicio
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                    Se enviará automáticamente un reporte al departamento de sistemas
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="razonDeshabilitacion" className={esModoOscuro ? "text-white" : "text-[#800040]"}>
+                Razón de la deshabilitación *
+              </Label>
+              <textarea
+                id="razonDeshabilitacion"
+                value={razonDeshabilitacion}
+                onChange={(e) => setRazonDeshabilitacion(e.target.value)}
+                placeholder="Especifique detalladamente la razón por la cual se deshabilita el equipo (ej: Pantalla dañada, no enciende, problemas de conectividad, etc.)"
+                className={`w-full h-32 p-2 rounded-md border ${
+                  esModoOscuro
+                    ? "bg-[#3a3a3a] border-[#1d5631]/30 text-white"
+                    : "bg-[#f8f8f8] border-[#800040]/30 text-[#800040]"
+                }`}
+                required
+              />
+              <p className={`text-xs ${esModoOscuro ? "text-gray-400" : "text-gray-500"}`}>
+                Esta información será incluida en el reporte enviado al departamento de sistemas
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDialogoDeshabilitarAbierto(false)
+                setEquipoADeshabilitar(null)
+                setRazonDeshabilitacion("")
+              }}
+              className={
+                esModoOscuro
+                  ? "bg-gray-700 text-white hover:bg-gray-600"
+                  : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+              }
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmarDeshabilitacion}
+              disabled={enviandoReporte || !razonDeshabilitacion.trim()}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+            >
+              {enviandoReporte ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando Reporte...
+                </>
+              ) : (
+                <>
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Deshabilitar Equipo
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para cambiar estado de reparación */}
+      <Dialog open={dialogoEstadoAbierto} onOpenChange={setDialogoEstadoAbierto}>
+        <DialogContent className={`${esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-white"} max-w-md`}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Activity className="h-5 w-5" />
+              <span>Actualizar Estado de Reparación</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {equipoParaEstado && (
+            <div className="space-y-4">
+              <div className={`p-3 rounded-lg ${esModoOscuro ? "bg-[#3a3a3a]" : "bg-gray-50"}`}>
+                <h4 className="font-medium mb-2">Información del Equipo:</h4>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="font-medium">Equipo:</span> #{equipoParaEstado.id}
+                  </p>
+                  <p>
+                    <span className="font-medium">Estado actual:</span>{" "}
+                    {equipoParaEstado.estadoReparacion
+                      ? estadosEquipo[equipoParaEstado.estadoReparacion].label
+                      : "Sin estado"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="estado">Nuevo Estado *</Label>
+                <Select value={nuevoEstado} onValueChange={(value: any) => setNuevoEstado(value)}>
+                  <SelectTrigger className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={esModoOscuro ? "bg-[#3a3a3a] text-white" : ""}>
+                    {Object.entries(estadosEquipo).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center space-x-2">
+                          <div className={`p-1 rounded-full ${config.color} text-white`}>{config.icon}</div>
+                          <div>
+                            <p className="font-medium">{config.label}</p>
+                            <p className="text-xs opacity-70">{config.description}</p>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="comentario">Comentario (opcional)</Label>
+                <Textarea
+                  id="comentario"
+                  value={comentarioEstado}
+                  onChange={(e) => setComentarioEstado(e.target.value)}
+                  placeholder="Agregar detalles sobre el progreso de la reparación..."
+                  className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex space-x-2">
+                <Button onClick={() => setDialogoEstadoAbierto(false)} variant="outline" className="flex-1">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={actualizarEstadoReparacion}
+                  className={`flex-1 ${esModoOscuro ? colors.dark.buttonPrimary : colors.light.buttonPrimary}`}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Actualizar Estado
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-
-// Componente Search para el ícono de búsqueda
-function Search(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  )
-}
-
