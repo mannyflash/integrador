@@ -410,7 +410,7 @@ export default function VistaEquipos({
         notasEquipo: equipo.notas || "Sin notas adicionales",
         estadoAnterior: "En servicio",
         estadoNuevo: "Fuera de servicio",
-        correoDestino: "sistemas@universidad.edu", // Cambiar por el correo real
+        correoDestino: "manuelgaona800@gmail.com", // Cambiar por el correo real
         asunto: `REPORTE URGENTE - Equipo ${equipo.id} Fuera de Servicio`,
         mensaje: `
 REPORTE AUTOMÁTICO DE EQUIPO DESHABILITADO
