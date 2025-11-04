@@ -1,5 +1,7 @@
 "use client"
 
+import { TooltipContent } from "@/components/ui/tooltip"
+
 import type React from "react"
 import { useState, useEffect } from "react"
 import { doc, updateDoc, setDoc, onSnapshot, addDoc, collection, serverTimestamp } from "firebase/firestore"
@@ -8,16 +10,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Laptop, CheckCircle, RefreshCw, Plus, Settings, Info, HelpCircle, XCircle, AlertCircle } from "lucide-react"
+import {
+  Laptop,
+  CheckCircle,
+  RefreshCw,
+  Plus,
+  Settings,
+  Info,
+  HelpCircle,
+  XCircle,
+  AlertCircle,
+  Activity,
+} from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { motion, AnimatePresence } from "framer-motion"
 import swal from "sweetalert"
 import { db } from "../pages/panel-laboratorista"
 import { toast } from "../hooks/use-toast"
+import { AlertTriangle, Wrench, CheckCircle2 } from "lucide-react"
+import { enviarCorreoEquipoDeshabilitado } from "../pages/enviar-correo"
 
 interface Equipo {
   id: string
@@ -25,14 +42,19 @@ interface Equipo {
   enUso?: boolean
   ultimaActualizacion?: string
   notas?: string
+  // Nuevos campos para el estado de reparación
+  estadoReparacion?: "reportado" | "en_proceso" | "resuelto"
+  fechaActualizacionEstado?: string
+  comentarioEstado?: string
+  notificacionAdminId?: string // ID de la notificación enviada al admin
 }
 
 const colors = {
   light: {
-    primary: "#800040", // Guinda/vino como color principal en modo claro
-    secondary: "#1d5631", // Verde oscuro como color secundario
-    tertiary: "#74726f", // Gris para elementos terciarios
-    background: "#fff0f5", // Fondo con tono rosado muy suave
+    primary: "#800040",
+    secondary: "#1d5631",
+    tertiary: "#74726f",
+    background: "#fff0f5",
     cardBackground: "bg-white",
     headerBackground: "bg-gradient-to-r from-[#800040] to-[#a30050]",
     titleText: "text-[#800040]",
@@ -56,10 +78,10 @@ const colors = {
     badgeSecundario: "bg-[#800040]/20 text-[#800040]",
   },
   dark: {
-    primary: "#1d5631", // Verde oscuro como color principal en modo oscuro
-    secondary: "#800040", // Guinda/vino como color secundario
-    tertiary: "#74726f", // Gris para elementos terciarios
-    background: "#0c1f15", // Fondo verde muy oscuro
+    primary: "#1d5631",
+    secondary: "#800040",
+    tertiary: "#74726f",
+    background: "#0c1f15",
     cardBackground: "bg-[#2a2a2a]",
     headerBackground: "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]",
     titleText: "text-white",
@@ -84,6 +106,28 @@ const colors = {
   },
 }
 
+// Configuración de estados de equipos
+const estadosEquipo = {
+  reportado: {
+    icon: <AlertTriangle className="h-3 w-3" />,
+    color: "bg-red-500",
+    label: "Reportado",
+    description: "Problema reportado, pendiente de revisión",
+  },
+  en_proceso: {
+    icon: <Wrench className="h-3 w-3" />,
+    color: "bg-yellow-500",
+    label: "En Proceso",
+    description: "Siendo reparado por el departamento de sistemas",
+  },
+  resuelto: {
+    icon: <CheckCircle2 className="h-3 w-3" />,
+    color: "bg-green-500",
+    label: "Resuelto",
+    description: "Problema solucionado, equipo disponible",
+  },
+}
+
 // Función para crear notificaciones para el administrador
 const crearNotificacionAdmin = async (
   tipo: string,
@@ -93,7 +137,8 @@ const crearNotificacionAdmin = async (
   datos?: any,
 ) => {
   try {
-    await addDoc(collection(db, "NotificacionesAdmin"), {
+    // Construir el objeto base de la notificación
+    const notificacionBase: any = {
       tipo,
       titulo,
       mensaje,
@@ -101,13 +146,74 @@ const crearNotificacionAdmin = async (
       leida: false,
       prioridad,
       datos: datos || null,
-      // Agregar estado inicial para equipos
-      estadoEquipo: tipo === "equipo" && datos?.accion === "deshabilitar_equipo" ? "reportado" : undefined,
-    })
+    }
+
+    // Solo agregar estadoEquipo si es una notificación de equipo deshabilitado
+    if (tipo === "equipo" && datos?.accion === "deshabilitar_equipo") {
+      notificacionBase.estadoEquipo = "reportado"
+    }
+
+    const docRef = await addDoc(collection(db, "NotificacionesAdmin"), notificacionBase)
     console.log("Notificación creada para el administrador:", titulo)
+    return docRef.id
   } catch (error) {
     console.error("Error al crear notificación:", error)
+    return null
   }
+}
+
+// Función para actualizar el estado de una notificación existente
+const actualizarEstadoNotificacionAdmin = async (
+  notificacionId: string,
+  nuevoEstado: "reportado" | "en_proceso" | "resuelto",
+  comentario?: string,
+) => {
+  try {
+    await updateDoc(doc(db, "NotificacionesAdmin", notificacionId), {
+      estadoEquipo: nuevoEstado,
+      fechaActualizacionEstado: serverTimestamp(),
+      comentarioEstado: comentario || null,
+    })
+    console.log("Estado de notificación actualizado:", notificacionId, nuevoEstado)
+  } catch (error) {
+    console.error("Error al actualizar estado de notificación:", error)
+  }
+}
+
+// Función auxiliar para limpiar campos undefined de un equipo
+const limpiarEquipo = (equipo: Equipo): any => {
+  const equipoLimpio: any = {
+    id: equipo.id,
+    fueraDeServicio: equipo.fueraDeServicio,
+    ultimaActualizacion: equipo.ultimaActualizacion || new Date().toISOString(),
+  }
+
+  // Solo agregar campos opcionales si tienen valores válidos
+  if (equipo.enUso !== undefined) {
+    equipoLimpio.enUso = equipo.enUso
+  }
+
+  if (equipo.notas) {
+    equipoLimpio.notas = equipo.notas
+  }
+
+  if (equipo.estadoReparacion) {
+    equipoLimpio.estadoReparacion = equipo.estadoReparacion
+  }
+
+  if (equipo.fechaActualizacionEstado) {
+    equipoLimpio.fechaActualizacionEstado = equipo.fechaActualizacionEstado
+  }
+
+  if (equipo.comentarioEstado) {
+    equipoLimpio.comentarioEstado = equipo.comentarioEstado
+  }
+
+  if (equipo.notificacionAdminId) {
+    equipoLimpio.notificacionAdminId = equipo.notificacionAdminId
+  }
+
+  return equipoLimpio
 }
 
 export default function VistaEquipos({
@@ -131,12 +237,17 @@ export default function VistaEquipos({
   const [razonDeshabilitacion, setRazonDeshabilitacion] = useState("")
   const [enviandoReporte, setEnviandoReporte] = useState(false)
 
+  // Estados para el diálogo de cambio de estado
+  const [dialogoEstadoAbierto, setDialogoEstadoAbierto] = useState(false)
+  const [equipoParaEstado, setEquipoParaEstado] = useState<Equipo | null>(null)
+  const [nuevoEstado, setNuevoEstado] = useState<"reportado" | "en_proceso" | "resuelto">("reportado")
+  const [comentarioEstado, setComentarioEstado] = useState("")
+
   const modoColor = esModoOscuro ? colors.dark : colors.light
 
   const cargarEquipos = () => {
     setCargando(true)
     try {
-      // Usar onSnapshot para escuchar cambios en tiempo real
       const unsubscribe = onSnapshot(
         doc(db, "Numero de equipos", "equipos"),
         (equiposDoc) => {
@@ -144,12 +255,16 @@ export default function VistaEquipos({
             const data = equiposDoc.data()
             const equiposData = Array.isArray(data.Equipos) ? data.Equipos : []
 
-            // Asegurarse de que todos los equipos tengan los campos necesarios
-            const equiposCompletos = equiposData.map((equipo) => ({
-              ...equipo,
+            const equiposCompletos: Equipo[] = equiposData.map((equipo: any) => ({
+              id: equipo.id,
+              fueraDeServicio: equipo.fueraDeServicio || false,
+              enUso: equipo.enUso || false,
               ultimaActualizacion: equipo.ultimaActualizacion || new Date().toISOString(),
               notas: equipo.notas || "",
-              enUso: equipo.enUso || false,
+              estadoReparacion: equipo.estadoReparacion as "reportado" | "en_proceso" | "resuelto" | undefined,
+              fechaActualizacionEstado: equipo.fechaActualizacionEstado || undefined,
+              comentarioEstado: equipo.comentarioEstado || undefined,
+              notificacionAdminId: equipo.notificacionAdminId || undefined,
             }))
 
             setEquipos(equiposCompletos)
@@ -164,13 +279,10 @@ export default function VistaEquipos({
         (error) => {
           console.error("Error al escuchar cambios en equipos:", error)
           setCargando(false)
-          console.error("Error al escuchar cambios en equipos:", error)
-          setCargando(false)
           logAction("Error", `Error al escuchar cambios en equipos: ${error}`)
         },
       )
 
-      // Retornar la función de limpieza
       return unsubscribe
     } catch (error) {
       console.error("Error al configurar el listener de equipos:", error)
@@ -181,10 +293,8 @@ export default function VistaEquipos({
   }
 
   useEffect(() => {
-    // Guardar la función de limpieza que devuelve cargarEquipos
     const unsubscribe = cargarEquipos()
 
-    // Limpiar la suscripción cuando el componente se desmonte
     return () => {
       if (typeof unsubscribe === "function") {
         unsubscribe()
@@ -197,14 +307,12 @@ export default function VistaEquipos({
   }, [equipos, filtro, busqueda, activeTab])
 
   useEffect(() => {
-    // Verificar si algún equipo cambió a estado "en uso"
     if (equiposAnteriores.length > 0) {
       const nuevosEnUso = equipos.filter(
         (equipo) => equipo.enUso && !equiposAnteriores.find((eq) => eq.id === equipo.id)?.enUso,
       )
 
       if (nuevosEnUso.length > 0) {
-        // Mostrar notificación para cada equipo que cambió a "en uso"
         nuevosEnUso.forEach((equipo) => {
           toast({
             title: "Equipo en uso",
@@ -215,14 +323,12 @@ export default function VistaEquipos({
       }
     }
 
-    // Actualizar el estado anterior
     setEquiposAnteriores(equipos)
   }, [equipos])
 
   const aplicarFiltros = () => {
     let equiposFiltrados = [...equipos]
 
-    // Filtrar por estado
     if (filtro === "enServicio") {
       equiposFiltrados = equiposFiltrados.filter((equipo) => !equipo.fueraDeServicio)
     } else if (filtro === "fueraDeServicio") {
@@ -231,7 +337,6 @@ export default function VistaEquipos({
       equiposFiltrados = equiposFiltrados.filter((equipo) => equipo.enUso)
     }
 
-    // Filtrar por búsqueda
     if (busqueda) {
       equiposFiltrados = equiposFiltrados.filter(
         (equipo) =>
@@ -253,7 +358,7 @@ export default function VistaEquipos({
 
       const equiposAnteriores = equipos.length
 
-      const nuevosEquipos = Array.from({ length: cantidad }, (_, i) => ({
+      const nuevosEquipos: Equipo[] = Array.from({ length: cantidad }, (_, i) => ({
         id: (i + 1).toString(),
         fueraDeServicio: false,
         enUso: false,
@@ -266,7 +371,6 @@ export default function VistaEquipos({
       setCantidadEquipos("")
       setDialogoAbierto(false)
 
-      // Crear notificación DETALLADA para el administrador
       await crearNotificacionAdmin(
         "sistema",
         `🔧 Configuración de Equipos Actualizada`,
@@ -316,7 +420,7 @@ export default function VistaEquipos({
     try {
       const notasAnteriores = equipoSeleccionado.notas || "Sin notas previas"
 
-      const equiposActualizados = equipos.map((equipo) =>
+      const equiposActualizados: Equipo[] = equipos.map((equipo) =>
         equipo.id === equipoSeleccionado.id
           ? {
               ...equipo,
@@ -327,13 +431,12 @@ export default function VistaEquipos({
       )
 
       await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-        Equipos: equiposActualizados,
+        Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
       setEquipos(equiposActualizados)
       setDialogoNotasAbierto(false)
 
-      // Crear notificación DETALLADA si las notas indican un problema
       const palabrasProblema = ["problema", "falla", "error", "dañado", "roto", "no funciona", "defecto"]
       const tieneProblema = palabrasProblema.some((palabra) => notas.toLowerCase().includes(palabra))
 
@@ -354,7 +457,6 @@ export default function VistaEquipos({
           },
         )
       } else {
-        // Notificación normal para actualización de notas
         await crearNotificacionAdmin(
           "equipo",
           `📝 Notas Actualizadas - Equipo #${equipoSeleccionado.id}`,
@@ -401,86 +503,34 @@ export default function VistaEquipos({
     try {
       setEnviandoReporte(true)
 
-      const datosReporte = {
+      const resultado = await enviarCorreoEquipoDeshabilitado({
         equipoId: equipo.id,
-        accion: "deshabilitado",
-        fecha: new Date().toLocaleString("es-MX"),
-        usuario: usuario,
-        razonDeshabilitacion: razon,
-        notasEquipo: equipo.notas || "Sin notas adicionales",
-        estadoAnterior: "En servicio",
-        estadoNuevo: "Fuera de servicio",
-        correoDestino: "manuelgaona800@gmail.com", // Cambiar por el correo real
-        asunto: `REPORTE URGENTE - Equipo ${equipo.id} Fuera de Servicio`,
-        mensaje: `
-REPORTE AUTOMÁTICO DE EQUIPO DESHABILITADO
-
-═══════════════════════════════════════════════════════════════
-INFORMACIÓN DEL EQUIPO
-═══════════════════════════════════════════════════════════════
-• Equipo ID: ${equipo.id}
-• Fecha y hora: ${new Date().toLocaleString("es-MX")}
-• Usuario responsable: ${usuario}
-• Estado anterior: En servicio
-• Estado nuevo: Fuera de servicio
-
-═══════════════════════════════════════════════════════════════
-RAZÓN DE LA DESHABILITACIÓN
-═══════════════════════════════════════════════════════════════
-${razon}
-
-═══════════════════════════════════════════════════════════════
-NOTAS ADICIONALES DEL EQUIPO
-═══════════════════════════════════════════════════════════════
-${equipo.notas || "Sin notas adicionales"}
-
-═══════════════════════════════════════════════════════════════
-ACCIONES REQUERIDAS
-═══════════════════════════════════════════════════════════════
-1. Revisar físicamente el equipo ${equipo.id}
-2. Diagnosticar el problema reportado: "${razon}"
-3. Realizar las reparaciones necesarias
-4. Notificar al laboratorio cuando esté listo para reactivación
-5. Actualizar el estado en el sistema una vez reparado
-
-⚠️  ATENCIÓN: Este equipo NO debe ser utilizado hasta completar la revisión técnica.
-
-═══════════════════════════════════════════════════════════════
-Sistema de Gestión de Laboratorio - Reporte Automático
-Generado el: ${new Date().toLocaleString("es-MX")}
-═══════════════════════════════════════════════════════════════
-      `,
-      }
-
-      // URL del Google Apps Script Web App (debes crear uno y reemplazar esta URL)
-      const googleScriptURL = "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"
-
-      const response = await fetch(googleScriptURL, {
-        method: "POST",
-        mode: "no-cors", // Necesario para Google Apps Script
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(datosReporte),
+        motivo: razon,
+        notas: equipo.notas || "Sin notas adicionales",
+        laboratorista: usuario,
       })
 
-      console.log("Reporte enviado exitosamente al departamento de sistemas")
-      await logAction("Envío de Reporte", `Reporte de equipo ${equipo.id} deshabilitado enviado por correo`)
+      if (!resultado.success) {
+        throw new Error(resultado.message || "Error al enviar el correo")
+      }
+
+      console.log("Correo enviado exitosamente al departamento de sistemas:", resultado.message)
+      await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
 
       toast({
-        title: "Reporte enviado",
-        description: `Se ha notificado al departamento de sistemas sobre el equipo ${equipo.id}`,
+        title: "Correo enviado",
+        description: `Se ha notificado por correo al departamento de sistemas sobre el equipo ${equipo.id}`,
         variant: "default",
       })
 
       return true
     } catch (error) {
-      console.error("Error al enviar el reporte por correo:", error)
-      await logAction("Error de Reporte", `Error al enviar reporte de equipo ${equipo.id}: ${error}`)
+      console.error("Error al enviar el correo:", error)
+      await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
 
       toast({
-        title: "Error al enviar reporte",
-        description: "No se pudo enviar el reporte al departamento de sistemas. El cambio se guardó correctamente.",
+        title: "Error al enviar correo",
+        description: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
         variant: "destructive",
       })
 
@@ -495,10 +545,8 @@ Generado el: ${new Date().toLocaleString("es-MX")}
     if (!equipo) return
 
     if (equipo.fueraDeServicio) {
-      // Si está fuera de servicio, reactivar directamente
       reactivarEquipo(id)
     } else {
-      // Si está en servicio, abrir diálogo para deshabilitar
       setEquipoADeshabilitar(equipo)
       setRazonDeshabilitacion("")
       setDialogoDeshabilitarAbierto(true)
@@ -516,7 +564,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
     }
 
     try {
-      const equiposActualizados = equipos.map((equipo) =>
+      const equiposActualizados: Equipo[] = equipos.map((equipo) =>
         equipo.id === equipoADeshabilitar.id
           ? {
               ...equipo,
@@ -525,18 +573,17 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               notas: equipo.notas
                 ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`
                 : `[${new Date().toLocaleString("es-MX")}] Deshabilitado: ${razonDeshabilitacion}`,
+              estadoReparacion: "reportado" as const,
+              fechaActualizacionEstado: new Date().toISOString(),
             }
           : equipo,
       )
 
       await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-        Equipos: equiposActualizados,
+        Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
-      setEquipos(equiposActualizados)
-
-      // Crear notificación DETALLADA para el administrador con estado inicial "reportado"
-      await crearNotificacionAdmin(
+      const notificacionId = await crearNotificacionAdmin(
         "equipo",
         `🚨EQUIPO #${equipoADeshabilitar.id} FUERA DE SERVICIO`,
         `URGENTE: El equipo #${equipoADeshabilitar.id} ha sido deshabilitado y requiere atención inmediata del departamento de sistemas. Se ha enviado un reporte automático por correo.`,
@@ -554,7 +601,25 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         },
       )
 
-      // Enviar reporte por correo
+      if (notificacionId) {
+        const equiposConNotificacion: Equipo[] = equiposActualizados.map((equipo) =>
+          equipo.id === equipoADeshabilitar.id
+            ? {
+                ...equipo,
+                notificacionAdminId: notificacionId,
+              }
+            : equipo,
+        )
+
+        await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+          Equipos: equiposConNotificacion.map(limpiarEquipo),
+        })
+
+        setEquipos(equiposConNotificacion)
+      } else {
+        setEquipos(equiposActualizados)
+      }
+
       await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
 
       setDialogoDeshabilitarAbierto(false)
@@ -578,7 +643,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         text: "Ha ocurrido un error al deshabilitar el equipo.",
         icon: "error",
       })
-      await logAction("Error", `Error al deshabilitar el equipo #${equipoADeshabilitar.id}: ${error}`)
+      await logAction("Error", `Error al deshabilitar el equipo #${equipoADeshabilitar?.id}: ${error}`)
     }
   }
 
@@ -586,7 +651,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
     try {
       const equipoAnterior = equipos.find((e) => e.id === id)
 
-      const equiposActualizados = equipos.map((equipo) =>
+      const equiposActualizados: Equipo[] = equipos.map((equipo) =>
         equipo.id === id
           ? {
               ...equipo,
@@ -595,17 +660,27 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               notas: equipo.notas
                 ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`
                 : `[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso`,
+              estadoReparacion: "resuelto" as const,
+              fechaActualizacionEstado: new Date().toISOString(),
+              comentarioEstado: "Equipo reactivado y disponible para uso",
             }
           : equipo,
       )
 
       await updateDoc(doc(db, "Numero de equipos", "equipos"), {
-        Equipos: equiposActualizados,
+        Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
       setEquipos(equiposActualizados)
 
-      // Crear notificación DETALLADA para el administrador
+      if (equipoAnterior?.notificacionAdminId) {
+        await actualizarEstadoNotificacionAdmin(
+          equipoAnterior.notificacionAdminId,
+          "resuelto",
+          "Equipo reactivado y disponible para uso",
+        )
+      }
+
       await crearNotificacionAdmin(
         "equipo",
         `✅ Equipo #${id} Reactivado y Disponible`,
@@ -637,6 +712,94 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         icon: "error",
       })
       await logAction("Error", `Error al reactivar el equipo #${id}: ${error}`)
+    }
+  }
+
+  const abrirDialogoEstado = (equipo: Equipo) => {
+    setEquipoParaEstado(equipo)
+    setNuevoEstado(equipo.estadoReparacion || "reportado")
+    setComentarioEstado(equipo.comentarioEstado || "")
+    setDialogoEstadoAbierto(true)
+  }
+
+  const actualizarEstadoReparacion = async () => {
+    if (!equipoParaEstado) return
+
+    try {
+      const equiposActualizados: Equipo[] = equipos.map((equipo) => {
+        if (equipo.id === equipoParaEstado.id) {
+          // Construir el objeto base sin campos opcionales
+          const equipoActualizado: Equipo = {
+            id: equipo.id,
+            fueraDeServicio: equipo.fueraDeServicio,
+            ultimaActualizacion: new Date().toISOString(),
+            estadoReparacion: nuevoEstado,
+            fechaActualizacionEstado: new Date().toISOString(),
+          }
+
+          // Agregar campos opcionales solo si tienen valores válidos
+          if (equipo.enUso !== undefined) {
+            equipoActualizado.enUso = equipo.enUso
+          }
+
+          if (equipo.notas) {
+            equipoActualizado.notas = equipo.notas
+          }
+
+          if (comentarioEstado.trim()) {
+            equipoActualizado.comentarioEstado = comentarioEstado.trim()
+          } else if (equipo.comentarioEstado) {
+            equipoActualizado.comentarioEstado = equipo.comentarioEstado
+          }
+
+          if (equipo.notificacionAdminId) {
+            equipoActualizado.notificacionAdminId = equipo.notificacionAdminId
+          }
+
+          return equipoActualizado
+        }
+        return equipo
+      })
+
+      // Limpiar todos los equipos para eliminar campos undefined
+      const equiposLimpios = equiposActualizados.map(limpiarEquipo)
+
+      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+        Equipos: equiposLimpios,
+      })
+
+      setEquipos(equiposActualizados)
+
+      if (equipoParaEstado.notificacionAdminId) {
+        await actualizarEstadoNotificacionAdmin(
+          equipoParaEstado.notificacionAdminId,
+          nuevoEstado,
+          comentarioEstado.trim() || undefined,
+        )
+      }
+
+      setDialogoEstadoAbierto(false)
+      setEquipoParaEstado(null)
+      setComentarioEstado("")
+
+      await logAction(
+        "Actualizar Estado Reparación",
+        `Estado del equipo #${equipoParaEstado.id} cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+      )
+
+      await swal({
+        title: "¡Estado actualizado!",
+        text: `El estado del equipo #${equipoParaEstado.id} se ha cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+        icon: "success",
+      })
+    } catch (error) {
+      console.error("Error al actualizar estado de reparación:", error)
+      await swal({
+        title: "Error",
+        text: "Ha ocurrido un error al actualizar el estado del equipo.",
+        icon: "error",
+      })
+      await logAction("Error", `Error al actualizar estado del equipo #${equipoParaEstado.id}: ${error}`)
     }
   }
 
@@ -920,6 +1083,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                     <TableHead className="font-semibold">ID</TableHead>
                     <TableHead className="font-semibold">Estado</TableHead>
                     <TableHead className="font-semibold">En Uso</TableHead>
+                    <TableHead className="font-semibold">Estado Reparación</TableHead>
                     <TableHead className="font-semibold">Última Actualización</TableHead>
                     <TableHead className="font-semibold">Notas</TableHead>
                     <TableHead className="font-semibold text-right">Acciones</TableHead>
@@ -973,6 +1137,25 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                             <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>No</span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          {equipo.estadoReparacion ? (
+                            <Badge
+                              variant="outline"
+                              className={`${
+                                equipo.estadoReparacion === "resuelto"
+                                  ? "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/30"
+                                  : equipo.estadoReparacion === "en_proceso"
+                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/30"
+                                    : "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/30"
+                              }`}
+                            >
+                              {estadosEquipo[equipo.estadoReparacion].icon}
+                              <span className="ml-1">{estadosEquipo[equipo.estadoReparacion].label}</span>
+                            </Badge>
+                          ) : (
+                            <span className={esModoOscuro ? "text-gray-400" : "text-gray-500"}>-</span>
+                          )}
+                        </TableCell>
                         <TableCell className={esModoOscuro ? "text-gray-300" : "text-gray-700"}>
                           {equipo.ultimaActualizacion ? formatearFecha(equipo.ultimaActualizacion) : "N/A"}
                         </TableCell>
@@ -1015,6 +1198,31 @@ Generado el: ${new Date().toLocaleString("es-MX")}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+
+                            {equipo.fueraDeServicio && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => abrirDialogoEstado(equipo)}
+                                      className={`${
+                                        esModoOscuro
+                                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                          : "bg-blue-600 hover:bg-blue-700 text-white"
+                                      }`}
+                                    >
+                                      <Activity className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Actualizar Estado de Reparación</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+
                             <Button
                               size="sm"
                               variant={equipo.fueraDeServicio ? "default" : "destructive"}
@@ -1210,6 +1418,84 @@ Generado el: ${new Date().toLocaleString("es-MX")}
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para cambiar estado de reparación */}
+      <Dialog open={dialogoEstadoAbierto} onOpenChange={setDialogoEstadoAbierto}>
+        <DialogContent className={`${esModoOscuro ? "bg-[#1d5631]/20 text-white" : "bg-white"} max-w-md`}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Activity className="h-5 w-5" />
+              <span>Actualizar Estado de Reparación</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {equipoParaEstado && (
+            <div className="space-y-4">
+              <div className={`p-3 rounded-lg ${esModoOscuro ? "bg-[#3a3a3a]" : "bg-gray-50"}`}>
+                <h4 className="font-medium mb-2">Información del Equipo:</h4>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="font-medium">Equipo:</span> #{equipoParaEstado.id}
+                  </p>
+                  <p>
+                    <span className="font-medium">Estado actual:</span>{" "}
+                    {equipoParaEstado.estadoReparacion
+                      ? estadosEquipo[equipoParaEstado.estadoReparacion].label
+                      : "Sin estado"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="estado">Nuevo Estado *</Label>
+                <Select value={nuevoEstado} onValueChange={(value: any) => setNuevoEstado(value)}>
+                  <SelectTrigger className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={esModoOscuro ? "bg-[#3a3a3a] text-white" : ""}>
+                    {Object.entries(estadosEquipo).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center space-x-2">
+                          <div className={`p-1 rounded-full ${config.color} text-white`}>{config.icon}</div>
+                          <div>
+                            <p className="font-medium">{config.label}</p>
+                            <p className="text-xs opacity-70">{config.description}</p>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="comentario">Comentario (opcional)</Label>
+                <Textarea
+                  id="comentario"
+                  value={comentarioEstado}
+                  onChange={(e) => setComentarioEstado(e.target.value)}
+                  placeholder="Agregar detalles sobre el progreso de la reparación..."
+                  className={esModoOscuro ? "bg-[#3a3a3a] border-gray-600" : ""}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex space-x-2">
+                <Button onClick={() => setDialogoEstadoAbierto(false)} variant="outline" className="flex-1">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={actualizarEstadoReparacion}
+                  className={`flex-1 ${esModoOscuro ? colors.dark.buttonPrimary : colors.light.buttonPrimary}`}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Actualizar Estado
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

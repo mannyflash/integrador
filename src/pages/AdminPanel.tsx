@@ -30,7 +30,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Separator } from "@/components/ui/separator"
 
 // Importar los iconos necesarios de Lucide React
 import {
@@ -87,7 +89,7 @@ const colors = {
     primary: "#1d5631", // Verde oscuro como color principal en modo oscuro
     secondary: "#800040", // Guinda/vino como color secundario
     tertiary: "#74726f", // Gris para elementos terciarios
-    background: "bg-[#0c1f15]", // Fondo verde muy oscuro
+    background: "bg-[#0c1f1a]", // Fondo verde muy oscuro
     cardBackground: "bg-[#2a2a2a]",
     headerBackground: "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]",
     titleText: "text-white",
@@ -243,6 +245,10 @@ export default function AdminPanel() {
     ultimaActualizacion: new Date().toLocaleString(),
   })
 
+  const [notificacionSeleccionada, setNotificacionSeleccionada] = useState<Notificacion | null>(null)
+  const [previewAbierto, setPreviewAbierto] = useState(false)
+  // const [mostrarContenido, setMostrarContenido] = useState(false) // ELIMINADO
+
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [isLoading, setIsLoading] = useState(true)
 
@@ -314,6 +320,17 @@ export default function AdminPanel() {
 
   // Configurar listeners para notificaciones
   const setupNotificacionesListeners = () => {
+    const esDiaActual = (timestamp: Timestamp) => {
+      const fechaNotificacion = timestamp.toDate()
+      const hoy = new Date()
+
+      return (
+        fechaNotificacion.getDate() === hoy.getDate() &&
+        fechaNotificacion.getMonth() === hoy.getMonth() &&
+        fechaNotificacion.getFullYear() === hoy.getFullYear()
+      )
+    }
+
     // Listener principal para notificaciones
     const unsubscribeNotificaciones = onSnapshot(
       query(collection(db, "NotificacionesAdmin"), orderBy("fecha", "desc"), limit(50)),
@@ -323,13 +340,22 @@ export default function AdminPanel() {
           ...doc.data(),
         })) as Notificacion[]
 
-        setNotificaciones(notificacionesData)
+        const notificacionesFiltradas = notificacionesData.filter((n) => {
+          // Si es una notificación de equipo, mostrar solo las que no están resueltas
+          if (n.tipo === "equipo") {
+            return n.estadoEquipo !== "resuelto"
+          }
+          // Para otros tipos de notificaciones, mostrar las del día actual o las no leídas
+          return esDiaActual(n.fecha) || !n.leida
+        })
 
-        const noLeidas = notificacionesData.filter((n) => !n.leida).length
+        setNotificaciones(notificacionesFiltradas)
+
+        const noLeidas = notificacionesFiltradas.filter((n) => !n.leida).length
         setNotificacionesNoLeidas(noLeidas)
 
         // Calcular estadísticas
-        const porTipo = notificacionesData.reduce(
+        const porTipo = notificacionesFiltradas.reduce(
           (acc, notif) => {
             acc[notif.tipo] = (acc[notif.tipo] || 0) + 1
             return acc
@@ -338,14 +364,14 @@ export default function AdminPanel() {
         )
 
         setEstadisticas({
-          total: notificacionesData.length,
+          total: notificacionesFiltradas.length,
           noLeidas,
           porTipo,
           ultimaActualizacion: new Date().toLocaleString(),
         })
 
         // Mostrar alerta para notificaciones nuevas de alta prioridad
-        const nuevasAlta = notificacionesData.filter(
+        const nuevasAlta = notificacionesFiltradas.filter(
           (n) => !n.leida && n.prioridad === "alta" && Date.now() - n.fecha.toMillis() < 60000,
         )
 
@@ -455,6 +481,26 @@ export default function AdminPanel() {
     const años = Math.floor(meses / 12)
     return `Hace ${años} año${años > 1 ? "s" : ""}`
   }
+
+  const abrirPreview = (notificacion: Notificacion) => {
+    setNotificacionSeleccionada(notificacion)
+    setPreviewAbierto(true)
+    // setMostrarContenido(true) // ELIMINADO
+
+    // Marcar como leída si no lo está
+    if (!notificacion.leida) {
+      marcarComoLeida(notificacion.id)
+    }
+  }
+
+  // const cerrarPreview = () => { // ELIMINADO
+  //   setMostrarContenido(false)
+  //   // Esperar a que termine la animación antes de cerrar el Sheet
+  //   setTimeout(() => {
+  //     setPreviewAbierto(false)
+  //     setNotificacionSeleccionada(null)
+  //   }, 300) // Duración de la animación de salida
+  // }
 
   const NotificacionItem = ({ notificacion }: { notificacion: Notificacion }) => {
     const tipoConfig = tiposNotificacion[notificacion.tipo]
@@ -693,7 +739,7 @@ export default function AdminPanel() {
         className={`p-4 border-l-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md ${
           prioridadColors[notificacion.prioridad]
         } ${!notificacion.leida ? "ring-2 ring-blue-200" : ""}`}
-        onClick={() => !notificacion.leida && marcarComoLeida(notificacion.id)}
+        onClick={() => abrirPreview(notificacion)}
       >
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-3 flex-1">
@@ -736,6 +782,284 @@ export default function AdminPanel() {
           </div>
         </div>
       </motion.div>
+    )
+  }
+
+  const NotificacionPreview = () => {
+    if (!notificacionSeleccionada) return null
+
+    const tipoConfig = tiposNotificacion[notificacionSeleccionada.tipo]
+    const estadoConfig = notificacionSeleccionada.estadoEquipo
+      ? estadosEquipo[notificacionSeleccionada.estadoEquipo]
+      : null
+
+    return (
+      <Sheet
+        open={previewAbierto}
+        onOpenChange={(open) => {
+          // if (!open) cerrarPreview() // ELIMINADO
+          if (!open) {
+            setPreviewAbierto(false)
+            setNotificacionSeleccionada(null)
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className={`w-full sm:max-w-2xl ${theme === "dark" ? "bg-[#1a1a1a] text-white border-gray-700" : "bg-white"}`}
+        >
+          {/* <AnimatePresence mode="wait"> // ELIMINADO */}
+          {/* {mostrarContenido && ( // ELIMINADO */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            // exit={{ opacity: 0, x: 20 }} // ELIMINADO
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <SheetHeader>
+              <div className="flex items-center space-x-3 mb-2">
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  // exit={{ scale: 0, rotate: 180 }} // ELIMINADO
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                  className={`p-3 rounded-full ${tipoConfig.color} text-white`}
+                >
+                  {tipoConfig.icon}
+                </motion.div>
+                <div className="flex-1">
+                  <SheetTitle className={theme === "dark" ? "text-white" : "text-gray-900"}>
+                    {notificacionSeleccionada.titulo}
+                  </SheetTitle>
+                  <SheetDescription className="flex items-center space-x-2 mt-1">
+                    <Badge variant="outline">{tipoConfig.label}</Badge>
+                    {notificacionSeleccionada.prioridad === "alta" && (
+                      <Badge variant="destructive" className="text-xs">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Urgente
+                      </Badge>
+                    )}
+                    {estadoConfig && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${estadoConfig.color} text-white border-transparent`}
+                      >
+                        {estadoConfig.icon}
+                        <span className="ml-1">{estadoConfig.label}</span>
+                      </Badge>
+                    )}
+                  </SheetDescription>
+                </div>
+              </div>
+            </SheetHeader>
+
+            <Separator className="my-4" />
+
+            <ScrollArea className="h-[calc(100vh-200px)]">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                // exit={{ opacity: 0, y: -20 }} // ELIMINADO
+                transition={{ delay: 0.1, duration: 0.3 }}
+                className="space-y-6"
+              >
+                {/* Información principal */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  // exit={{ opacity: 0, x: -20 }} // ELIMINADO
+                  transition={{ delay: 0.15 }}
+                >
+                  <h3 className={`text-sm font-semibold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
+                    Mensaje
+                  </h3>
+                  <p className={`text-base ${theme === "dark" ? "text-gray-200" : "text-gray-800"}`}>
+                    {notificacionSeleccionada.mensaje}
+                  </p>
+                </motion.div>
+
+                <Separator />
+
+                {/* Fecha y hora */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  // exit={{ opacity: 0, x: -20 }} // ELIMINADO
+                  transition={{ delay: 0.2 }}
+                  className="grid grid-cols-2 gap-4"
+                >
+                  <div>
+                    <h3
+                      className={`text-sm font-semibold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                    >
+                      Fecha y hora
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4 text-gray-400" />
+                      <span className={theme === "dark" ? "text-gray-200" : "text-gray-800"}>
+                        {notificacionSeleccionada.fecha.toDate().toLocaleString("es-MX", {
+                          dateStyle: "full",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </div>
+                    <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                      {formatearFecha(notificacionSeleccionada.fecha)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3
+                      className={`text-sm font-semibold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                    >
+                      Prioridad
+                    </h3>
+                    <Badge
+                      variant={notificacionSeleccionada.prioridad === "alta" ? "destructive" : "outline"}
+                      className="capitalize"
+                    >
+                      {notificacionSeleccionada.prioridad}
+                    </Badge>
+                  </div>
+                </motion.div>
+
+                <Separator />
+
+                {/* Estado del equipo (si aplica) */}
+                {estadoConfig && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    // exit={{ opacity: 0, x: -20 }} // ELIMINADO
+                    transition={{ delay: 0.25 }}
+                  >
+                    <h3
+                      className={`text-sm font-semibold mb-3 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                    >
+                      Estado de reparación
+                    </h3>
+                    <Card className={theme === "dark" ? "bg-[#2a2a2a] border-gray-700" : "bg-gray-50"}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className={`p-2 rounded-full ${estadoConfig.color} text-white`}>{estadoConfig.icon}</div>
+                          <div>
+                            <p className={`font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                              {estadoConfig.label}
+                            </p>
+                            <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                              {estadoConfig.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {notificacionSeleccionada.comentarioEstado && (
+                          <div
+                            className={`mt-3 p-3 rounded-lg ${theme === "dark" ? "bg-[#1a1a1a]" : "bg-white"} border ${theme === "dark" ? "border-gray-700" : "border-gray-200"}`}
+                          >
+                            <p
+                              className={`text-xs font-semibold mb-1 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                            >
+                              Comentario del laboratorista:
+                            </p>
+                            <p className={`text-sm ${theme === "dark" ? "text-gray-200" : "text-gray-800"}`}>
+                              {notificacionSeleccionada.comentarioEstado}
+                            </p>
+                          </div>
+                        )}
+
+                        {notificacionSeleccionada.fechaActualizacionEstado && (
+                          <p className={`text-xs mt-2 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                            Última actualización: {formatearFecha(notificacionSeleccionada.fechaActualizacionEstado)}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {/* Detalles específicos según el tipo */}
+                {notificacionSeleccionada.datos && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    // exit={{ opacity: 0, x: -20 }} // ELIMINADO
+                    transition={{ delay: 0.3 }}
+                  >
+                    <h3
+                      className={`text-sm font-semibold mb-3 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}
+                    >
+                      Detalles adicionales
+                    </h3>
+                    <Card className={theme === "dark" ? "bg-[#2a2a2a] border-gray-700" : "bg-gray-50"}>
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {Object.entries(notificacionSeleccionada.datos).map(([key, value]) => (
+                            <div key={key} className="space-y-1">
+                              <p
+                                className={`text-xs font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-500"} capitalize`}
+                              >
+                                {key.replace(/([A-Z])/g, " $1").trim()}
+                              </p>
+                              <p className={`text-sm ${theme === "dark" ? "text-gray-200" : "text-gray-800"}`}>
+                                {typeof value === "boolean" ? (value ? "Sí" : "No") : value?.toString() || "N/A"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </motion.div>
+            </ScrollArea>
+
+            {/* Botones de acción */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              // exit={{ opacity: 0, y: 20 }} // ELIMINADO
+              transition={{ delay: 0.2 }}
+              className="absolute bottom-0 left-0 right-0 p-6 border-t bg-inherit"
+            >
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  onClick={() => {
+                    if (notificacionSeleccionada.leida) {
+                      updateDoc(doc(db, "NotificacionesAdmin", notificacionSeleccionada.id), { leida: false })
+                      setNotificaciones((prev) =>
+                        prev.map((n) => (n.id === notificacionSeleccionada.id ? { ...n, leida: false } : n)),
+                      )
+                    } else {
+                      marcarComoLeida(notificacionSeleccionada.id)
+                    }
+                    // setPreviewAbierto(false) // ELIMINADO
+                    // setNotificacionSeleccionada(null) // ELIMINADO
+                    setPreviewAbierto(false)
+                    setNotificacionSeleccionada(null)
+                  }}
+                >
+                  {notificacionSeleccionada.leida ? "Marcar como no leída" : "Marcar como leída"}
+                </Button>
+                <Button
+                  className={theme === "dark" ? currentColors.buttonPrimary : currentColors.buttonPrimary}
+                  onClick={() => {
+                    // setPreviewAbierto(false) // ELIMINADO
+                    // setNotificacionSeleccionada(null) // ELIMINADO
+                    setPreviewAbierto(false)
+                    setNotificacionSeleccionada(null)
+                  }}
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+          {/* )} // ELIMINADO */}
+          {/* </AnimatePresence> // ELIMINADO */}
+        </SheetContent>
+      </Sheet>
     )
   }
 
@@ -982,6 +1306,8 @@ export default function AdminPanel() {
           )}
         </main>
       </div>
+
+      <NotificacionPreview />
     </div>
   )
 }
