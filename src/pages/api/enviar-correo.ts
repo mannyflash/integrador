@@ -51,14 +51,14 @@ Generado el: ${new Date().toLocaleString("es-MX")}
     const datosParaScript = {
       asunto: `REPORTE URGENTE - Equipo ${datos.equipoId} Fuera de Servicio`,
       mensaje: mensaje,
-      correoDestino: "L21303162@puertopenasco.tecnm.mx",
+      correoDestino: "diana.lc@puertopenasco.tecnm.mx",
     }
 
     const googleScriptURL = "https://script.google.com/macros/s/AKfycbw6cyTLzTDQdbLh5obzkZuHbFD90cZcoe6gXo9_H4FNtXE7biAbr_6FgoKRCDK6X1U/exec"
 
     const response = await fetch(googleScriptURL, {
       method: "POST",
-      mode: "no-cors", // Necesario para Google Apps Script
+      mode: "no-cors",
       headers: {
         "Content-Type": "application/json",
       },
