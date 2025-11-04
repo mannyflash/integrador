@@ -29,7 +29,6 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { createGlobalStyle } from "styled-components"
 
 interface ClassInfo {
   id: string
@@ -61,12 +60,6 @@ interface Practica {
   Duracion: string
   fecha: string
 }
-
-const GlobalStyle = createGlobalStyle`
-  .swal2-container {
-    z-index: 10000 !important;
-  }
-`
 
 export function AppSidebar({
   maestroId,
@@ -862,8 +855,6 @@ export function AppSidebar({
           </form>
         </DialogContent>
       </Dialog>
-      <GlobalStyle />
     </>
   )
 }
-
