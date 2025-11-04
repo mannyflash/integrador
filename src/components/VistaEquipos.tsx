@@ -34,7 +34,7 @@ import swal from "sweetalert"
 import { db } from "../pages/panel-laboratorista"
 import { toast } from "../hooks/use-toast"
 import { AlertTriangle, Wrench, CheckCircle2 } from "lucide-react"
-import { enviarCorreoEquipoDeshabilitado } from "../pages/enviar-correo"
+import { enviarCorreoEquipoDeshabilitado } from "../pages/api/enviar-correo"
 
 interface Equipo {
   id: string
