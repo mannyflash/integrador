@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Pencil, Trash2, UserSquare2, Mail, Building, Key, Search, Plus, RefreshCw, UserCheck } from "lucide-react"
+import { Pencil, Trash2, UserSquare2, Mail, Building, Key, Search, Plus, RefreshCw, UserCheck, List, ArrowLeft } from 'lucide-react'
 import {
   collection,
   setDoc,
@@ -32,11 +32,14 @@ interface Docente {
   [key: string]: any
 }
 
+type VistaDocente = "menu" | "agregar" | "lista"
+
 export function DocentesTab({
   db,
   isDarkMode,
   currentColors,
 }: { db: Firestore; isDarkMode: boolean; currentColors: any }) {
+  const [vistaActual, setVistaActual] = useState<VistaDocente>("menu")
   const [docentes, setDocentes] = useState<Docente[]>([])
   const [datosDocente, setDatosDocente] = useState<Docente>({
     Matricula: "",
@@ -87,7 +90,6 @@ export function DocentesTab({
       const { Matricula, Contraseña, ...restoDatosDocente } = datosDocente
 
       if (!editando) {
-        // Check if the matricula already exists when adding a new teacher
         const docenteDoc = doc(db, "Docentes", Matricula)
         const docenteSnapshot = await getDoc(docenteDoc)
 
@@ -125,6 +127,7 @@ export function DocentesTab({
       }
       setDatosDocente({ Matricula: "", Nombre: "", Apellido: "", Email: "", Contraseña: "", Departamento: "" })
       cargarDocentes()
+      setVistaActual("menu")
     } catch (error) {
       console.error("Error al agregar/actualizar docente:", error)
       await Swal.fire({
@@ -162,6 +165,7 @@ export function DocentesTab({
   const modificarDocente = (docente: Docente) => {
     setDatosDocente({ ...docente, Contraseña: "" })
     setEditando(true)
+    setVistaActual("agregar")
   }
 
   const cancelarEdicion = () => {
@@ -174,6 +178,7 @@ export function DocentesTab({
       Departamento: "",
     })
     setEditando(false)
+    setVistaActual("menu")
   }
 
   const docentesFiltrados = docentes.filter(
@@ -185,173 +190,241 @@ export function DocentesTab({
       docente.Departamento.toLowerCase().includes(busqueda.toLowerCase()),
   )
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card
-        className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} shadow-lg transition-all duration-300 hover:shadow-xl border border-opacity-20 ${isDarkMode ? "border-gray-700" : "border-gray-200"}`}
-      >
-        <CardHeader
-          className={`${isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"} rounded-t-lg`}
+  if (vistaActual === "menu") {
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full p-4">
+          <Card
+            className={`${isDarkMode ? "bg-[#2a2a2a] hover:bg-[#323232]" : "bg-white hover:bg-gray-50"} shadow-lg transition-all duration-300 hover:shadow-2xl border border-opacity-20 ${isDarkMode ? "border-gray-700" : "border-gray-200"} cursor-pointer transform hover:scale-105`}
+            onClick={() => setVistaActual("agregar")}
+          >
+            <CardContent className="pt-12 pb-12 flex flex-col items-center justify-center text-center space-y-4">
+              <div className={`${isDarkMode ? "bg-[#1d5631]" : "bg-[#800040]"} p-6 rounded-full`}>
+                <Plus className="h-12 w-12 text-white" />
+              </div>
+              <h3 className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-[#800040]"}`}>
+                Agregar Maestro
+              </h3>
+              <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                Registrar un nuevo docente en el sistema
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`${isDarkMode ? "bg-[#2a2a2a] hover:bg-[#323232]" : "bg-white hover:bg-gray-50"} shadow-lg transition-all duration-300 hover:shadow-2xl border border-opacity-20 ${isDarkMode ? "border-gray-700" : "border-gray-200"} cursor-pointer transform hover:scale-105`}
+            onClick={() => setVistaActual("lista")}
+          >
+            <CardContent className="pt-12 pb-12 flex flex-col items-center justify-center text-center space-y-4">
+              <div className={`${isDarkMode ? "bg-[#1d5631]" : "bg-[#800040]"} p-6 rounded-full`}>
+                <List className="h-12 w-12 text-white" />
+              </div>
+              <h3 className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-[#800040]"}`}>
+                Ver Lista de Maestros
+              </h3>
+              <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                Consultar, editar y eliminar docentes registrados
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (vistaActual === "agregar") {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Button
+          onClick={() => {
+            cancelarEdicion()
+            setVistaActual("menu")
+          }}
+          className={`mb-4 ${isDarkMode ? "bg-[#74726f] hover:bg-[#5a5856]" : "bg-[#74726f] hover:bg-[#5a5856]"} text-white`}
         >
-          <CardTitle className="text-white flex items-center gap-2">
-            {editando ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-            {editando ? "Editar Docente" : "Agregar Docente"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <form onSubmit={manejarEnvio} className="space-y-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="matriculaDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <UserCheck className="h-4 w-4" /> Matrícula
-              </Label>
-              <div className="relative">
-                <Input
-                  id="matriculaDocente"
-                  value={datosDocente.Matricula}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Matricula: e.target.value })}
-                  required
-                  disabled={editando}
-                  className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
-                />
-                <UserCheck
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="nombreDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <UserSquare2 className="h-4 w-4" /> Nombre
-              </Label>
-              <div className="relative">
-                <Input
-                  id="nombreDocente"
-                  value={datosDocente.Nombre}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Nombre: e.target.value })}
-                  required
-                  className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
-                />
-                <UserSquare2
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="apellidoDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <UserSquare2 className="h-4 w-4" /> Apellido
-              </Label>
-              <div className="relative">
-                <Input
-                  id="apellidoDocente"
-                  value={datosDocente.Apellido}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Apellido: e.target.value })}
-                  required
-                  className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
-                />
-                <UserSquare2
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="emailDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <Mail className="h-4 w-4" /> Email
-              </Label>
-              <div className="relative">
-                <Input
-                  id="emailDocente"
-                  type="email"
-                  value={datosDocente.Email}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Email: e.target.value })}
-                  required
-                  className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
-                />
-                <Mail
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="contraseñaDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <Key className="h-4 w-4" />
-                {editando ? "Nueva Contraseña (dejar en blanco para no cambiar)" : "Contraseña"}
-              </Label>
-              <div className="relative">
-                <Input
-                  id="contraseñaDocente"
-                  type="password"
-                  value={datosDocente.Contraseña}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Contraseña: e.target.value })}
-                  required={!editando}
-                  className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
-                />
-                <Key
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="departamentoDocente"
-                className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
-              >
-                <Building className="h-4 w-4" /> Departamento
-              </Label>
-              <div className="relative">
-                <select
-                  id="departamentoDocente"
-                  value={datosDocente.Departamento}
-                  onChange={(e) => setDatosDocente({ ...datosDocente, Departamento: e.target.value })}
-                  required
-                  className={`w-full pl-9 py-2 rounded-md ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Volver al Menú
+        </Button>
+        
+        <Card
+          className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} shadow-lg transition-all duration-300 hover:shadow-xl border border-opacity-20 ${isDarkMode ? "border-gray-700" : "border-gray-200"}`}
+        >
+          <CardHeader
+            className={`${isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"} rounded-t-lg`}
+          >
+            <CardTitle className="text-white flex items-center gap-2">
+              {editando ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              {editando ? "Editar Docente" : "Agregar Docente"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <form onSubmit={manejarEnvio} className="space-y-4">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="matriculaDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
                 >
-                  <option value="">Seleccione un departamento</option>
-                  <option value="Ingeniería en Sistemas Computacionales">Ingeniería en Sistemas Computacionales</option>
-                  <option value="Ingeniería Civil">Ingeniería Civil</option>
-                  <option value="Ingeniería Industrial">Ingeniería Industrial</option>
-                  <option value="Licenciatura en Administración">Licenciatura en Administración</option>
-                </select>
-                <Building
-                  className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
-                />
+                  <UserCheck className="h-4 w-4" /> Matrícula
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="matriculaDocente"
+                    value={datosDocente.Matricula}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Matricula: e.target.value })}
+                    required
+                    disabled={editando}
+                    className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  />
+                  <UserCheck
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button
-                type="submit"
-                className={`flex-1 ${isDarkMode ? "bg-[#1d5631] hover:bg-[#153d23] text-white" : "bg-[#800040] hover:bg-[#5c002e] text-white"} transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2`}
-              >
-                {editando ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                {editando ? "Actualizar Docente" : "Agregar Docente"}
-              </Button>
-              {editando && (
+              <div className="space-y-2">
+                <Label
+                  htmlFor="nombreDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
+                >
+                  <UserSquare2 className="h-4 w-4" /> Nombre
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="nombreDocente"
+                    value={datosDocente.Nombre}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Nombre: e.target.value })}
+                    required
+                    className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  />
+                  <UserSquare2
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="apellidoDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
+                >
+                  <UserSquare2 className="h-4 w-4" /> Apellido
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="apellidoDocente"
+                    value={datosDocente.Apellido}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Apellido: e.target.value })}
+                    required
+                    className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  />
+                  <UserSquare2
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="emailDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
+                >
+                  <Mail className="h-4 w-4" /> Email
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="emailDocente"
+                    type="email"
+                    value={datosDocente.Email}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Email: e.target.value })}
+                    required
+                    className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  />
+                  <Mail
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="contraseñaDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
+                >
+                  <Key className="h-4 w-4" />
+                  {editando ? "Nueva Contraseña (dejar en blanco para no cambiar)" : "Contraseña"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="contraseñaDocente"
+                    type="password"
+                    value={datosDocente.Contraseña}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Contraseña: e.target.value })}
+                    required={!editando}
+                    className={`pl-9 ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  />
+                  <Key
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="departamentoDocente"
+                  className={`${isDarkMode ? "text-white" : "text-[#800040]"} flex items-center gap-2`}
+                >
+                  <Building className="h-4 w-4" /> Departamento
+                </Label>
+                <div className="relative">
+                  <select
+                    id="departamentoDocente"
+                    value={datosDocente.Departamento}
+                    onChange={(e) => setDatosDocente({ ...datosDocente, Departamento: e.target.value })}
+                    required
+                    className={`w-full pl-9 py-2 rounded-md ${isDarkMode ? "bg-[#3a3a3a] text-white border-[#1d5631]/30" : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30"} focus:ring-2 focus:ring-opacity-50 ${isDarkMode ? "focus:ring-[#1d5631]" : "focus:ring-[#800040]"} transition-all`}
+                  >
+                    <option value="">Seleccione un departamento</option>
+                    <option value="Ingeniería en Sistemas Computacionales">Ingeniería en Sistemas Computacionales</option>
+                    <option value="Ingeniería Civil">Ingeniería Civil</option>
+                    <option value="Ingeniería Industrial">Ingeniería Industrial</option>
+                    <option value="Licenciatura en Administración">Licenciatura en Administración</option>
+                  </select>
+                  <Building
+                    className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? "text-[#a0a0a0]" : "text-[#74726f]"}`}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
                 <Button
-                  type="button"
-                  onClick={cancelarEdicion}
-                  className={`${isDarkMode ? "bg-[#74726f] hover:bg-[#5a5856] text-white" : "bg-[#74726f] hover:bg-[#5a5856] text-white"} transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2`}
+                  type="submit"
+                  className={`flex-1 ${isDarkMode ? "bg-[#1d5631] hover:bg-[#153d23] text-white" : "bg-[#800040] hover:bg-[#5c002e] text-white"} transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2`}
                 >
-                  <RefreshCw className="h-4 w-4" />
-                  Cancelar
+                  {editando ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editando ? "Actualizar Docente" : "Agregar Docente"}
                 </Button>
-              )}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+                {editando && (
+                  <Button
+                    type="button"
+                    onClick={cancelarEdicion}
+                    className={`${isDarkMode ? "bg-[#74726f] hover:bg-[#5a5856] text-white" : "bg-[#74726f] hover:bg-[#5a5856] text-white"} transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2`}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      <Button
+        onClick={() => setVistaActual("menu")}
+        className={`mb-4 ${isDarkMode ? "bg-[#74726f] hover:bg-[#5a5856]" : "bg-[#74726f] hover:bg-[#5a5856]"} text-white`}
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Volver al Menú
+      </Button>
+      
       <Card
         className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} shadow-lg transition-all duration-300 hover:shadow-xl border border-opacity-20 ${isDarkMode ? "border-gray-700" : "border-gray-200"}`}
       >
@@ -380,7 +453,7 @@ export function DocentesTab({
           </div>
 
           <div className="rounded-lg border overflow-hidden">
-            <div className="max-h-[400px] overflow-auto">
+            <div className="max-h-[500px] overflow-auto">
               <Table>
                 <TableHeader className={`sticky top-0 ${isDarkMode ? "bg-gray-800" : "bg-gray-50"}`}>
                   <TableRow>

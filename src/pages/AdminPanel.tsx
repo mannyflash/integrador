@@ -23,7 +23,7 @@ import { AdministradoresTab } from "../components/AdministradoresTab"
 import { firebaseConfig } from "../lib/constants"
 import { motion, AnimatePresence } from "framer-motion"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import Swal from "sweetalert2"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,26 +35,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 
 // Importar los iconos necesarios de Lucide React
-import {
-  Moon,
-  Sun,
-  Bell,
-  AlertTriangle,
-  UserPlus,
-  Settings,
-  CheckCircle,
-  Clock,
-  Users,
-  Laptop,
-  Award,
-  Shield,
-  Activity,
-  AlertCircle,
-  Info,
-  Zap,
-  Wrench,
-  CheckCircle2,
-} from "lucide-react"
+import { Moon, Sun, Bell, AlertTriangle, UserPlus, Settings, CheckCircle, Clock, Users, Laptop, Award, Shield, Activity, AlertCircle, Info, Zap, Wrench, CheckCircle2 } from 'lucide-react'
 
 // Añadir la definición de colores del index.tsx
 const colors = {
@@ -247,7 +228,6 @@ export default function AdminPanel() {
 
   const [notificacionSeleccionada, setNotificacionSeleccionada] = useState<Notificacion | null>(null)
   const [previewAbierto, setPreviewAbierto] = useState(false)
-  // const [mostrarContenido, setMostrarContenido] = useState(false) // ELIMINADO
 
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [isLoading, setIsLoading] = useState(true)
@@ -351,6 +331,13 @@ export default function AdminPanel() {
 
         setNotificaciones(notificacionesFiltradas)
 
+        if (notificacionSeleccionada) {
+          const notificacionActualizada = notificacionesFiltradas.find((n) => n.id === notificacionSeleccionada.id)
+          if (notificacionActualizada) {
+            setNotificacionSeleccionada(notificacionActualizada)
+          }
+        }
+
         const noLeidas = notificacionesFiltradas.filter((n) => !n.leida).length
         setNotificacionesNoLeidas(noLeidas)
 
@@ -370,20 +357,44 @@ export default function AdminPanel() {
           ultimaActualizacion: new Date().toLocaleString(),
         })
 
-        // Mostrar alerta para notificaciones nuevas de alta prioridad
-        const nuevasAlta = notificacionesFiltradas.filter(
-          (n) => !n.leida && n.prioridad === "alta" && Date.now() - n.fecha.toMillis() < 60000,
-        )
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const nuevaNotificacion = {
+              id: change.doc.id,
+              ...change.doc.data(),
+            } as Notificacion
 
-        nuevasAlta.forEach((notif) => {
-          Swal.fire({
-            title: "🚨 Notificación Urgente",
-            text: notif.titulo,
-            icon: "warning",
-            confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
-            timer: 5000,
-            timerProgressBar: true,
-          })
+            // Solo mostrar alerta si la notificación fue creada en los últimos 5 segundos
+            const tiempoTranscurrido = Date.now() - nuevaNotificacion.fecha.toMillis()
+            if (tiempoTranscurrido < 5000) {
+              // Mostrar toast para notificaciones de prioridad alta o media
+              if (nuevaNotificacion.prioridad === "alta") {
+                Swal.fire({
+                  title: "🚨 Notificación Urgente",
+                  text: nuevaNotificacion.titulo,
+                  icon: "warning",
+                  confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+                  timer: 5000,
+                  timerProgressBar: true,
+                  position: "top-end",
+                  toast: true,
+                  showConfirmButton: false,
+                })
+              } else if (nuevaNotificacion.prioridad === "media") {
+                Swal.fire({
+                  title: nuevaNotificacion.titulo,
+                  text: nuevaNotificacion.mensaje.substring(0, 100),
+                  icon: "info",
+                  confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+                  timer: 4000,
+                  timerProgressBar: true,
+                  position: "top-end",
+                  toast: true,
+                  showConfirmButton: false,
+                })
+              }
+            }
+          }
         })
       },
     )
@@ -422,13 +433,19 @@ export default function AdminPanel() {
 
   const marcarComoLeida = async (notificacionId: string) => {
     try {
-      // Actualizar en Firestore
       await updateDoc(doc(db, "NotificacionesAdmin", notificacionId), {
         leida: true,
       })
 
-      // Actualizar estado local inmediatamente
       setNotificaciones((prev) => prev.map((n) => (n.id === notificacionId ? { ...n, leida: true } : n)))
+
+      setNotificacionSeleccionada((prev) => {
+        if (prev && prev.id === notificacionId) {
+          return { ...prev, leida: true }
+        }
+        return prev
+      })
+
       setNotificacionesNoLeidas((prev) => Math.max(0, prev - 1))
     } catch (error) {
       console.error("Error al marcar notificación como leída:", error)
@@ -483,24 +500,27 @@ export default function AdminPanel() {
   }
 
   const abrirPreview = (notificacion: Notificacion) => {
-    setNotificacionSeleccionada(notificacion)
+    // Crear una copia independiente de la notificación
+    const copiaNotificacion = { ...notificacion }
+    setNotificacionSeleccionada(copiaNotificacion)
     setPreviewAbierto(true)
-    // setMostrarContenido(true) // ELIMINADO
-
-    // Marcar como leída si no lo está
-    if (!notificacion.leida) {
-      marcarComoLeida(notificacion.id)
-    }
+    // NO marcar como leída automáticamente
   }
 
-  // const cerrarPreview = () => { // ELIMINADO
-  //   setMostrarContenido(false)
-  //   // Esperar a que termine la animación antes de cerrar el Sheet
-  //   setTimeout(() => {
-  //     setPreviewAbierto(false)
-  //     setNotificacionSeleccionada(null)
-  //   }, 300) // Duración de la animación de salida
-  // }
+  const cerrarPreview = async () => {
+    if (notificacionSeleccionada && notificacionSeleccionada.tipo !== "equipo" && !notificacionSeleccionada.leida) {
+      try {
+        await marcarComoLeida(notificacionSeleccionada.id)
+      } catch (error) {
+        console.error("Error al marcar notificación como leída:", error)
+      }
+    }
+
+    setPreviewAbierto(false)
+    setTimeout(() => {
+      setNotificacionSeleccionada(null)
+    }, 150)
+  }
 
   const NotificacionItem = ({ notificacion }: { notificacion: Notificacion }) => {
     const tipoConfig = tiposNotificacion[notificacion.tipo]
@@ -797,10 +817,8 @@ export default function AdminPanel() {
       <Sheet
         open={previewAbierto}
         onOpenChange={(open) => {
-          // if (!open) cerrarPreview() // ELIMINADO
           if (!open) {
-            setPreviewAbierto(false)
-            setNotificacionSeleccionada(null)
+            cerrarPreview()
           }
         }}
       >
@@ -808,12 +826,9 @@ export default function AdminPanel() {
           side="right"
           className={`w-full sm:max-w-2xl ${theme === "dark" ? "bg-[#1a1a1a] text-white border-gray-700" : "bg-white"}`}
         >
-          {/* <AnimatePresence mode="wait"> // ELIMINADO */}
-          {/* {mostrarContenido && ( // ELIMINADO */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            // exit={{ opacity: 0, x: 20 }} // ELIMINADO
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
             <SheetHeader>
@@ -821,7 +836,6 @@ export default function AdminPanel() {
                 <motion.div
                   initial={{ scale: 0, rotate: -180 }}
                   animate={{ scale: 1, rotate: 0 }}
-                  // exit={{ scale: 0, rotate: 180 }} // ELIMINADO
                   transition={{ type: "spring", stiffness: 200, damping: 15 }}
                   className={`p-3 rounded-full ${tipoConfig.color} text-white`}
                 >
@@ -859,7 +873,6 @@ export default function AdminPanel() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                // exit={{ opacity: 0, y: -20 }} // ELIMINADO
                 transition={{ delay: 0.1, duration: 0.3 }}
                 className="space-y-6"
               >
@@ -867,7 +880,6 @@ export default function AdminPanel() {
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  // exit={{ opacity: 0, x: -20 }} // ELIMINADO
                   transition={{ delay: 0.15 }}
                 >
                   <h3 className={`text-sm font-semibold mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
@@ -884,7 +896,6 @@ export default function AdminPanel() {
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  // exit={{ opacity: 0, x: -20 }} // ELIMINADO
                   transition={{ delay: 0.2 }}
                   className="grid grid-cols-2 gap-4"
                 >
@@ -930,7 +941,6 @@ export default function AdminPanel() {
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    // exit={{ opacity: 0, x: -20 }} // ELIMINADO
                     transition={{ delay: 0.25 }}
                   >
                     <h3
@@ -982,7 +992,6 @@ export default function AdminPanel() {
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    // exit={{ opacity: 0, x: -20 }} // ELIMINADO
                     transition={{ delay: 0.3 }}
                   >
                     <h3
@@ -1017,7 +1026,6 @@ export default function AdminPanel() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              // exit={{ opacity: 0, y: 20 }} // ELIMINADO
               transition={{ delay: 0.2 }}
               className="absolute bottom-0 left-0 right-0 p-6 border-t bg-inherit"
             >
@@ -1031,33 +1039,24 @@ export default function AdminPanel() {
                       setNotificaciones((prev) =>
                         prev.map((n) => (n.id === notificacionSeleccionada.id ? { ...n, leida: false } : n)),
                       )
+                      setNotificacionSeleccionada((prev) => (prev ? { ...prev, leida: false } : null))
+                      setNotificacionesNoLeidas((prev) => prev + 1)
                     } else {
                       marcarComoLeida(notificacionSeleccionada.id)
                     }
-                    // setPreviewAbierto(false) // ELIMINADO
-                    // setNotificacionSeleccionada(null) // ELIMINADO
-                    setPreviewAbierto(false)
-                    setNotificacionSeleccionada(null)
                   }}
                 >
                   {notificacionSeleccionada.leida ? "Marcar como no leída" : "Marcar como leída"}
                 </Button>
                 <Button
                   className={theme === "dark" ? currentColors.buttonPrimary : currentColors.buttonPrimary}
-                  onClick={() => {
-                    // setPreviewAbierto(false) // ELIMINADO
-                    // setNotificacionSeleccionada(null) // ELIMINADO
-                    setPreviewAbierto(false)
-                    setNotificacionSeleccionada(null)
-                  }}
+                  onClick={cerrarPreview}
                 >
                   Cerrar
                 </Button>
               </div>
             </motion.div>
           </motion.div>
-          {/* )} // ELIMINADO */}
-          {/* </AnimatePresence> // ELIMINADO */}
         </SheetContent>
       </Sheet>
     )
@@ -1237,58 +1236,6 @@ export default function AdminPanel() {
           <StatsCards stats={stats} isDarkMode={theme === "dark"} colors={colors} />
 
           {/* Resumen de notificaciones recientes en el dashboard */}
-          {activeTab === "alumnos" && (
-            <div className="mb-6">
-              <Card className={theme === "dark" ? "bg-[#2a2a2a]" : "bg-white"}>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Zap className="h-5 w-5" />
-                    <span>Actividad Reciente del Sistema</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {notificaciones.slice(0, 3).map((notif) => (
-                      <div
-                        key={notif.id}
-                        className={`flex items-center space-x-3 p-2 rounded-lg ${theme === "dark" ? "hover:bg-[#3a3a3a]" : "hover:bg-gray-50"}`}
-                      >
-                        <div className={`p-1 rounded-full ${tiposNotificacion[notif.tipo].color} text-white`}>
-                          {tiposNotificacion[notif.tipo].icon}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <p className={`text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                              {notif.titulo}
-                            </p>
-                            {notif.estadoEquipo && (
-                              <Badge
-                                variant="outline"
-                                className={`text-xs ${estadosEquipo[notif.estadoEquipo].color} text-white border-transparent`}
-                              >
-                                {estadosEquipo[notif.estadoEquipo].icon}
-                                <span className="ml-1">{estadosEquipo[notif.estadoEquipo].label}</span>
-                              </Badge>
-                            )}
-                          </div>
-                          <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                            {formatearFecha(notif.fecha)}
-                          </p>
-                        </div>
-                        {!notif.leida && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
-                      </div>
-                    ))}
-                  </div>
-                  {notificaciones.length === 0 && (
-                    <p className={`text-center py-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                      No hay actividad reciente
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
           {activeTab === "alumnos" && (
             <AlumnosTab db={db} isDarkMode={theme === "dark"} currentColors={currentColors} />
           )}

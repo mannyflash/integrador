@@ -30,11 +30,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { motion, AnimatePresence } from "framer-motion"
-import swal from "sweetalert"
 import { db } from "../pages/panel-laboratorista"
 import { toast } from "../hooks/use-toast"
 import { AlertTriangle, Wrench, CheckCircle2 } from "lucide-react"
-import { enviarCorreoEquipoDeshabilitado } from "../pages/api/enviar-correo"
+import { enviarCorreoEquipoDeshabilitado } from "@/pages/api/enviar-correo"
+import Swal from "sweetalert2"
 
 interface Equipo {
   id: string
@@ -387,10 +387,10 @@ export default function VistaEquipos({
         },
       )
 
-      await swal({
+      toast({
         title: "¡Éxito!",
-        text: `${cantidad} equipos agregados correctamente, reemplazando los ${equiposAnteriores} anteriores`,
-        icon: "success",
+        description: `${cantidad} equipos agregados correctamente, reemplazando los ${equiposAnteriores} anteriores`,
+        variant: "default",
       })
 
       await logAction(
@@ -399,10 +399,10 @@ export default function VistaEquipos({
       )
     } catch (error) {
       console.error("Error al agregar equipos:", error)
-      await swal({
+      toast({
         title: "Error",
-        text: "Ha ocurrido un error al agregar los equipos.",
-        icon: "error",
+        description: "Ha ocurrido un error al agregar los equipos.",
+        variant: "destructive",
       })
       await logAction("Error", `Error al agregar equipos: ${error}`)
     }
@@ -472,19 +472,19 @@ export default function VistaEquipos({
         )
       }
 
-      await swal({
+      toast({
         title: "¡Éxito!",
-        text: `Notas del equipo #${equipoSeleccionado.id} actualizadas`,
-        icon: "success",
+        description: `Notas del equipo #${equipoSeleccionado.id} actualizadas`,
+        variant: "default",
       })
 
       await logAction("Actualizar Notas", `Notas del equipo #${equipoSeleccionado.id} actualizadas`)
     } catch (error) {
       console.error("Error al actualizar las notas:", error)
-      await swal({
+      toast({
         title: "Error",
-        text: "Ha ocurrido un error al actualizar las notas.",
-        icon: "error",
+        description: "Ha ocurrido un error al actualizar las notas.",
+        variant: "destructive",
       })
       await logAction("Error", `Error al actualizar las notas del equipo #${equipoSeleccionado.id}: ${error}`)
     }
@@ -496,47 +496,6 @@ export default function VistaEquipos({
       return fecha.toLocaleDateString() + " " + fecha.toLocaleTimeString()
     } catch (error) {
       return "Fecha desconocida"
-    }
-  }
-
-  const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
-    try {
-      setEnviandoReporte(true)
-
-      const resultado = await enviarCorreoEquipoDeshabilitado({
-        equipoId: equipo.id,
-        motivo: razon,
-        notas: equipo.notas || "Sin notas adicionales",
-        laboratorista: usuario,
-      })
-
-      if (!resultado.success) {
-        throw new Error(resultado.message || "Error al enviar el correo")
-      }
-
-      console.log("Correo enviado exitosamente al departamento de sistemas:", resultado.message)
-      await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
-
-      toast({
-        title: "Correo enviado",
-        description: `Se ha notificado por correo al departamento de sistemas sobre el equipo ${equipo.id}`,
-        variant: "default",
-      })
-
-      return true
-    } catch (error) {
-      console.error("Error al enviar el correo:", error)
-      await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
-
-      toast({
-        title: "Error al enviar correo",
-        description: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
-        variant: "destructive",
-      })
-
-      return false
-    } finally {
-      setEnviandoReporte(false)
     }
   }
 
@@ -555,10 +514,11 @@ export default function VistaEquipos({
 
   const confirmarDeshabilitacion = async () => {
     if (!equipoADeshabilitar || !razonDeshabilitacion.trim()) {
-      toast({
+      Swal.fire({
+        icon: "warning",
         title: "Información requerida",
-        description: "Por favor, especifique la razón de la deshabilitación",
-        variant: "destructive",
+        text: "Por favor, especifique la razón de la deshabilitación",
+        confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
       })
       return
     }
@@ -620,30 +580,80 @@ export default function VistaEquipos({
         setEquipos(equiposActualizados)
       }
 
-      await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
+      await Swal.fire({
+        icon: "success",
+        title: "¡Equipo Deshabilitado!",
+        text: `El equipo #${equipoADeshabilitar.id} ha sido marcado como fuera de servicio.`,
+        confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
+        timer: 2000,
+      })
 
       setDialogoDeshabilitarAbierto(false)
-      setEquipoADeshabilitar(null)
       setRazonDeshabilitacion("")
-
-      await swal({
-        title: "¡Equipo Deshabilitado!",
-        text: `El equipo #${equipoADeshabilitar.id} ha sido marcado como fuera de servicio y se ha enviado un reporte al departamento de sistemas.`,
-        icon: "success",
-      })
 
       await logAction(
         "Deshabilitar Equipo",
         `Equipo #${equipoADeshabilitar.id} deshabilitado. Razón: ${razonDeshabilitacion}`,
       )
+
+      const envioExitoso = await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
+
+      if (envioExitoso) {
+        await Swal.fire({
+          icon: "success",
+          title: "¡Correo Enviado!",
+          text: `Se ha notificado exitosamente al departamento de sistemas sobre el equipo #${equipoADeshabilitar.id}`,
+          confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
+          timer: 2500,
+        })
+      }
+
+      setEquipoADeshabilitar(null)
     } catch (error) {
       console.error("Error al deshabilitar el equipo:", error)
-      await swal({
+      Swal.fire({
+        icon: "error",
         title: "Error",
         text: "Ha ocurrido un error al deshabilitar el equipo.",
-        icon: "error",
+        confirmButtonColor: "#dc2626",
       })
       await logAction("Error", `Error al deshabilitar el equipo #${equipoADeshabilitar?.id}: ${error}`)
+    }
+  }
+
+  const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
+    try {
+      setEnviandoReporte(true)
+
+      const resultado = await enviarCorreoEquipoDeshabilitado({
+        equipoId: equipo.id,
+        motivo: razon,
+        notas: equipo.notas || "Sin notas adicionales",
+        laboratorista: usuario,
+      })
+
+      if (!resultado.success) {
+        throw new Error(resultado.message || "Error al enviar el correo")
+      }
+
+      console.log("Correo enviado exitosamente:", resultado.message)
+      await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
+
+      return true
+    } catch (error) {
+      console.error("Error al enviar el correo:", error)
+      await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error al enviar correo",
+        text: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
+        confirmButtonColor: "#dc2626",
+      })
+
+      return false
+    } finally {
+      setEnviandoReporte(false)
     }
   }
 
@@ -681,35 +691,19 @@ export default function VistaEquipos({
         )
       }
 
-      await crearNotificacionAdmin(
-        "equipo",
-        `✅ Equipo #${id} Reactivado y Disponible`,
-        `El equipo #${id} ha sido reactivado exitosamente y está disponible para uso nuevamente. El problema anterior ha sido resuelto.`,
-        "baja",
-        {
-          equipoId: id,
-          accion: "reactivar_equipo",
-          fecha: new Date().toLocaleString("es-MX"),
-          estadoAnterior: "Fuera de servicio",
-          estadoNuevo: "En servicio",
-          notasAnteriores: equipoAnterior?.notas || "Sin notas previas",
-          disponibleParaUso: true,
-        },
-      )
-
-      await swal({
+      toast({
         title: "¡Éxito!",
-        text: `El equipo #${id} ha sido reactivado y está disponible para uso.`,
-        icon: "success",
+        description: `El equipo #${id} ha sido reactivado y está disponible para uso.`,
+        variant: "default",
       })
 
       await logAction("Reactivar Equipo", `Equipo #${id} reactivado y disponible para uso`)
     } catch (error) {
       console.error("Error al reactivar el equipo:", error)
-      await swal({
+      toast({
         title: "Error",
-        text: "Ha ocurrido un error al reactivar el equipo.",
-        icon: "error",
+        description: "Ha ocurrido un error al reactivar el equipo.",
+        variant: "destructive",
       })
       await logAction("Error", `Error al reactivar el equipo #${id}: ${error}`)
     }
@@ -726,23 +720,27 @@ export default function VistaEquipos({
     if (!equipoParaEstado) return
 
     try {
+      const reactivarEquipo = nuevoEstado === "resuelto"
+
       const equiposActualizados: Equipo[] = equipos.map((equipo) => {
         if (equipo.id === equipoParaEstado.id) {
-          // Construir el objeto base sin campos opcionales
           const equipoActualizado: Equipo = {
             id: equipo.id,
-            fueraDeServicio: equipo.fueraDeServicio,
+            fueraDeServicio: reactivarEquipo ? false : equipo.fueraDeServicio, // Reactivar si se marca como resuelto
             ultimaActualizacion: new Date().toISOString(),
             estadoReparacion: nuevoEstado,
             fechaActualizacionEstado: new Date().toISOString(),
           }
 
-          // Agregar campos opcionales solo si tienen valores válidos
           if (equipo.enUso !== undefined) {
             equipoActualizado.enUso = equipo.enUso
           }
 
-          if (equipo.notas) {
+          if (reactivarEquipo) {
+            equipoActualizado.notas = equipo.notas
+              ? `${equipo.notas}\n\n[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso - ${comentarioEstado.trim() || "Problema resuelto"}`
+              : `[${new Date().toLocaleString("es-MX")}] Reactivado y disponible para uso - ${comentarioEstado.trim() || "Problema resuelto"}`
+          } else if (equipo.notas) {
             equipoActualizado.notas = equipo.notas
           }
 
@@ -784,20 +782,22 @@ export default function VistaEquipos({
 
       await logAction(
         "Actualizar Estado Reparación",
-        `Estado del equipo #${equipoParaEstado.id} cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+        `Estado del equipo #${equipoParaEstado.id} cambiado a "${estadosEquipo[nuevoEstado].label}"${reactivarEquipo ? " y reactivado automáticamente" : ""}`,
       )
 
-      await swal({
-        title: "¡Estado actualizado!",
-        text: `El estado del equipo #${equipoParaEstado.id} se ha cambiado a "${estadosEquipo[nuevoEstado].label}"`,
-        icon: "success",
+      toast({
+        title: reactivarEquipo ? "¡Equipo reactivado!" : "¡Estado actualizado!",
+        description: reactivarEquipo
+          ? `El equipo #${equipoParaEstado.id} ha sido marcado como resuelto y está disponible para uso.`
+          : `El estado del equipo #${equipoParaEstado.id} se ha cambiado a "${estadosEquipo[nuevoEstado].label}"`,
+        variant: "default",
       })
     } catch (error) {
       console.error("Error al actualizar estado de reparación:", error)
-      await swal({
+      toast({
         title: "Error",
-        text: "Ha ocurrido un error al actualizar el estado del equipo.",
-        icon: "error",
+        description: "Ha ocurrido un error al actualizar el estado del equipo.",
+        variant: "destructive",
       })
       await logAction("Error", `Error al actualizar estado del equipo #${equipoParaEstado.id}: ${error}`)
     }
@@ -1223,32 +1223,21 @@ export default function VistaEquipos({
                               </TooltipProvider>
                             )}
 
-                            <Button
-                              size="sm"
-                              variant={equipo.fueraDeServicio ? "default" : "destructive"}
-                              onClick={() => iniciarDeshabilitacion(equipo.id)}
-                              className={
-                                equipo.fueraDeServicio
-                                  ? esModoOscuro
-                                    ? "bg-green-600 hover:bg-green-700 text-white"
-                                    : "bg-green-600 hover:bg-green-700 text-white"
-                                  : esModoOscuro
+                            {!equipo.fueraDeServicio && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => iniciarDeshabilitacion(equipo.id)}
+                                className={
+                                  esModoOscuro
                                     ? "bg-red-600 hover:bg-red-700 text-white"
                                     : "bg-red-600 hover:bg-red-700 text-white"
-                              }
-                            >
-                              {equipo.fueraDeServicio ? (
-                                <>
-                                  <CheckCircle className="mr-1 h-3 w-3" />
-                                  Activar
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="mr-1 h-3 w-3" />
-                                  Desactivar
-                                </>
-                              )}
-                            </Button>
+                                }
+                              >
+                                <XCircle className="mr-1 h-3 w-3" />
+                                Desactivar
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </motion.tr>

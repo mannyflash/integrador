@@ -436,7 +436,6 @@ export default function ListaAsistencias() {
               fecha: new Date().toLocaleDateString("es-MX"),
               finalizadaAutomaticamente: true,
               razonFinalizacion: "Cierre del navegador",
-              tipoClase: "Regular",
               estado: "Finalizada Automáticamente",
               equiposLiberados: true,
               historialGuardado: true,
@@ -617,8 +616,8 @@ export default function ListaAsistencias() {
         // Crear notificación DETALLADA para el administrador
         await crearNotificacionAdmin(
           "asistencia",
-          `📚 Clase Regular Iniciada: "${selectedPractica.Titulo}"`,
-          `El maestro ${maestroInfo?.Nombre} ${maestroInfo?.Apellido} ha iniciado una clase regular. Los estudiantes pueden registrar su asistencia desde la página principal.`,
+          `📚 Clase Iniciada: "${selectedPractica.Titulo}"`,
+          `El maestro ${maestroInfo?.Nombre} ${maestroInfo?.Apellido} ha iniciado una clase. Los estudiantes pueden registrar su asistencia desde la página principal.`,
           "baja",
           {
             maestroNombre: `${maestroInfo?.Nombre} ${maestroInfo?.Apellido}`,
@@ -630,10 +629,9 @@ export default function ListaAsistencias() {
             materiaId: selectedMateriaId,
             horaInicio: horaActual,
             fecha: new Date().toLocaleDateString("es-MX"),
-            tipoClase: "Regular",
             estado: "Iniciada",
             ubicacion: "Laboratorio de Cómputo",
-            accion: "iniciar_clase_regular",
+            accion: "iniciar_clase",
           },
         )
 
@@ -744,7 +742,7 @@ export default function ListaAsistencias() {
         // Crear notificación DETALLADA para el administrador sobre clase finalizada
         await crearNotificacionAdmin(
           "asistencia",
-          `✅ Clase Regular Finalizada: "${selectedPractica.Titulo}"`,
+          `✅ Clase Finalizada: "${selectedPractica.Titulo}"`,
           `La clase "${selectedPractica.Titulo}" del maestro ${maestroInfo?.Nombre} ${maestroInfo?.Apellido} ha finalizado exitosamente. Se han registrado ${asistencias.length} asistencias.`,
           "baja",
           {
@@ -759,11 +757,10 @@ export default function ListaAsistencias() {
             horaFin: horaActual,
             duracionClase: duracionClase,
             fecha: new Date().toLocaleDateString("es-MX"),
-            tipoClase: "Regular",
             estado: "Finalizada",
             equiposLiberados: true,
             historialGuardado: true,
-            accion: "finalizar_clase_regular",
+            accion: "finalizar_clase",
           },
         )
 
@@ -1466,7 +1463,7 @@ export default function ListaAsistencias() {
             </Card>
           </div>
 
-          {/* Tabla de asistencias */}
+          {/*Tabla de asistencias */}
           <Card
             className={`flex-1 ${theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground} border-none shadow-lg`}
           >
