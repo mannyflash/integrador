@@ -1,14 +1,30 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useMemo } from "react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Pencil, Trash2, UserPlus, Users, Search, RefreshCw, GraduationCap, Clock, BookOpen, UserCircle, X, Check, Filter, Layers, ArrowLeft, ListChecks } from 'lucide-react'
+import {
+  Pencil,
+  Trash2,
+  UserCircle,
+  GraduationCap,
+  Clock,
+  BookOpen,
+  Users,
+  Search,
+  RefreshCw,
+  X,
+  Plus,
+  Save,
+  Ban,
+  ArrowLeft,
+  Layers,
+  List,
+} from "lucide-react"
 import {
   collection,
   setDoc,
@@ -22,36 +38,30 @@ import {
 } from "firebase/firestore"
 import Swal from "sweetalert2"
 import type React from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+interface Alumno {
+  Matricula: string
+  Nombre: string
+  Apellido: string
+  Carrera: string
+  Semestre: string
+  Turno: string
+  Grupo: string
+  [key: string]: any
+}
+
+type Vista = "menu" | "agregar" | "lista"
 
 export function AlumnosTab({
   db,
   isDarkMode,
   currentColors,
 }: { db: Firestore; isDarkMode: boolean; currentColors: any }) {
-  const [vistaActual, setVistaActual] = useState<"menu" | "agregar" | "lista">("menu")
+  const [vistaActual, setVistaActual] = useState<Vista>("menu")
 
-  const [alumnos, setAlumnos] = useState<
-    Array<{
-      Matricula: string
-      Nombre: string
-      Apellido: string
-      Carrera: string
-      Semestre: string
-      Turno: string
-      Grupo: string
-      [key: string]: any
-    }>
-  >([])
-  const [datosAlumno, setDatosAlumno] = useState<{
-    Matricula: string
-    Nombre: string
-    Apellido: string
-    Carrera: string
-    Semestre: string
-    Turno: string
-    Grupo: string
-    [key: string]: any
-  }>({
+  const [alumnos, setAlumnos] = useState<Alumno[]>([])
+  const [datosAlumno, setDatosAlumno] = useState<Alumno>({
     Matricula: "",
     Nombre: "",
     Apellido: "",
@@ -61,12 +71,11 @@ export function AlumnosTab({
     Grupo: "",
   })
   const [editando, setEditando] = useState(false)
-  const [cargando, setCargando] = useState(true)
-  const [busqueda, setBusqueda] = useState("")
-  const [filtroCarrera, setFiltroCarrera] = useState("todas")
-  const [showFilters, setShowFilters] = useState(false)
-  const [filtroSemestre, setFiltroSemestre] = useState("todos")
-  const [filtroTurno, setFiltroTurno] = useState("todos")
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [carreraFilter, setCarreraFilter] = useState("todas")
+  const [semestreFilter, setSemestreFilter] = useState("todos")
+  const [turnoFilter, setTurnoFilter] = useState("todos")
   const [actualizacionMasiva, setActualizacionMasiva] = useState(false)
   const [tipoActualizacion, setTipoActualizacion] = useState("semestre")
 
@@ -88,7 +97,7 @@ export function AlumnosTab({
   }, [])
 
   const cargarAlumnos = async () => {
-    setCargando(true)
+    setIsLoading(true)
     try {
       const alumnosRef = collection(db, "Alumnos")
       const alumnosSnapshot = await getDocs(query(alumnosRef))
@@ -101,16 +110,7 @@ export function AlumnosTab({
         Turno: doc.data().Turno || "",
         Grupo: doc.data().Grupo || "",
         ...doc.data(),
-      })) as Array<{
-        Matricula: string
-        Nombre: string
-        Apellido: string
-        Carrera: string
-        Semestre: string
-        Turno: string
-        Grupo: string
-        [key: string]: any
-      }>
+      })) as Alumno[]
       setAlumnos(alumnosData)
     } catch (error) {
       console.error("Error al cargar alumnos:", error)
@@ -118,10 +118,9 @@ export function AlumnosTab({
         title: "Error",
         text: "No se pudieron cargar los alumnos. Por favor, intenta de nuevo.",
         icon: "error",
-        confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
       })
     } finally {
-      setCargando(false)
+      setIsLoading(false)
     }
   }
 
@@ -131,7 +130,6 @@ export function AlumnosTab({
       const { Matricula, ...restoDatosAlumno } = datosAlumno
 
       if (!editando) {
-        // Check if the matricula already exists only when adding a new student
         const alumnoDoc = doc(db, "Alumnos", Matricula)
         const alumnoSnapshot = await getDoc(alumnoDoc)
 
@@ -140,39 +138,34 @@ export function AlumnosTab({
             title: "Error",
             text: "Esta matrícula ya existe. Por favor, use una matrícula diferente.",
             icon: "error",
-            confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
           })
           return
         }
 
-        // Add new student
         await setDoc(alumnoDoc, restoDatosAlumno)
         await Swal.fire({
           title: "¡Éxito!",
           text: "Alumno agregado correctamente",
           icon: "success",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
       } else {
-        // Update existing student
         await updateDoc(doc(db, "Alumnos", Matricula), restoDatosAlumno)
         await Swal.fire({
           title: "¡Éxito!",
           text: "Alumno actualizado correctamente",
           icon: "success",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
         setEditando(false)
       }
       setDatosAlumno({ Matricula: "", Nombre: "", Apellido: "", Carrera: "", Semestre: "", Turno: "", Grupo: "" })
       cargarAlumnos()
+      setVistaActual("lista")
     } catch (error) {
       console.error("Error al agregar/actualizar alumno:", error)
       await Swal.fire({
         title: "Error",
         text: "Ha ocurrido un error al agregar/actualizar el alumno. Por favor, intenta de nuevo.",
         icon: "error",
-        confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
       })
     }
   }
@@ -183,7 +176,7 @@ export function AlumnosTab({
       text: "No podrás revertir esta acción!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
+      confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
       confirmButtonText: "Sí, eliminar!",
       cancelButtonText: "Cancelar",
@@ -192,21 +185,11 @@ export function AlumnosTab({
     if (result.isConfirmed) {
       try {
         await deleteDoc(doc(db, "Alumnos", matricula))
-        Swal.fire({
-          title: "Eliminado!",
-          text: "El alumno ha sido eliminado.",
-          icon: "success",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
-        })
+        Swal.fire("Eliminado!", "El alumno ha sido eliminado.", "success")
         cargarAlumnos()
       } catch (error) {
         console.error("Error al eliminar alumno:", error)
-        Swal.fire({
-          title: "Error!",
-          text: "Ha ocurrido un error al eliminar el alumno.",
-          icon: "error",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
-        })
+        Swal.fire("Error!", "Ha ocurrido un error al eliminar el alumno.", "error")
       }
     }
   }
@@ -217,7 +200,6 @@ export function AlumnosTab({
         title: "Error",
         text: "Por favor, selecciona todos los campos requeridos.",
         icon: "error",
-        confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
       })
       return
     }
@@ -227,7 +209,7 @@ export function AlumnosTab({
       text: `¿Deseas cambiar a todos los alumnos de ${carreraSeleccionada}, del semestre ${semestreActual}º al semestre ${nuevoSemestre}º?`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
+      confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
       confirmButtonText: "Sí, actualizar",
       cancelButtonText: "Cancelar",
@@ -260,20 +242,19 @@ export function AlumnosTab({
           title: "¡Éxito!",
           text: `Se actualizaron ${contador} alumnos del semestre ${semestreActual}º al semestre ${nuevoSemestre}º.`,
           icon: "success",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
 
         cargarAlumnos()
         setCarreraSeleccionada("")
         setSemestreActual("")
         setNuevoSemestre("")
+        setActualizacionMasiva(false) // Close the massive update section
       } catch (error) {
         console.error("Error al actualizar semestres:", error)
         await Swal.fire({
           title: "Error",
           text: "Ha ocurrido un error al actualizar los semestres. Por favor, intenta de nuevo.",
           icon: "error",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
       } finally {
         setActualizando(false)
@@ -287,7 +268,6 @@ export function AlumnosTab({
         title: "Error",
         text: "Por favor, selecciona todos los campos requeridos.",
         icon: "error",
-        confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
       })
       return
     }
@@ -297,7 +277,7 @@ export function AlumnosTab({
       text: `¿Deseas cambiar a todos los alumnos de ${carreraGrupo}, del semestre ${semestreGrupo}º, del grupo ${grupoActual} al grupo ${nuevoGrupo}?`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
+      confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
       confirmButtonText: "Sí, actualizar",
       cancelButtonText: "Cancelar",
@@ -334,7 +314,6 @@ export function AlumnosTab({
           title: "¡Éxito!",
           text: `Se actualizaron ${contador} alumnos del grupo ${grupoActual} al grupo ${nuevoGrupo}.`,
           icon: "success",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
 
         cargarAlumnos()
@@ -342,13 +321,13 @@ export function AlumnosTab({
         setSemestreGrupo("")
         setGrupoActual("")
         setNuevoGrupo("")
+        setActualizacionMasiva(false) // Close the massive update section
       } catch (error) {
         console.error("Error al actualizar grupos:", error)
         await Swal.fire({
           title: "Error",
           text: "Ha ocurrido un error al actualizar los grupos. Por favor, intenta de nuevo.",
           icon: "error",
-          confirmButtonColor: isDarkMode ? "#1d5631" : "#800040",
         })
       } finally {
         setActualizando(false)
@@ -356,16 +335,7 @@ export function AlumnosTab({
     }
   }
 
-  const modificarAlumno = (alumno: {
-    Matricula: string
-    Nombre: string
-    Apellido: string
-    Carrera: string
-    Semestre: string
-    Turno: string
-    Grupo: string
-    [key: string]: any
-  }) => {
+  const modificarAlumno = (alumno: Alumno) => {
     setDatosAlumno(alumno)
     setEditando(true)
     setVistaActual("agregar")
@@ -376,460 +346,264 @@ export function AlumnosTab({
     setEditando(false)
   }
 
-  const volverAlMenu = () => {
-    setVistaActual("menu")
-    cancelarEdicion()
-  }
+  const alumnosFiltrados = useMemo(() => {
+    return alumnos.filter((alumno) => {
+      const matchesSearch =
+        alumno.Matricula.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alumno.Nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alumno.Apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        alumno.Grupo.toLowerCase().includes(searchTerm.toLowerCase())
 
-  const alumnosFiltrados = alumnos.filter((alumno) => {
-    const coincideBusqueda =
-      alumno.Matricula.toLowerCase().includes(busqueda.toLowerCase()) ||
-      alumno.Nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      alumno.Apellido.toLowerCase().includes(busqueda.toLowerCase()) ||
-      alumno.Grupo.toLowerCase().includes(busqueda.toLowerCase())
+      const matchesCarrera = carreraFilter === "todas" || alumno.Carrera === carreraFilter
+      const matchesSemestre = semestreFilter === "todos" || alumno.Semestre === semestreFilter
+      const matchesTurno = turnoFilter === "todos" || alumno.Turno === turnoFilter
 
-    const coincideCarrera = filtroCarrera === "todas" || alumno.Carrera === filtroCarrera
-    const coincideSemestre = filtroSemestre === "todos" || alumno.Semestre === filtroSemestre
-    const coincideTurno = filtroTurno === "todos" || alumno.Turno === filtroTurno
-
-    return coincideBusqueda && coincideCarrera && coincideSemestre && coincideTurno
-  })
+      return matchesSearch && matchesCarrera && matchesSemestre && matchesTurno
+    })
+  }, [alumnos, searchTerm, carreraFilter, semestreFilter, turnoFilter])
 
   const carreras = [...new Set(alumnos.map((alumno) => alumno.Carrera))].filter(Boolean)
-  const semestres = [...new Set(alumnos.map((alumno) => alumno.Semestre))].filter(Boolean)
+  const semestres = [...new Set(alumnos.map((alumno) => alumno.Semestre))].filter(Boolean).sort()
   const turnos = [...new Set(alumnos.map((alumno) => alumno.Turno))].filter(Boolean)
   const grupos = [...new Set(alumnos.map((alumno) => alumno.Grupo))].filter(Boolean)
 
   const resetFilters = () => {
-    setFiltroCarrera("todas")
-    setFiltroSemestre("todos")
-    setFiltroTurno("todos")
-    setBusqueda("")
+    setCarreraFilter("todas")
+    setSemestreFilter("todos")
+    setTurnoFilter("todos")
+    setSearchTerm("")
   }
+
+  const headerBgClass = isDarkMode
+    ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]"
+    : "bg-gradient-to-r from-[#800040] to-[#a30050]"
 
   if (vistaActual === "menu") {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-200px)] p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
-          <Card
-            onClick={() => setVistaActual("agregar")}
-            className={`${
-              isDarkMode ? "bg-[#2a2a2a] border-gray-700 hover:bg-[#333]" : "bg-white border-gray-200 hover:bg-gray-50"
-            } shadow-lg rounded-xl overflow-hidden transition-all duration-300 cursor-pointer transform hover:scale-105`}
-          >
-            <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
-              <div
-                className={`p-6 rounded-full ${
-                  isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"
-                }`}
-              >
-                <UserPlus className="h-12 w-12 text-white" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto p-4">
+        <Card
+          className={`${isDarkMode ? "bg-gray-800 hover:bg-gray-750" : "bg-white hover:bg-gray-50"} shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden border-0 cursor-pointer transform hover:scale-[1.02]`}
+          onClick={() => setVistaActual("agregar")}
+        >
+          <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-10">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="bg-white/20 backdrop-blur-sm p-6 rounded-full shadow-lg">
+                <Plus className="h-16 w-16" />
               </div>
-              <h3 className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-800"}`}>Agregar Alumno</h3>
-              <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+              <CardTitle className="text-3xl font-bold">Agregar Alumno</CardTitle>
+              <CardDescription className="text-white/90 text-base">
                 Registra un nuevo alumno en el sistema
-              </p>
-            </CardContent>
-          </Card>
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-10 bg-gradient-to-b from-white to-gray-50">
+            <ul className="space-y-4 text-gray-700">
+              <li className="flex items-center gap-3 text-base">
+                <UserCircle className="h-5 w-5 text-[#952952]" />
+                <span>Asignar matrícula y nombre</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <GraduationCap className="h-5 w-5 text-[#952952]" />
+                <span>Seleccionar carrera y semestre</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Users className="h-5 w-5 text-[#952952]" />
+                <span>Definir turno y grupo</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
 
-          <Card
-            onClick={() => setVistaActual("lista")}
-            className={`${
-              isDarkMode ? "bg-[#2a2a2a] border-gray-700 hover:bg-[#333]" : "bg-white border-gray-200 hover:bg-gray-50"
-            } shadow-lg rounded-xl overflow-hidden transition-all duration-300 cursor-pointer transform hover:scale-105`}
-          >
-            <CardContent className="p-8 flex flex-col items-center justify-center text-center space-y-4">
-              <div
-                className={`p-6 rounded-full ${
-                  isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"
-                }`}
-              >
-                <ListChecks className="h-12 w-12 text-white" />
+        <Card
+          className={`${isDarkMode ? "bg-gray-800 hover:bg-gray-750" : "bg-white hover:bg-gray-50"} shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden border-0 cursor-pointer transform hover:scale-[1.02]`}
+          onClick={() => setVistaActual("lista")}
+        >
+          <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-10">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="bg-white/20 backdrop-blur-sm p-6 rounded-full shadow-lg">
+                <List className="h-16 w-16" />
               </div>
-              <h3 className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-800"}`}>
-                Ver Lista de Alumnos
-              </h3>
-              <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
-                Consulta y gestiona los alumnos registrados
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              <CardTitle className="text-3xl font-bold">Ver Lista de Alumnos</CardTitle>
+              <CardDescription className="text-white/90 text-base">
+                Consulta, edita o elimina alumnos existentes
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-10 bg-gradient-to-b from-white to-gray-50">
+            <ul className="space-y-4 text-gray-700">
+              <li className="flex items-center gap-3 text-base">
+                <Search className="h-5 w-5 text-[#952952]" />
+                <span>Buscar y filtrar alumnos</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Pencil className="h-5 w-5 text-[#952952]" />
+                <span>Editar información</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Trash2 className="h-5 w-5 text-[#952952]" />
+                <span>Eliminar registros</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   if (vistaActual === "agregar") {
     return (
-      <Card
-        className={`${
-          isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"
-        } shadow-lg rounded-xl overflow-hidden transition-all duration-300 max-w-2xl mx-auto`}
-      >
-        <CardHeader
-          className={`${
-            isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"
-          } py-4 px-6 border-b`}
+      <div className="max-w-2xl mx-auto">
+        <Card
+          className={`${isDarkMode ? "bg-gray-800" : "bg-white"} shadow-lg hover:shadow-xl transition-shadow duration-300 border-0`}
         >
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-bold flex items-center text-white transition-colors duration-300">
-              {editando ? (
-                <>
-                  <Pencil className="mr-2 h-5 w-5" />
-                  Editar Alumno
-                </>
-              ) : (
-                <>
-                  <UserPlus className="mr-2 h-5 w-5" />
-                  Agregar Alumno
-                </>
-              )}
-            </CardTitle>
-            <Button
-              onClick={volverAlMenu}
-              size="sm"
-              variant="ghost"
-              className="text-white hover:bg-white/20"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver al Menú
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          <form onSubmit={manejarEnvio} className="space-y-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="matriculaAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <UserCircle className="h-4 w-4" /> Matrícula
-              </Label>
-              <Input
-                id="matriculaAlumno"
-                value={datosAlumno.Matricula}
-                onChange={(e) => setDatosAlumno({ ...datosAlumno, Matricula: e.target.value })}
-                required
-                disabled={editando}
-                className={`${
-                  isDarkMode
-                    ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                } rounded-md transition-all duration-200`}
-                placeholder="Ej. 20230001"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="nombreAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <UserCircle className="h-4 w-4" /> Nombre
-              </Label>
-              <Input
-                id="nombreAlumno"
-                value={datosAlumno.Nombre}
-                onChange={(e) => setDatosAlumno({ ...datosAlumno, Nombre: e.target.value })}
-                required
-                className={`${
-                  isDarkMode
-                    ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                } rounded-md transition-all duration-200`}
-                placeholder="Ej. Juan"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="apellidoAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <UserCircle className="h-4 w-4" /> Apellido
-              </Label>
-              <Input
-                id="apellidoAlumno"
-                value={datosAlumno.Apellido}
-                onChange={(e) => setDatosAlumno({ ...datosAlumno, Apellido: e.target.value })}
-                required
-                className={`${
-                  isDarkMode
-                    ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                } rounded-md transition-all duration-200`}
-                placeholder="Ej. Pérez"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="carreraAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <GraduationCap className="h-4 w-4" /> Carrera
-              </Label>
-              <Select
-                value={datosAlumno.Carrera}
-                onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Carrera: value })}
-              >
-                <SelectTrigger
-                  id="carreraAlumno"
-                  className={`${
-                    isDarkMode
-                      ? "bg-gray-700 text-white border-gray-600 focus:ring-green-500"
-                      : "bg-white text-gray-900 border-gray-300 focus:ring-red-500"
-                  } rounded-md transition-all duration-200`}
-                >
-                  <SelectValue placeholder="Selecciona una carrera" />
-                </SelectTrigger>
-                <SelectContent
-                  className={`${
-                    isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                  }`}
-                >
-                  <SelectItem value="Ingenieria en sistemas computacionales">
-                    Ingeniería en Sistemas Computacionales
-                  </SelectItem>
-                  <SelectItem value="ingenieria industrial">Ingeniería Industrial</SelectItem>
-                  <SelectItem value="licenciatura en administracion de empresas">
-                    Licenciatura en Administración de Empresas
-                  </SelectItem>
-                  <SelectItem value="ingenieria civil">Ingeniería Civil</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="semestreAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <BookOpen className="h-4 w-4" /> Semestre
-              </Label>
-              <Select
-                value={datosAlumno.Semestre}
-                onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Semestre: value })}
-              >
-                <SelectTrigger
-                  id="semestreAlumno"
-                  className={`${
-                    isDarkMode
-                      ? "bg-gray-700 text-white border-gray-600 focus:ring-green-500"
-                      : "bg-white text-gray-900 border-gray-300 focus:ring-red-500"
-                  } rounded-md transition-all duration-200`}
-                >
-                  <SelectValue placeholder="Selecciona un semestre" />
-                </SelectTrigger>
-                <SelectContent
-                  className={`${
-                    isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                  }`}
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                    <SelectItem key={semestre} value={semestre.toString()}>
-                      {semestre}º Semestre
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="turnoAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <Clock className="h-4 w-4" /> Turno
-              </Label>
-              <Select
-                value={datosAlumno.Turno}
-                onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Turno: value })}
-              >
-                <SelectTrigger
-                  id="turnoAlumno"
-                  className={`${
-                    isDarkMode
-                      ? "bg-gray-700 text-white border-gray-600 focus:ring-green-500"
-                      : "bg-white text-gray-900 border-gray-300 focus:ring-red-500"
-                  } rounded-md transition-all duration-200`}
-                >
-                  <SelectValue placeholder="Selecciona un turno" />
-                </SelectTrigger>
-                <SelectContent
-                  className={`${
-                    isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                  }`}
-                >
-                  <SelectItem value="matutino">Matutino</SelectItem>
-                  <SelectItem value="vespertino">Vespertino</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="grupoAlumno"
-                className={`font-medium flex items-center gap-2 ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-              >
-                <Users className="h-4 w-4" /> Grupo
-              </Label>
-              <Input
-                id="grupoAlumno"
-                value={datosAlumno.Grupo}
-                onChange={(e) => setDatosAlumno({ ...datosAlumno, Grupo: e.target.value })}
-                required
-                className={`${
-                  isDarkMode
-                    ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                } rounded-md transition-all duration-200`}
-                placeholder="Ej. A"
-              />
-            </div>
-            <div className="flex gap-2 pt-2">
+          <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-6 rounded-t-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+                  {editando ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                </div>
+                <div>
+                  <CardTitle className="text-2xl font-bold">{editando ? "Editar Alumno" : "Agregar Alumno"}</CardTitle>
+                  <CardDescription className="text-white/80 mt-1">
+                    {editando
+                      ? "Modifica los datos del alumno seleccionado"
+                      : "Completa el formulario para agregar un nuevo alumno"}
+                  </CardDescription>
+                </div>
+              </div>
               <Button
-                type="submit"
-                className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200 transform hover:scale-105 active:scale-95 ${
-                  isDarkMode ? "bg-green-700 hover:bg-green-600 text-white" : "bg-red-800 hover:bg-red-700 text-white"
-                }`}
-              >
-                {editando ? (
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4" />
-                    <span>Actualizar Alumno</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <UserPlus className="h-4 w-4" />
-                    <span>Agregar Alumno</span>
-                  </div>
-                )}
-              </Button>
-              {editando && (
-                <Button
-                  type="button"
-                  onClick={cancelarEdicion}
-                  className="py-2 px-4 rounded-md font-medium transition-all duration-200 transform hover:scale-105 active:scale-95 bg-gray-500 hover:bg-gray-400 text-white"
-                >
-                  <div className="flex items-center gap-2">
-                    <X className="h-4 w-4" />
-                    <span>Cancelar</span>
-                  </div>
-                </Button>
-              )}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card
-      className={`${
-        isDarkMode ? "bg-[#2a2a2a] border-gray-700" : "bg-white border-gray-200"
-      } shadow-lg rounded-xl overflow-hidden transition-all duration-300 h-[calc(100vh-200px)]`}
-    >
-      <CardHeader
-        className={`${
-          isDarkMode ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]" : "bg-gradient-to-r from-[#800040] to-[#a30050]"
-        } py-4 px-6 border-b`}
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button onClick={volverAlMenu} size="sm" variant="ghost" className="text-white hover:bg-white/20">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle className="text-xl font-bold flex items-center text-white transition-colors duration-300">
-              <Users className="mr-2 h-5 w-5" />
-              Lista de Alumnos ({alumnosFiltrados.length})
-            </CardTitle>
-          </div>
-          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar alumno..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className={`pl-9 ${
-                  isDarkMode
-                    ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                } rounded-md transition-all duration-200 w-full md:w-auto`}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => setShowFilters(!showFilters)}
+                variant="ghost"
                 size="sm"
-                className={`${
-                  isDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                } rounded-md transition-all duration-200 flex items-center gap-1`}
-                title="Filtros avanzados"
+                onClick={() => {
+                  setVistaActual("menu")
+                  cancelarEdicion()
+                }}
+                className="text-white hover:bg-white/20"
               >
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">Filtros</span>
-              </Button>
-              <Button
-                onClick={cargarAlumnos}
-                size="sm"
-                className={`${
-                  isDarkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                } rounded-md transition-all duration-200`}
-                title="Actualizar lista"
-              >
-                <RefreshCw className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver al Menú
               </Button>
             </div>
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <form onSubmit={manejarEnvio} className="space-y-4">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="matriculaAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <UserCircle className="h-4 w-4" /> Matrícula
+                </Label>
+                <div className="relative">
+                  <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="matriculaAlumno"
+                    value={datosAlumno.Matricula}
+                    onChange={(e) => setDatosAlumno({ ...datosAlumno, Matricula: e.target.value })}
+                    required
+                    disabled={editando}
+                    placeholder="Ej: 20230001"
+                    className={`pl-10 ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}
+                  />
+                </div>
+              </div>
 
-        {showFilters && (
-          <div className="mt-4 p-4 rounded-lg bg-black/10 backdrop-blur-sm">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <Label className="text-white text-xs mb-1 block">Carrera</Label>
-                <Select value={filtroCarrera} onValueChange={setFiltroCarrera}>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="nombreAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <UserCircle className="h-4 w-4" /> Nombre
+                </Label>
+                <div className="relative">
+                  <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="nombreAlumno"
+                    value={datosAlumno.Nombre}
+                    onChange={(e) => setDatosAlumno({ ...datosAlumno, Nombre: e.target.value })}
+                    required
+                    placeholder="Ej: Juan"
+                    className={`pl-10 ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="apellidoAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <UserCircle className="h-4 w-4" /> Apellido
+                </Label>
+                <div className="relative">
+                  <UserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="apellidoAlumno"
+                    value={datosAlumno.Apellido}
+                    onChange={(e) => setDatosAlumno({ ...datosAlumno, Apellido: e.target.value })}
+                    required
+                    placeholder="Ej: Pérez"
+                    className={`pl-10 ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="carreraAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <GraduationCap className="h-4 w-4" /> Carrera
+                </Label>
+                <Select
+                  value={datosAlumno.Carrera}
+                  onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Carrera: value })}
+                >
                   <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white/90 text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
+                    id="carreraAlumno"
+                    className={`${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"} pl-10`}
                   >
-                    <SelectValue placeholder="Filtrar por carrera" />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <GraduationCap className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <SelectValue placeholder="Selecciona una carrera" />
                   </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    <SelectItem value="todas">Todas las carreras</SelectItem>
-                    {carreras.map((carrera) => (
-                      <SelectItem key={carrera} value={carrera}>
-                        {carrera}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                    <SelectItem value="Ingenieria en sistemas computacionales">
+                      Ingeniería en Sistemas Computacionales
+                    </SelectItem>
+                    <SelectItem value="ingenieria industrial">Ingeniería Industrial</SelectItem>
+                    <SelectItem value="licenciatura en administracion de empresas">
+                      Licenciatura en Administración de Empresas
+                    </SelectItem>
+                    <SelectItem value="ingenieria civil">Ingeniería Civil</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="flex-1 min-w-[200px]">
-                <Label className="text-white text-xs mb-1 block">Semestre</Label>
-                <Select value={filtroSemestre} onValueChange={setFiltroSemestre}>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="semestreAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <BookOpen className="h-4 w-4" /> Semestre
+                </Label>
+                <Select
+                  value={datosAlumno.Semestre}
+                  onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Semestre: value })}
+                >
                   <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white/90 text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
+                    id="semestreAlumno"
+                    className={`${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"} pl-10`}
                   >
-                    <SelectValue placeholder="Filtrar por semestre" />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <BookOpen className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <SelectValue placeholder="Selecciona un semestre" />
                   </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    <SelectItem value="todos">Todos los semestres</SelectItem>
-                    {semestres.map((semestre) => (
-                      <SelectItem key={semestre} value={semestre}>
+                  <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                      <SelectItem key={semestre} value={semestre.toString()}>
                         {semestre}º Semestre
                       </SelectItem>
                     ))}
@@ -837,41 +611,172 @@ export function AlumnosTab({
                 </Select>
               </div>
 
-              <div className="flex-1 min-w-[200px]">
-                <Label className="text-white text-xs mb-1 block">Turno</Label>
-                <Select value={filtroTurno} onValueChange={setFiltroTurno}>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="turnoAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <Clock className="h-4 w-4" /> Turno
+                </Label>
+                <Select
+                  value={datosAlumno.Turno}
+                  onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Turno: value })}
+                >
                   <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white/90 text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
+                    id="turnoAlumno"
+                    className={`${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"} pl-10`}
                   >
-                    <SelectValue placeholder="Filtrar por turno" />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <SelectValue placeholder="Selecciona un turno" />
                   </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode ? "bg-gray-800 text-white border-gray-700" : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    <SelectItem value="todos">Todos los turnos</SelectItem>
-                    {turnos.map((turno) => (
-                      <SelectItem key={turno} value={turno}>
-                        {turno.charAt(0).toUpperCase() + turno.slice(1)}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                    <SelectItem value="matutino">Matutino</SelectItem>
+                    <SelectItem value="vespertino">Vespertino</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              <div className="space-y-2">
+                <Label
+                  htmlFor="grupoAlumno"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <Users className="h-4 w-4" /> Grupo
+                </Label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="grupoAlumno"
+                    value={datosAlumno.Grupo}
+                    onChange={(e) => setDatosAlumno({ ...datosAlumno, Grupo: e.target.value })}
+                    required
+                    placeholder="Ej: A"
+                    className={`pl-10 ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="submit"
+                  className={`flex-1 gap-2 ${
+                    isDarkMode
+                      ? "bg-[#1d5631] hover:bg-[#153d23] text-white"
+                      : "bg-[#800040] hover:bg-[#5c002e] text-white"
+                  } transition-all duration-200`}
+                >
+                  {editando ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editando ? "Actualizar Alumno" : "Agregar Alumno"}
+                </Button>
+
+                {editando && (
+                  <Button type="button" onClick={cancelarEdicion} variant="outline" className="gap-2 bg-transparent">
+                    <Ban className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      <Card
+        className={`${isDarkMode ? "bg-gray-800" : "bg-white"} shadow-lg hover:shadow-xl transition-shadow duration-300 border-0 overflow-hidden`}
+      >
+        <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-3">
               <Button
-                onClick={resetFilters}
+                variant="ghost"
                 size="sm"
-                variant="outline"
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                onClick={() => setVistaActual("menu")}
+                className="text-white hover:bg-white/20"
               >
-                Limpiar filtros
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver al Menú
               </Button>
+              <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-2xl font-bold">Lista de Alumnos</CardTitle>
+                <span className="text-white/80 text-sm">
+                  {alumnosFiltrados.length} {alumnosFiltrados.length === 1 ? "alumno" : "alumnos"}
+                </span>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={cargarAlumnos} className="text-white hover:bg-white/20">
+              <RefreshCw className="h-4 w-4" />
+              <span className="sr-only">Actualizar</span>
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar alumnos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-white/10 text-white border-white/20 placeholder:text-gray-300"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Select value={carreraFilter} onValueChange={setCarreraFilter}>
+                <SelectTrigger className="flex-1 bg-white/10 text-white border-white/20">
+                  <SelectValue placeholder="Filtrar por carrera" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todas">Todas las carreras</SelectItem>
+                  {carreras.map((carrera) => (
+                    <SelectItem key={carrera} value={carrera}>
+                      {carrera}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={semestreFilter} onValueChange={setSemestreFilter}>
+                <SelectTrigger className="w-[180px] bg-white/10 text-white border-white/20">
+                  <SelectValue placeholder="Filtrar por semestre" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todos">Todos los semestres</SelectItem>
+                  {semestres.map((semestre) => (
+                    <SelectItem key={semestre} value={semestre}>
+                      {semestre}º Semestre
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={turnoFilter} onValueChange={setTurnoFilter}>
+                <SelectTrigger className="w-[150px] bg-white/10 text-white border-white/20">
+                  <SelectValue placeholder="Filtrar por turno" />
+                </SelectTrigger>
+                <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                  <SelectItem value="todos">Todos los turnos</SelectItem>
+                  {turnos.map((turno) => (
+                    <SelectItem key={turno} value={turno}>
+                      {turno.charAt(0).toUpperCase() + turno.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 onClick={() => {
                   setActualizacionMasiva(!actualizacionMasiva)
@@ -886,380 +791,326 @@ export function AlumnosTab({
               </Button>
             </div>
           </div>
-        )}
-      </CardHeader>
-      {actualizacionMasiva && (
-        <div className="px-6 py-4 bg-black/5 border-t border-b border-gray-200 dark:border-gray-700">
-          <h3 className={`text-lg font-semibold mb-3 ${isDarkMode ? "text-white" : "text-gray-800"}`}>
-            Actualización masiva
-          </h3>
+        </CardHeader>
+        {actualizacionMasiva && (
+          <div className="px-6 py-4 bg-black/5 border-t border-b border-gray-200 dark:border-gray-700">
+            <h3 className={`text-lg font-semibold mb-3 ${isDarkMode ? "text-white" : "text-gray-800"}`}>
+              Actualización masiva
+            </h3>
 
-          <Tabs value={tipoActualizacion} onValueChange={setTipoActualizacion} className="w-full">
-            <TabsList className="grid grid-cols-2 mb-4">
-              <TabsTrigger value="semestre" className="text-sm">
-                <BookOpen className="h-4 w-4 mr-2" />
-                Actualizar Semestres
-              </TabsTrigger>
-              <TabsTrigger value="grupo" className="text-sm">
-                <Layers className="h-4 w-4 mr-2" />
-                Actualizar Grupos
-              </TabsTrigger>
-            </TabsList>
+            <Tabs value={tipoActualizacion} onValueChange={setTipoActualizacion} className="w-full">
+              <TabsList className="grid grid-cols-2 mb-4">
+                <TabsTrigger value="semestre" className="text-sm">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Actualizar Semestres
+                </TabsTrigger>
+                <TabsTrigger value="grupo" className="text-sm">
+                  <Layers className="h-4 w-4 mr-2" />
+                  Actualizar Grupos
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="semestre">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Carrera
-                  </Label>
-                  <Select value={carreraSeleccionada} onValueChange={setCarreraSeleccionada}>
-                    <SelectTrigger
-                      className={`${
+              <TabsContent value="semestre">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Carrera
+                    </Label>
+                    <Select value={carreraSeleccionada} onValueChange={setCarreraSeleccionada}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar carrera" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {carreras.map((carrera) => (
+                          <SelectItem key={carrera} value={carrera}>
+                            {carrera}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Semestre actual
+                    </Label>
+                    <Select value={semestreActual} onValueChange={setSemestreActual}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Nuevo semestre
+                    </Label>
+                    <Select value={nuevoSemestre} onValueChange={setNuevoSemestre}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={actualizarSemestreMasivo}
+                      disabled={actualizando || !carreraSeleccionada || !semestreActual || !nuevoSemestre}
+                      className={`w-full ${
                         isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
+                          ? "bg-green-700 hover:bg-green-600 text-white"
+                          : "bg-red-800 hover:bg-red-700 text-white"
                       } rounded-md transition-all duration-200`}
                     >
-                      <SelectValue placeholder="Seleccionar carrera" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {carreras.map((carrera) => (
-                        <SelectItem key={carrera} value={carrera}>
-                          {carrera}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      {actualizando ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Actualizando...</span>
+                        </div>
+                      ) : (
+                        <span>Actualizar semestres</span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Semestre actual
-                  </Label>
-                  <Select value={semestreActual} onValueChange={setSemestreActual}>
-                    <SelectTrigger
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
-                      } rounded-md transition-all duration-200`}
-                    >
-                      <SelectValue placeholder="Seleccionar semestre" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                        <SelectItem key={semestre} value={semestre.toString()}>
-                          {semestre}º Semestre
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Nuevo semestre
-                  </Label>
-                  <Select value={nuevoSemestre} onValueChange={setNuevoSemestre}>
-                    <SelectTrigger
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
-                      } rounded-md transition-all duration-200`}
-                    >
-                      <SelectValue placeholder="Seleccionar semestre" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                        <SelectItem key={semestre} value={semestre.toString()}>
-                          {semestre}º Semestre
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    onClick={actualizarSemestreMasivo}
-                    disabled={actualizando || !carreraSeleccionada || !semestreActual || !nuevoSemestre}
-                    className={`w-full ${
-                      isDarkMode
-                        ? "bg-green-700 hover:bg-green-600 text-white"
-                        : "bg-red-800 hover:bg-red-700 text-white"
-                    } rounded-md transition-all duration-200`}
-                  >
-                    {actualizando ? (
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Actualizando...</span>
-                      </div>
-                    ) : (
-                      <span>Actualizar semestres</span>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="grupo">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Carrera
-                  </Label>
-                  <Select value={carreraGrupo} onValueChange={setCarreraGrupo}>
-                    <SelectTrigger
+              <TabsContent value="grupo">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Carrera
+                    </Label>
+                    <Select value={carreraGrupo} onValueChange={setCarreraGrupo}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar carrera" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {carreras.map((carrera) => (
+                          <SelectItem key={carrera} value={carrera}>
+                            {carrera}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Semestre
+                    </Label>
+                    <Select value={semestreGrupo} onValueChange={setSemestreGrupo}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Grupo actual
+                    </Label>
+                    <Select value={grupoActual} onValueChange={setGrupoActual}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar grupo" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {grupos.map((grupo) => (
+                          <SelectItem key={grupo} value={grupo}>
+                            Grupo {grupo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Nuevo grupo
+                    </Label>
+                    <Input
+                      value={nuevoGrupo}
+                      onChange={(e) => setNuevoGrupo(e.target.value)}
+                      placeholder="Ej. B"
                       className={`${
                         isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
+                          ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
+                          : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
+                      } rounded-md transition-all duration-200`}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={actualizarGrupoMasivo}
+                      disabled={actualizando || !carreraGrupo || !semestreGrupo || !grupoActual || !nuevoGrupo}
+                      className={`w-full ${
+                        isDarkMode
+                          ? "bg-green-700 hover:bg-green-600 text-white"
+                          : "bg-red-800 hover:bg-red-700 text-white"
                       } rounded-md transition-all duration-200`}
                     >
-                      <SelectValue placeholder="Seleccionar carrera" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {carreras.map((carrera) => (
-                        <SelectItem key={carrera} value={carrera}>
-                          {carrera}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      {actualizando ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Actualizando...</span>
+                        </div>
+                      ) : (
+                        <span>Actualizar grupos</span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Semestre
-                  </Label>
-                  <Select value={semestreGrupo} onValueChange={setSemestreGrupo}>
-                    <SelectTrigger
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
-                      } rounded-md transition-all duration-200`}
-                    >
-                      <SelectValue placeholder="Seleccionar semestre" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                        <SelectItem key={semestre} value={semestre.toString()}>
-                          {semestre}º Semestre
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Grupo actual
-                  </Label>
-                  <Select value={grupoActual} onValueChange={setGrupoActual}>
-                    <SelectTrigger
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-700 text-white border-gray-600"
-                          : "bg-white text-gray-900 border-gray-300"
-                      } rounded-md transition-all duration-200`}
-                    >
-                      <SelectValue placeholder="Seleccionar grupo" />
-                    </SelectTrigger>
-                    <SelectContent
-                      className={`${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-700"
-                          : "bg-white text-gray-900 border-gray-200"
-                      }`}
-                    >
-                      {grupos.map((grupo) => (
-                        <SelectItem key={grupo} value={grupo}>
-                          Grupo {grupo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                    Nuevo grupo
-                  </Label>
-                  <Input
-                    value={nuevoGrupo}
-                    onChange={(e) => setNuevoGrupo(e.target.value)}
-                    placeholder="Ej. B"
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
-                        : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
-                    } rounded-md transition-all duration-200`}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    onClick={actualizarGrupoMasivo}
-                    disabled={actualizando || !carreraGrupo || !semestreGrupo || !grupoActual || !nuevoGrupo}
-                    className={`w-full ${
-                      isDarkMode
-                        ? "bg-green-700 hover:bg-green-600 text-white"
-                        : "bg-red-800 hover:bg-red-700 text-white"
-                    } rounded-md transition-all duration-200`}
-                  >
-                    {actualizando ? (
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Actualizando...</span>
-                      </div>
-                    ) : (
-                      <span>Actualizar grupos</span>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      )}
-      <CardContent className="p-0 h-[calc(100%-80px)] overflow-hidden">
-        {cargando ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-green-500"></div>
+              </TabsContent>
+            </Tabs>
           </div>
-        ) : (
-          <div className="h-full overflow-auto">
-            <Table>
-              <TableHeader
-                className={`sticky top-0 ${
-                  isDarkMode ? "bg-gray-900" : "bg-gray-100"
-                } z-10 transition-colors duration-300`}
-              >
-                <TableRow>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-                  >
-                    Matrícula
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-                  >
-                    Nombre
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-                  >
-                    Apellido
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${
-                      isDarkMode ? "text-gray-200" : "text-gray-700"
-                    } hidden md:table-cell`}
-                  >
-                    Carrera
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${
-                      isDarkMode ? "text-gray-200" : "text-gray-700"
-                    } hidden md:table-cell`}
-                  >
-                    Semestre
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${
-                      isDarkMode ? "text-gray-200" : "text-gray-700"
-                    } hidden md:table-cell`}
-                  >
-                    Turno
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-left font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}
-                  >
-                    Grupo
-                  </TableHead>
-                  <TableHead
-                    className={`py-3 px-4 text-center font-semibold ${
-                      isDarkMode ? "text-gray-200" : "text-gray-700"
-                    }`}
-                  >
-                    Acciones
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {alumnosFiltrados.length > 0 ? (
-                  alumnosFiltrados.map((alumno) => (
+        )}
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex justify-center items-center p-8">
+              <div
+                className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+                  isDarkMode ? "border-[#1d5631]" : "border-[#800040]"
+                }`}
+              ></div>
+            </div>
+          ) : alumnosFiltrados.length > 0 ? (
+            <div className="max-h-[600px] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-10">
+                  <TableRow className={isDarkMode ? "bg-gray-900" : "bg-gray-50"}>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Matrícula</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Nombre</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Apellido</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Carrera</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Semestre</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Turno</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Grupo</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alumnosFiltrados.map((alumno) => (
                     <TableRow
                       key={alumno.Matricula}
-                      className={`${
-                        isDarkMode ? "hover:bg-gray-700 border-gray-700" : "hover:bg-gray-50 border-gray-200"
-                      } transition-colors duration-200`}
+                      className={`group ${isDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-50"} transition-colors`}
                     >
-                      <TableCell
-                        className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"} font-medium`}
-                      >
-                        {alumno.Matricula}
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>
+                        <div className="font-medium">{alumno.Matricula}</div>
                       </TableCell>
-                      <TableCell className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                        {alumno.Nombre}
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>{alumno.Nombre}</TableCell>
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>{alumno.Apellido}</TableCell>
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>{alumno.Carrera}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            isDarkMode ? "bg-[#1d5631]/20 text-[#2a7a45]" : "bg-[#800040]/20 text-[#800040]"
+                          }`}
+                        >
+                          {alumno.Semestre}º Semestre
+                        </span>
                       </TableCell>
-                      <TableCell className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                        {alumno.Apellido}
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>
+                        {alumno.Turno.charAt(0).toUpperCase() + alumno.Turno.slice(1)}
                       </TableCell>
-                      <TableCell
-                        className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"} hidden md:table-cell`}
-                      >
-                        {alumno.Carrera}
-                      </TableCell>
-                      <TableCell
-                        className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"} hidden md:table-cell`}
-                      >
-                        {alumno.Semestre}
-                      </TableCell>
-                      <TableCell
-                        className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"} hidden md:table-cell`}
-                      >
-                        {alumno.Turno}
-                      </TableCell>
-                      <TableCell className={`py-3 px-4 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                        {alumno.Grupo}
-                      </TableCell>
-                      <TableCell className="py-3 px-4 text-center">
-                        <div className="flex justify-center gap-2">
+                      <TableCell className={isDarkMode ? "text-white" : "text-gray-700"}>{alumno.Grupo}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2 opacity-70 group-hover:opacity-100 transition-opacity">
                           <Button
                             onClick={() => modificarAlumno(alumno)}
                             size="sm"
-                            className={`${
+                            variant="outline"
+                            className={`h-8 w-8 p-0 ${
                               isDarkMode
-                                ? "bg-blue-700 hover:bg-blue-600 text-white"
-                                : "bg-blue-600 hover:bg-blue-500 text-white"
-                            } rounded transition-all duration-200 transform hover:scale-105 active:scale-95`}
-                            title="Editar alumno"
+                                ? "text-blue-400 border-blue-400 hover:bg-blue-400/10"
+                                : "text-blue-600 border-blue-600 hover:bg-blue-600/10"
+                            }`}
                           >
                             <Pencil className="h-4 w-4" />
                             <span className="sr-only">Editar alumno</span>
@@ -1267,12 +1118,8 @@ export function AlumnosTab({
                           <Button
                             onClick={() => eliminarAlumno(alumno.Matricula)}
                             size="sm"
-                            className={`${
-                              isDarkMode
-                                ? "bg-red-700 hover:bg-red-600 text-white"
-                                : "bg-red-600 hover:bg-red-500 text-white"
-                            } rounded transition-all duration-200 transform hover:scale-105 active:scale-95`}
-                            title="Eliminar alumno"
+                            variant="outline"
+                            className="h-8 w-8 p-0 text-red-600 border-red-600 hover:bg-red-600/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Eliminar alumno</span>
@@ -1280,22 +1127,43 @@ export function AlumnosTab({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className={`py-8 text-center ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
-                    >
-                      No se encontraron alumnos con los criterios de búsqueda.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div
+              className={`flex flex-col items-center justify-center p-8 text-center ${
+                isDarkMode ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              <Users className="h-12 w-12 mb-2 opacity-20" />
+              <h3 className="text-lg font-medium mb-1">No hay alumnos</h3>
+              <p className="text-sm max-w-md">
+                {searchTerm || carreraFilter !== "todas" || semestreFilter !== "todos" || turnoFilter !== "todos"
+                  ? "No se encontraron alumnos con los filtros aplicados. Intenta con otros criterios de búsqueda."
+                  : "No hay alumnos registrados. Agrega un nuevo alumno usando el formulario."}
+              </p>
+              {(searchTerm || carreraFilter !== "todas" || semestreFilter !== "todos" || turnoFilter !== "todos") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 bg-transparent"
+                  onClick={() => {
+                    setSearchTerm("")
+                    setCarreraFilter("todas")
+                    setSemestreFilter("todos")
+                    setTurnoFilter("todos")
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

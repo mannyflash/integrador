@@ -211,12 +211,32 @@ export default function ListaAsistencias() {
   const [maestroInfo, setMaestroInfo] = useState<Docente | null>(null)
   const [showModal, setShowModal] = useState(false)
   const router = useRouter()
-  const [materias, setMaterias] = useState<{ id: string; nombre: string }[]>([])
+  const [materias, setMaterias] = useState<{ id: string; nombre: string; semestre?: string; turno?: string }[]>([])
   const [selectedMateriaId, setSelectedMateriaId] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [horaInicio, setHoraInicio] = useState<string | null>(null)
   const [horaFin, setHoraFin] = useState<string | null>(null)
+  const [alumnos, setAlumnos] = useState<Asistencia[]>([]) // Estado para almacenar todos los alumnos
+
+  // useEffect para cargar todos los alumnos desde Firebase
+  useEffect(() => {
+    const cargarAlumnos = async () => {
+      try {
+        const alumnosSnapshot = await getDocs(collection(db, "Alumnos"))
+        const alumnosData = alumnosSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Asistencia[]
+        setAlumnos(alumnosData)
+        console.log("[v0] Alumnos cargados:", alumnosData.length)
+      } catch (error) {
+        console.error("Error al cargar alumnos:", error)
+      }
+    }
+
+    cargarAlumnos()
+  }, [])
 
   // Función para verificar si hay una clase activa y recuperar su información
   const verificarClaseActiva = useCallback(async () => {
@@ -476,6 +496,8 @@ export default function ListaAsistencias() {
       const materiasData = materiasSnapshot.docs.map((doc) => ({
         id: doc.id,
         nombre: doc.data().NombreMateria,
+        semestre: doc.data().Semestre, // Añadir semestre
+        turno: doc.data().Turno, // Añadir turno
       }))
       setMaterias(materiasData)
     } catch (error) {
@@ -554,6 +576,8 @@ export default function ListaAsistencias() {
     setClaseIniciada(false)
     setHoraInicio(null)
     setHoraFin(null)
+    // Limpiar también el estado de alumnos si se usa para estadísticas
+    setAlumnos([])
   }, [])
 
   // Función para resetear el estado "enUso" de todos los equipos
@@ -919,20 +943,29 @@ export default function ListaAsistencias() {
       startY: currentY,
       theme: "grid",
       styles: {
-        fontSize: 8,
+        fontSize: 12,
         cellPadding: 2,
         textColor: [0, 0, 0],
-        lineWidth: 0.1,
+        lineWidth: 0.3,
+        lineColor: [100, 100, 100],
+        halign: "center",
+        valign: "middle",
       },
       headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
+        fillColor: [149, 41, 82], // Color borgoña para encabezado
+        textColor: [255, 255, 255],
         fontStyle: "bold",
+        fontSize: 13,
+        halign: "center",
+        cellPadding: 3,
       },
       columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: "auto" },
-        2: { cellWidth: 20 },
+        0: { cellWidth: 15, halign: "center", fontStyle: "bold" },
+        1: { cellWidth: "auto", halign: "center" },
+        2: { cellWidth: 25, halign: "center" },
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245], // Filas alternadas en gris claro
       },
       didDrawPage: (data: {
         cursor: { y: number }
@@ -1390,8 +1423,9 @@ export default function ListaAsistencias() {
                     <h3 className={`text-lg font-semibold mb-3 ${theme === "dark" ? "text-white" : "text-[#1C4A3F]"}`}>
                       Estadísticas de Asistencia
                     </h3>
-                    <div className="flex items-center justify-center h-24">
-                      <div className="text-center">
+                    <div className="space-y-3">
+                      {/* Contador principal */}
+                      <div className="text-center pb-3 border-b border-gray-300/20">
                         <div className={`text-4xl font-bold ${theme === "dark" ? "text-[#1BB827]" : "text-[#1BB827]"}`}>
                           {contador}
                         </div>
@@ -1399,6 +1433,62 @@ export default function ListaAsistencias() {
                           Estudiantes registrados
                         </p>
                       </div>
+
+                      {/* Porcentaje de asistencia */}
+                      {claseIniciada &&
+                        selectedMateriaId &&
+                        (() => {
+                          // Obtener el grupo más común de los alumnos que asistieron
+                          const gruposAsistentes = asistencias.map((a) => a.Grupo).filter(Boolean)
+                          const grupoActual = gruposAsistentes.length > 0 ? gruposAsistentes[0] : null
+
+                          // Contar total de alumnos con ese mismo grupo en la base de datos
+                          const totalAlumnosGrupo = grupoActual
+                            ? alumnos.filter((a) => a.Grupo === grupoActual).length
+                            : 0
+
+                          const porcentajeAsistencia =
+                            totalAlumnosGrupo > 0 ? Math.round((contador / totalAlumnosGrupo) * 100) : 0
+
+                          return (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-[#1C4A3F]/70"}`}>
+                                  Asistencia del grupo:
+                                </span>
+                                <span
+                                  className={`text-sm font-bold ${theme === "dark" ? "text-[#1BB827]" : "text-[#1BB827]"}`}
+                                >
+                                  {contador} de {totalAlumnosGrupo} alumnos
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-[#1C4A3F]/70"}`}>
+                                  Porcentaje de asistencia:
+                                </span>
+                                <span
+                                  className={`text-sm font-bold ${theme === "dark" ? "text-[#1BB827]" : "text-[#1BB827]"}`}
+                                >
+                                  {porcentajeAsistencia}%
+                                </span>
+                              </div>
+                              {grupoActual && (
+                                <div className="flex items-center justify-between">
+                                  <span
+                                    className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-[#1C4A3F]/70"}`}
+                                  >
+                                    Grupo:
+                                  </span>
+                                  <span
+                                    className={`text-sm font-semibold ${theme === "dark" ? "text-gray-300" : "text-[#1C4A3F]"}`}
+                                  >
+                                    {grupoActual}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
                     </div>
                   </div>
                 </div>
