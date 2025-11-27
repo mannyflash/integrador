@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react" // Import useRef
 import { useRouter } from "next/navigation"
 import { User, UserCog, Computer, Moon, Sun, ChevronRight } from "lucide-react"
 import { initializeApp } from "firebase/app"
@@ -33,6 +33,8 @@ import Image from "next/image"
 import swal from "sweetalert"
 import { motion, AnimatePresence } from "framer-motion"
 import bcrypt from "bcryptjs"
+
+import { Html5QrcodeScanner } from "html5-qrcode"
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
@@ -186,7 +188,34 @@ export default function InterfazLaboratorio() {
   const [classChoice, setClassChoice] = useState<"normal" | "invitado">("normal")
   const [classInfo, setClassInfo] = useState<any>(null)
 
+  const [qrScannerActive, setQrScannerActive] = useState(false)
+  const [lastScannedMatricula, setLastScannedMatricula] = useState("")
+  const [scannerMessage, setScannerMessage] = useState("")
+  const [qrInput, setQrInput] = useState("") // Agregar estado para el input del escáner QR
+  const qrInputRef = useRef<HTMLInputElement>(null) // Agregar ref para el input del escáner QR
+
   const welcomeMessages = ['"Hombres y Mujeres Del Mar y Desierto', 'Unidos Por La Educación Tecnológica De Calidad."']
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Solo forzar foco si el elemento activo no es un input, textarea o elemento editable
+      const activeElement = document.activeElement
+      const isInputActive =
+        activeElement?.tagName === "INPUT" ||
+        activeElement?.tagName === "TEXTAREA" ||
+        activeElement?.hasAttribute("contenteditable")
+
+      if (
+        qrInputRef.current &&
+        document.activeElement !== qrInputRef.current &&
+        !isInputActive // No forzar foco si hay un input activo
+      ) {
+        qrInputRef.current.focus()
+      }
+    }, 500)
+
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     const currentTheme = getTheme()
@@ -259,70 +288,17 @@ Hora de inicio: ${data.HoraInicio}`,
   }, [])
 
   // Añadir este efecto después del useEffect que verifica las clases
+  // Modificar este efecto para prevenir cierre accidental de la ventana del navegador
   useEffect(() => {
-    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
-      // Verificar si hay una sesión de maestro activa
-      const storedMaestroId = localStorage.getItem("maestroId")
-      const storedLabTechId = localStorage.getItem("labTechId")
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = "" // Chrome requiere returnValue
 
-      if (storedMaestroId || storedLabTechId) {
-        try {
-          // Verificar si hay una clase iniciada por este maestro
-          const estadoRef = doc(db, "EstadoClase", "actual")
-          const estadoDoc = await getDoc(estadoRef)
-
-          if (
-            estadoDoc.exists() &&
-            estadoDoc.data().iniciada === true &&
-            estadoDoc.data().maestroId === storedMaestroId
-          ) {
-            // Hay una clase activa iniciada por este maestro, finalizarla
-            const horaActual = new Date().toLocaleTimeString()
-
-            // Actualizar el estado de la clase
-            await setDoc(estadoRef, {
-              iniciada: false,
-              horaFin: horaActual,
-              finalizadaAutomaticamente: true,
-            })
-
-            // Resetear el estado de los equipos
-            await resetEquiposEnUso()
-
-            // Registrar la acción
-            console.log("Clase finalizada automáticamente debido al cierre del navegador")
-          }
-
-          // Verificar si hay una clase de invitado iniciada por este laboratorista
-          if (storedLabTechId) {
-            const estadoInvitadoRef = doc(db, "EstadoClaseInvitado", "actual")
-            const estadoInvitadoDoc = await getDoc(estadoInvitadoRef)
-
-            if (estadoInvitadoDoc.exists() && estadoInvitadoDoc.data().iniciada === true) {
-              // Finalizar la clase de invitado
-              await setDoc(estadoInvitadoRef, {
-                iniciada: false,
-                horaFin: new Date().toLocaleTimeString(),
-                finalizadaAutomaticamente: true,
-              })
-
-              // Resetear el estado de los equipos
-              await resetEquiposEnUso()
-
-              console.log("Clase de invitado finalizada automáticamente debido al cierre del navegador")
-            }
-          }
-
-          // Eliminar las sesiones
-          localStorage.removeItem("maestroId")
-          localStorage.removeItem("labTechId")
-        } catch (error) {
-          console.error("Error al finalizar la clase automáticamente:", error)
-        }
-      }
+      // Aquí podrías agregar lógica para intentar guardar el estado o notificar al usuario
+      // Por ahora, solo prevenimos el cierre.
+      console.log("Navegador intentando cerrar, prevented.")
     }
 
-    // Registrar el evento beforeunload
     window.addEventListener("beforeunload", handleBeforeUnload)
 
     // Limpiar el evento cuando el componente se desmonte
@@ -357,13 +333,57 @@ Hora de inicio: ${data.HoraInicio}`,
     return () => clearInterval(interval)
   }, [])
 
+  // Agregar este useEffect para el escáner
+  useEffect(() => {
+    let scanner: Html5QrcodeScanner | null = null
+
+    const initScanner = () => {
+      if (qrScannerActive && typeof window !== "undefined") {
+        scanner = new Html5QrcodeScanner(
+          "qr-reader",
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+          },
+          false,
+        )
+
+        scanner.render(
+          async (decodedText) => {
+            const datos = decodedText.split(",")
+            const matriculaEscaneada = datos[0]?.trim()
+
+            if (matriculaEscaneada && matriculaEscaneada !== lastScannedMatricula) {
+              setLastScannedMatricula(matriculaEscaneada)
+              await registrarAsistenciaQR(matriculaEscaneada)
+              setTimeout(() => setLastScannedMatricula(""), 3000)
+            }
+          },
+          (errorMessage) => {
+            console.log("[v0] Escaneando...", errorMessage)
+          },
+        )
+      }
+    }
+
+    initScanner()
+
+    return () => {
+      if (scanner) {
+        scanner.clear().catch((error) => {
+          console.error("Error al limpiar escáner:", error)
+        })
+      }
+    }
+  }, [qrScannerActive, lastScannedMatricula, isClassStarted, isGuestClassStarted, classInfo])
+
   const handleThemeToggle = () => {
     const newTheme = toggleTheme()
     setThemeState(newTheme)
     applyTheme(newTheme)
   }
 
-  // Función para resetear el estado "enUso" de todos los equipos
   const resetEquiposEnUso = async () => {
     try {
       const equipoRef = doc(db, "Numero de equipos", "equipos")
@@ -383,11 +403,99 @@ Hora de inicio: ${data.HoraInicio}`,
     }
   }
 
+  const registrarAsistenciaQR = async (matriculaEscaneada: string) => {
+    try {
+      const isAnyClassStarted = isClassStarted || isGuestClassStarted
+      if (!isAnyClassStarted) {
+        setScannerMessage("❌ No hay clases iniciadas")
+        setTimeout(() => setScannerMessage(""), 3000)
+        return
+      }
+
+      const asistenciasCollection = isGuestClassStarted ? "AsistenciasInvitado" : "Asistencias"
+
+      const asistenciasRef = collection(db, asistenciasCollection)
+      const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matriculaEscaneada))
+      const matriculaSnapshot = await getDocs(matriculaQuery)
+
+      if (!matriculaSnapshot.empty) {
+        setScannerMessage("⚠️ Ya registraste tu asistencia")
+        setTimeout(() => setScannerMessage(""), 3000)
+        return
+      }
+
+      const alumnoRef = doc(db, "Alumnos", matriculaEscaneada)
+      const alumnoSnap = await getDoc(alumnoRef)
+
+      if (alumnoSnap.exists()) {
+        const alumnoData = alumnoSnap.data()
+
+        if (asistenciasCollection === "Asistencias" && classInfo) {
+          const estadoRef = doc(db, "EstadoClase", "actual")
+          const estadoSnap = await getDoc(estadoRef)
+
+          if (estadoSnap.exists()) {
+            const materiaActualId = estadoSnap.data().materiaId
+            const materiasAlumno = alumnoData.Materias || []
+
+            if (!materiasAlumno.includes(materiaActualId)) {
+              setScannerMessage("❌ No estás inscrito en esta materia")
+              setTimeout(() => setScannerMessage(""), 3000)
+              return
+            }
+          }
+        }
+
+        const asistenciaRef = doc(collection(db, asistenciasCollection))
+
+        const commonData = {
+          AlumnoId: matriculaEscaneada,
+          Nombre: alumnoData.Nombre ?? "",
+          Apellido: alumnoData.Apellido ?? "",
+          Carrera: alumnoData.Carrera ?? "",
+          Grupo: alumnoData.Grupo ?? "",
+          Semestre: alumnoData.Semestre ?? "",
+          Turno: alumnoData.Turno ?? "",
+          Equipo: "personal",
+          Fecha: serverTimestamp(),
+        }
+
+        if (asistenciasCollection === "Asistencias" && classInfo) {
+          await setDoc(asistenciaRef, {
+            ...commonData,
+            MaestroNombre: classInfo.maestroNombre || "",
+            MaestroApellido: classInfo.maestroApellido || "",
+            Materia: classInfo.materiaNombre || "",
+            Practica: classInfo.practicaTitulo || "",
+          })
+        } else if (asistenciasCollection === "AsistenciasInvitado" && guestClassInfo) {
+          await setDoc(asistenciaRef, {
+            ...commonData,
+            MaestroInvitado: guestClassInfo.MaestroInvitado || "",
+            Materia: guestClassInfo.Materia || "",
+            Practica: guestClassInfo.Practica || "",
+          })
+        } else {
+          await setDoc(asistenciaRef, commonData)
+        }
+
+        setScannerMessage(`✅ Asistencia registrada: ${alumnoData.Nombre} ${alumnoData.Apellido}`)
+        setTimeout(() => setScannerMessage(""), 3000)
+      } else {
+        setScannerMessage("❌ Matrícula no encontrada en la base de datos")
+        setTimeout(() => setScannerMessage(""), 3000)
+      }
+    } catch (error) {
+      console.error("Error al registrar asistencia por QR:", error)
+      setScannerMessage("❌ Error al registrar asistencia")
+      setTimeout(() => setScannerMessage(""), 3000)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
       if (activeTab === "estudiante") {
-        // Verificar si hay alguna clase iniciada
         const isAnyClassStarted = isClassStarted || isGuestClassStarted
         if (!isAnyClassStarted) {
           await swal({
@@ -398,14 +506,11 @@ Hora de inicio: ${data.HoraInicio}`,
           return
         }
 
-        // Determinar qué tipo de clase está activa
         const selectedClass = isGuestClassStarted ? "invitado" : "normal"
         setClassChoice(selectedClass as "normal" | "invitado")
 
-        // Colección de asistencias según el tipo de clase
         const asistenciasCollection = selectedClass === "invitado" ? "AsistenciasInvitado" : "Asistencias"
 
-        // Para clase normal, verificar matrícula y equipo
         if (selectedClass === "normal") {
           if (!matricula || !equipo) {
             await swal({
@@ -417,7 +522,6 @@ Hora de inicio: ${data.HoraInicio}`,
           }
 
           try {
-            // Check for duplicate matricula
             const asistenciasRef = collection(db, asistenciasCollection)
             const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula))
             const matriculaSnapshot = await getDocs(matriculaQuery)
@@ -431,7 +535,6 @@ Hora de inicio: ${data.HoraInicio}`,
               return
             }
 
-            // Check for duplicate equipo, except for personal equipment
             if (equipo !== "personal") {
               const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
               const equipoSnapshot = await getDocs(equipoQuery)
@@ -446,15 +549,31 @@ Hora de inicio: ${data.HoraInicio}`,
               }
             }
 
-            // Get all student data
             const alumnoRef = doc(db, "Alumnos", matricula)
             const alumnoSnap = await getDoc(alumnoRef)
 
             if (alumnoSnap.exists()) {
               const alumnoData = alumnoSnap.data()
+
+              const estadoRef = doc(db, "EstadoClase", "actual")
+              const estadoSnap = await getDoc(estadoRef)
+
+              if (estadoSnap.exists()) {
+                const materiaActualId = estadoSnap.data().materiaId
+                const materiasAlumno = alumnoData.Materias || []
+
+                if (!materiasAlumno.includes(materiaActualId)) {
+                  await swal({
+                    title: "Error",
+                    text: "No estás inscrito en esta materia",
+                    icon: "error",
+                  })
+                  return
+                }
+              }
+
               const asistenciaRef = doc(collection(db, asistenciasCollection))
 
-              // Datos comunes para ambos tipos de asistencia
               const commonData = {
                 AlumnoId: matricula,
                 Nombre: alumnoData.Nombre ?? "",
@@ -467,9 +586,7 @@ Hora de inicio: ${data.HoraInicio}`,
                 Fecha: serverTimestamp(),
               }
 
-              // Datos específicos según el tipo de clase
               if (classInfo) {
-                // Para clase normal
                 await setDoc(asistenciaRef, {
                   ...commonData,
                   MaestroNombre: classInfo.maestroNombre || "",
@@ -478,11 +595,9 @@ Hora de inicio: ${data.HoraInicio}`,
                   Practica: classInfo.practicaTitulo || "",
                 })
               } else {
-                // Caso básico sin información adicional
                 await setDoc(asistenciaRef, commonData)
               }
 
-              // Marcar el equipo como "en uso" si no es equipo personal
               if (equipo !== "personal") {
                 try {
                   const equipoRef = doc(db, "Numero de equipos", "equipos")
@@ -528,7 +643,6 @@ Hora de inicio: ${data.HoraInicio}`,
             })
           }
         } else {
-          // Para clase invitada, verificar nombre, apellido y equipo
           if (!nombre || !apellido || !equipo) {
             await swal({
               title: "Error",
@@ -539,7 +653,6 @@ Hora de inicio: ${data.HoraInicio}`,
           }
 
           try {
-            // Check for duplicate equipo, except for personal equipment
             if (equipo !== "personal") {
               const asistenciasRef = collection(db, asistenciasCollection)
               const equipoQuery = query(asistenciasRef, where("Equipo", "==", equipo))
@@ -555,11 +668,9 @@ Hora de inicio: ${data.HoraInicio}`,
               }
             }
 
-            // Generar un ID único para el alumno invitado
             const alumnoId = matriculaInvitado ? matriculaInvitado : `INV-${Date.now()}`
             const asistenciaRef = doc(collection(db, asistenciasCollection))
 
-            // Datos para asistencia de invitado
             const invitadoData = {
               AlumnoId: alumnoId,
               Nombre: nombre,
@@ -572,7 +683,6 @@ Hora de inicio: ${data.HoraInicio}`,
               Fecha: serverTimestamp(),
             }
 
-            // Añadir datos específicos de la clase invitada
             if (guestClassInfo) {
               await setDoc(asistenciaRef, {
                 ...invitadoData,
@@ -585,7 +695,6 @@ Hora de inicio: ${data.HoraInicio}`,
               await setDoc(asistenciaRef, invitadoData)
             }
 
-            // Marcar el equipo como "en uso" si no es equipo personal
             if (equipo !== "personal") {
               try {
                 const equipoRef = doc(db, "Numero de equipos", "equipos")
@@ -709,14 +818,12 @@ Hora de inicio: ${data.HoraInicio}`,
 
       console.log("Intentando iniciar sesión como administrador:", { adminEmail })
 
-      // Primero, intentamos buscar por matrícula directamente
       const adminRef = doc(db, "Administrador", adminEmail)
       const adminSnap = await getDoc(adminRef)
 
       if (!adminSnap.exists()) {
         console.log("Administrador no encontrado por matrícula, buscando por email...")
 
-        // Si no se encuentra por matrícula, intentamos buscar por email
         const adminQuery = query(collection(db, "Administrador"), where("Email", "==", adminEmail))
         const querySnapshot = await getDocs(adminQuery)
 
@@ -730,7 +837,6 @@ Hora de inicio: ${data.HoraInicio}`,
           return
         }
 
-        // Si encontramos por email, usamos ese documento
         const adminDoc = querySnapshot.docs[0]
         const adminData = adminDoc.data()
 
@@ -764,7 +870,6 @@ Hora de inicio: ${data.HoraInicio}`,
           icon: "success",
         })
 
-        // Guardar el ID del administrador en localStorage
         localStorage.setItem("adminId", adminDoc.id)
 
         setIsAdminLoginOpen(false)
@@ -772,7 +877,6 @@ Hora de inicio: ${data.HoraInicio}`,
         return
       }
 
-      // Si llegamos aquí, encontramos al administrador por matrícula
       const adminData = adminSnap.data()
       if (!adminData || !adminData.Contraseña) {
         console.log("Error en los datos del administrador")
@@ -785,7 +889,6 @@ Hora de inicio: ${data.HoraInicio}`,
       }
 
       console.log("Administrador encontrado por matrícula, verificando contraseña")
-      // Usar bcrypt.compare para comparar la contraseña ingresada con la hasheada
       const passwordMatch = await bcrypt.compare(adminPassword, adminData.Contraseña)
 
       if (!passwordMatch) {
@@ -805,7 +908,6 @@ Hora de inicio: ${data.HoraInicio}`,
         icon: "success",
       })
 
-      // Guardar el ID del administrador en localStorage
       localStorage.setItem("adminId", adminEmail)
 
       setIsAdminLoginOpen(false)
@@ -824,7 +926,18 @@ Hora de inicio: ${data.HoraInicio}`,
     }
   }
 
-  const carouselImages = ["/fondo chato.jpg", "/FondoItspp.png", "/tecnmImagen.png", "/LogoSistemas.png"]
+  const handleQrScan = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      if (qrInput.trim()) {
+        const matricula = qrInput.trim().split(/\s+/)[0]
+        await registrarAsistenciaQR(matricula)
+        setQrInput("")
+      }
+    }
+  }
+
+  const carouselImages = ["/FondoItspp.png", "/tecnmImagen.png", "/LogoSistemas.png"]
 
   if (isLoading) {
     return <Loader />
@@ -833,7 +946,7 @@ Hora de inicio: ${data.HoraInicio}`,
   return (
     <div
       className={`min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 ${
-        theme === "dark" ? "dark bg-[#0c1f1a]" : "bg-[#f0fff4]"
+        theme === "dark" ? colors.dark.background : colors.light.background
       } transition-colors duration-300`}
     >
       <div className="fixed top-2 left-2 z-50">
@@ -844,7 +957,6 @@ Hora de inicio: ${data.HoraInicio}`,
         />
       </div>
 
-      {/* Botón de cambio de tema */}
       <button
         onClick={handleThemeToggle}
         className={`fixed top-4 right-4 z-50 p-3 rounded-full transition-all duration-300 ${
@@ -852,6 +964,45 @@ Hora de inicio: ${data.HoraInicio}`,
         }`}
       >
         {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
+
+      <button
+        onClick={() => setQrScannerActive(!qrScannerActive)}
+        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-lg transition-all ${
+          qrScannerActive
+            ? "bg-red-500 hover:bg-red-600"
+            : theme === "dark"
+              ? "bg-[#1BB827] hover:bg-[#159620]"
+              : "bg-[#1BB827] hover:bg-[#159620]"
+        } text-white`}
+        title={qrScannerActive ? "Desactivar escáner QR" : "Activar escáner QR"}
+      >
+        {qrScannerActive ? (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+            />
+          </svg>
+        )}
       </button>
 
       <AnimatePresence mode="wait">
@@ -871,12 +1022,11 @@ Hora de inicio: ${data.HoraInicio}`,
 
       <Card
         className={`w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[80%] xl:max-w-[75%] mx-auto overflow-hidden ${
-          theme === "dark" ? "bg-[#1C4A3F]" : "bg-white"
+          theme === "dark" ? colors.dark.cardBackground : colors.light.cardBackground
         } border-none relative z-10 shadow-xl rounded-2xl sm:rounded-3xl`}
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={activeTab}
             className="flex flex-col lg:flex-row min-h-[70vh] sm:min-h-[80vh] relative overflow-hidden rounded-2xl sm:rounded-3xl"
             {...TabAnimation}
           >
@@ -947,7 +1097,8 @@ Hora de inicio: ${data.HoraInicio}`,
                   defaultValue="estudiante"
                   className="w-full max-w-md mx-auto"
                   value={activeTab}
-                  onValueChange={(value) => {
+                  onValueChange={(value: string) => {
+                    // Agregando tipo string al parámetro value
                     setIsReversed(!isReversed)
                     setTimeout(() => {
                       setActiveTab(value as UserType)
@@ -981,7 +1132,6 @@ Hora de inicio: ${data.HoraInicio}`,
 
                   <TabsContent value="estudiante" className="space-y-6">
                     <form onSubmit={handleSubmit} className="space-y-5">
-                      {/* Estado de las clases */}
                       <div className="space-y-3">
                         <Label
                           htmlFor="classStatus"
@@ -1058,10 +1208,8 @@ Hora de inicio: ${data.HoraInicio}`,
                         </div>
                       </div>
 
-                      {/* Formulario para clase normal */}
                       {isClassStarted && !isGuestClassStarted && (
                         <>
-                          {/* PRIMERO: Selección de equipo */}
                           <div className="space-y-3">
                             <Label
                               htmlFor="equipo"
@@ -1098,7 +1246,6 @@ Hora de inicio: ${data.HoraInicio}`,
                             </Select>
                           </div>
 
-                          {/* SEGUNDO: Matrícula */}
                           <div className="space-y-3">
                             <Label
                               htmlFor="matricula"
@@ -1126,10 +1273,8 @@ Hora de inicio: ${data.HoraInicio}`,
                         </>
                       )}
 
-                      {/* Formulario para clase invitada */}
                       {isGuestClassStarted && !isClassStarted && (
                         <>
-                          {/* PRIMERO: Selección de equipo */}
                           <div className="space-y-3">
                             <Label
                               htmlFor="equipo"
@@ -1239,7 +1384,6 @@ Hora de inicio: ${data.HoraInicio}`,
                         </>
                       )}
 
-                      {/* Botón de registro de asistencia */}
                       <Button
                         type="submit"
                         className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
@@ -1272,7 +1416,7 @@ Hora de inicio: ${data.HoraInicio}`,
                         </Label>
                         <Select
                           value={userType}
-                          onValueChange={(value) => setUserType(value as "maestro" | "laboratorista")}
+                          onValueChange={(value: string) => setUserType(value as "maestro" | "laboratorista")} // Agregando tipo string al parámetro value
                         >
                           <SelectTrigger
                             className={`${
@@ -1363,6 +1507,73 @@ Hora de inicio: ${data.HoraInicio}`,
         </AnimatePresence>
       </Card>
 
+      {qrScannerActive && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div
+            className={`relative w-full max-w-md mx-4 p-6 rounded-2xl shadow-2xl ${
+              theme === "dark" ? "bg-[#0f1b18]" : "bg-white"
+            }`}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                Escáner de Asistencia QR
+              </h3>
+              <button
+                onClick={() => setQrScannerActive(false)}
+                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div id="qr-reader" className="w-full mb-4"></div>
+
+            {/* Input para escáner físico */}
+            <Input
+              ref={qrInputRef}
+              value={qrInput}
+              onChange={(e) => setQrInput(e.target.value)}
+              onKeyDown={handleQrScan}
+              placeholder="Escanea tu código aquí..."
+              className={`${
+                theme === "dark"
+                  ? "bg-[#153731] border-[#1BB827]/30 text-white"
+                  : "bg-[#f0fff4] border-[#1BB827]/30 text-[#1C4A3F]"
+              } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300 mb-4`}
+              autoFocus={qrScannerActive} // Auto-focus when scanner becomes active
+            />
+
+            {scannerMessage && (
+              <div
+                className={`p-3 rounded-lg text-center font-semibold ${
+                  scannerMessage.includes("✅")
+                    ? "bg-green-100 text-green-800"
+                    : scannerMessage.includes("⚠️")
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-red-100 text-red-800"
+                }`}
+              >
+                {scannerMessage}
+              </div>
+            )}
+
+            <p className={`text-sm text-center mt-4 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+              {isClassStarted || isGuestClassStarted
+                ? "Escanea tu credencial para registrar asistencia"
+                : "No hay clases iniciadas. El escáner se activará cuando inicie una clase."}
+            </p>
+          </div>
+        </div>
+      )}
+
       <Dialog open={isAdminLoginOpen} onOpenChange={setIsAdminLoginOpen}>
         <DialogContent
           className={`sm:max-w-md ${
@@ -1433,6 +1644,23 @@ Hora de inicio: ${data.HoraInicio}`,
           </form>
         </DialogContent>
       </Dialog>
+
+      <input
+        ref={qrInputRef}
+        type="text"
+        value={qrInput}
+        onChange={(e) => setQrInput(e.target.value)}
+        onKeyDown={handleQrScan}
+        className="fixed top-0 left-0 w-1 h-1 opacity-0 pointer-events-none"
+        autoFocus
+        tabIndex={-1}
+      />
+
+      {scannerMessage && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-white dark:bg-gray-800 px-6 py-3 rounded-lg shadow-lg border-2 border-[#1BB827]">
+          <p className="text-lg font-semibold">{scannerMessage}</p>
+        </div>
+      )}
     </div>
   )
 }

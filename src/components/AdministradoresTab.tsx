@@ -22,6 +22,8 @@ import {
   X,
   AlertCircle,
   Save,
+  List,
+  ArrowLeft,
 } from "lucide-react"
 import {
   collection,
@@ -43,7 +45,7 @@ interface Administrador {
   Nombre: string
   Apellido: string
   Email: string
-  Contraseña?: string // Make it optional since it might not always be present
+  Contraseña?: string
 }
 
 export function AdministradoresTab({
@@ -51,6 +53,7 @@ export function AdministradoresTab({
   isDarkMode,
   currentColors,
 }: { db: Firestore; isDarkMode: boolean; currentColors: any }) {
+  const [vistaActual, setVistaActual] = useState<"menu" | "agregar" | "lista">("menu")
   const [administradores, setAdministradores] = useState<Administrador[]>([])
   const [administradoresFiltrados, setAdministradoresFiltrados] = useState<Administrador[]>([])
   const [datosAdministrador, setDatosAdministrador] = useState<Administrador>({
@@ -64,6 +67,7 @@ export function AdministradoresTab({
   const [cargando, setCargando] = useState(true)
   const [busqueda, setBusqueda] = useState("")
   const [errorMatricula, setErrorMatricula] = useState("")
+  const [seleccionados, setSeleccionados] = useState<string[]>([])
 
   useEffect(() => {
     cargarAdministradores()
@@ -141,7 +145,6 @@ export function AdministradoresTab({
   const manejarEnvio = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    // Validate matricula first
     const matriculaValida = await validarMatricula(datosAdministrador.Matricula)
     if (!matriculaValida) return
 
@@ -184,6 +187,7 @@ export function AdministradoresTab({
 
       setDatosAdministrador({ Matricula: "", Nombre: "", Apellido: "", Email: "", Contraseña: "" })
       cargarAdministradores()
+      setVistaActual("lista")
     } catch (error) {
       console.error("Error al agregar/actualizar administrador:", error)
       await Swal.fire({
@@ -230,6 +234,7 @@ export function AdministradoresTab({
     setDatosAdministrador({ ...administrador, Contraseña: "" })
     setEditando(true)
     setErrorMatricula("")
+    setVistaActual("agregar")
   }
 
   const cancelarEdicion = () => {
@@ -238,25 +243,150 @@ export function AdministradoresTab({
     setErrorMatricula("")
   }
 
-  // Color helpers
+  const toggleSeleccionarTodos = () => {
+    if (seleccionados.length === administradoresFiltrados.length) {
+      setSeleccionados([])
+    } else {
+      setSeleccionados(administradoresFiltrados.map((a) => a.Matricula))
+    }
+  }
+
+  const toggleSeleccionarAdministrador = (matricula: string) => {
+    setSeleccionados((prev) => (prev.includes(matricula) ? prev.filter((m) => m !== matricula) : [...prev, matricula]))
+  }
+
+  const eliminarSeleccionados = async () => {
+    if (seleccionados.length === 0) {
+      Swal.fire("Advertencia", "No has seleccionado ningún administrador", "warning")
+      return
+    }
+
+    const result = await Swal.fire({
+      title: "¿Estás seguro?",
+      text: `Se eliminarán ${seleccionados.length} administrador(es). No podrás revertir esta acción!`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Sí, eliminar!",
+      cancelButtonText: "Cancelar",
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await Promise.all(seleccionados.map((matricula) => deleteDoc(doc(db, "Administrador", matricula))))
+        Swal.fire("Eliminados!", `${seleccionados.length} administrador(es) eliminado(s).`, "success")
+        setSeleccionados([])
+        cargarAdministradores()
+      } catch (error) {
+        console.error("Error al eliminar administradores:", error)
+        Swal.fire("Error!", "Ha ocurrido un error al eliminar los administradores.", "error")
+      }
+    }
+  }
+
   const headerGradient = isDarkMode
     ? "bg-gradient-to-r from-[#1d5631] to-[#2a7a45]"
-    : "bg-gradient-to-r from-[#800040] to-[#a30050]"
+    : "bg-gradient-to-r from-[#952952] to-[#7a1f42]"
 
-  const textColor = isDarkMode ? "text-white" : "text-[#800040]"
-  const descriptionColor = isDarkMode ? "text-gray-300" : "text-[#800040]/80"
+  const textColor = isDarkMode ? "text-white" : "text-[#952952]"
+  const descriptionColor = isDarkMode ? "text-gray-300" : "text-[#952952]/80"
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card
-        className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} h-full shadow-lg hover:shadow-xl transition-shadow duration-300`}
-      >
-        <CardHeader className={`${headerGradient} text-white rounded-t-lg`}>
-          <div className="flex items-center">
-            <Shield className="mr-2 h-6 w-6" />
-            <CardTitle className="text-xl font-bold">
-              {editando ? "Editar Administrador" : "Agregar Administrador"}
-            </CardTitle>
+  if (vistaActual === "menu") {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto p-4">
+        <Card
+          className={`${isDarkMode ? "bg-gray-800 hover:bg-gray-750" : "bg-white hover:bg-gray-50"} shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden border-0 cursor-pointer transform hover:scale-[1.02]`}
+          onClick={() => setVistaActual("agregar")}
+        >
+          <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-10">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="bg-white/20 backdrop-blur-sm p-6 rounded-full shadow-lg">
+                <Plus className="h-16 w-16" />
+              </div>
+              <CardTitle className="text-3xl font-bold">Agregar Administrador</CardTitle>
+              <CardDescription className="text-white/90 text-base">
+                Registra un nuevo administrador en el sistema
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-10 bg-gradient-to-b from-white to-gray-50">
+            <ul className="space-y-4 text-gray-700">
+              <li className="flex items-center gap-3 text-base">
+                <Hash className="h-5 w-5 text-[#952952]" />
+                <span>Asignar matrícula de identificación</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <User className="h-5 w-5 text-[#952952]" />
+                <span>Ingresar datos personales</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Key className="h-5 w-5 text-[#952952]" />
+                <span>Crear credenciales de acceso</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`${isDarkMode ? "bg-gray-800 hover:bg-gray-750" : "bg-white hover:bg-gray-50"} shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden border-0 cursor-pointer transform hover:scale-[1.02]`}
+          onClick={() => setVistaActual("lista")}
+        >
+          <CardHeader className="bg-gradient-to-br from-[#952952] to-[#7a1f42] text-white p-10">
+            <div className="flex flex-col items-center text-center space-y-6">
+              <div className="bg-white/20 backdrop-blur-sm p-6 rounded-full shadow-lg">
+                <List className="h-16 w-16" />
+              </div>
+              <CardTitle className="text-3xl font-bold">Ver Lista de Administradores</CardTitle>
+              <CardDescription className="text-white/90 text-base">
+                Consulta, edita o elimina administradores existentes
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-10 bg-gradient-to-b from-white to-gray-50">
+            <ul className="space-y-4 text-gray-700">
+              <li className="flex items-center gap-3 text-base">
+                <Search className="h-5 w-5 text-[#952952]" />
+                <span>Buscar y filtrar administradores</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Pencil className="h-5 w-5 text-[#952952]" />
+                <span>Editar información</span>
+              </li>
+              <li className="flex items-center gap-3 text-base">
+                <Trash2 className="h-5 w-5 text-[#952952]" />
+                <span>Eliminar registros</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (vistaActual === "agregar") {
+    return (
+      <Card className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} shadow-lg`}>
+        <CardHeader className={`${headerGradient} text-white rounded-t-lg p-6`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Shield className="mr-2 h-6 w-6" />
+              <CardTitle className="text-xl font-bold">
+                {editando ? "Editar Administrador" : "Agregar Administrador"}
+              </CardTitle>
+            </div>
+            <Button
+              onClick={() => {
+                setVistaActual("menu")
+                cancelarEdicion()
+              }}
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-white/20"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Volver al Menú
+            </Button>
           </div>
           <CardDescription className="text-gray-100 mt-1">
             {editando
@@ -265,14 +395,14 @@ export function AdministradoresTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <form onSubmit={manejarEnvio} className="space-y-4">
+          <form onSubmit={manejarEnvio} className="space-y-4 max-w-2xl mx-auto">
             <div className="space-y-2">
               <Label htmlFor="matriculaAdministrador" className={`${textColor} flex items-center`}>
                 <Hash className="h-4 w-4 mr-1" /> Matrícula
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Hash className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#800040]/50"}`} />
+                  <Hash className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#952952]/50"}`} />
                 </div>
                 <Input
                   id="matriculaAdministrador"
@@ -287,9 +417,8 @@ export function AdministradoresTab({
                   className={`pl-10 ${
                     isDarkMode
                       ? "bg-[#3a3a3a] text-white border-[#1d5631]/30 focus:border-[#1d5631]"
-                      : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30 focus:border-[#800040]"
-                  } 
-                    transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#800040]/20"}`}
+                      : "bg-[#f8f8f8] text-[#952952] border-[#952952]/30 focus:border-[#952952]"
+                  } transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#952952]/20"}`}
                 />
               </div>
               {errorMatricula && (
@@ -306,7 +435,7 @@ export function AdministradoresTab({
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <User className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#800040]/50"}`} />
+                  <User className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#952952]/50"}`} />
                 </div>
                 <Input
                   id="nombreAdministrador"
@@ -317,9 +446,8 @@ export function AdministradoresTab({
                   className={`pl-10 ${
                     isDarkMode
                       ? "bg-[#3a3a3a] text-white border-[#1d5631]/30 focus:border-[#1d5631]"
-                      : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30 focus:border-[#800040]"
-                  } 
-                    transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#800040]/20"}`}
+                      : "bg-[#f8f8f8] text-[#952952] border-[#952952]/30 focus:border-[#952952]"
+                  } transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#952952]/20"}`}
                 />
               </div>
             </div>
@@ -330,7 +458,7 @@ export function AdministradoresTab({
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <User className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#800040]/50"}`} />
+                  <User className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#952952]/50"}`} />
                 </div>
                 <Input
                   id="apellidoAdministrador"
@@ -341,9 +469,8 @@ export function AdministradoresTab({
                   className={`pl-10 ${
                     isDarkMode
                       ? "bg-[#3a3a3a] text-white border-[#1d5631]/30 focus:border-[#1d5631]"
-                      : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30 focus:border-[#800040]"
-                  } 
-                    transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#800040]/20"}`}
+                      : "bg-[#f8f8f8] text-[#952952] border-[#952952]/30 focus:border-[#952952]"
+                  } transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#952952]/20"}`}
                 />
               </div>
             </div>
@@ -354,7 +481,7 @@ export function AdministradoresTab({
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <AtSign className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#800040]/50"}`} />
+                  <AtSign className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#952952]/50"}`} />
                 </div>
                 <Input
                   id="emailAdministrador"
@@ -366,9 +493,8 @@ export function AdministradoresTab({
                   className={`pl-10 ${
                     isDarkMode
                       ? "bg-[#3a3a3a] text-white border-[#1d5631]/30 focus:border-[#1d5631]"
-                      : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30 focus:border-[#800040]"
-                  } 
-                    transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#800040]/20"}`}
+                      : "bg-[#f8f8f8] text-[#952952] border-[#952952]/30 focus:border-[#952952]"
+                  } transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#952952]/20"}`}
                 />
               </div>
             </div>
@@ -380,7 +506,7 @@ export function AdministradoresTab({
               </Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <Key className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#800040]/50"}`} />
+                  <Key className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-[#952952]/50"}`} />
                 </div>
                 <Input
                   id="contraseñaAdministrador"
@@ -392,9 +518,8 @@ export function AdministradoresTab({
                   className={`pl-10 ${
                     isDarkMode
                       ? "bg-[#3a3a3a] text-white border-[#1d5631]/30 focus:border-[#1d5631]"
-                      : "bg-[#f8f8f8] text-[#800040] border-[#800040]/30 focus:border-[#800040]"
-                  } 
-                    transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#800040]/20"}`}
+                      : "bg-[#f8f8f8] text-[#952952] border-[#952952]/30 focus:border-[#952952]"
+                  } transition-all duration-300 focus:ring-2 ${isDarkMode ? "focus:ring-[#1d5631]/20" : "focus:ring-[#952952]/20"}`}
                 />
               </div>
             </div>
@@ -405,7 +530,7 @@ export function AdministradoresTab({
                 className={`flex-1 transform transition-all duration-200 hover:scale-105 active:scale-95 ${
                   isDarkMode
                     ? "bg-[#1d5631] hover:bg-[#153d23] text-white"
-                    : "bg-[#800040] hover:bg-[#5c002e] text-white"
+                    : "bg-[#952952] hover:bg-[#7a1f42] text-white"
                 }`}
               >
                 {editando ? (
@@ -424,7 +549,7 @@ export function AdministradoresTab({
                   type="button"
                   onClick={cancelarEdicion}
                   variant="outline"
-                  className="transform transition-all duration-200 hover:scale-105 active:scale-95 border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600"
+                  className="transform transition-all duration-200 hover:scale-105 active:scale-95 border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 bg-transparent"
                 >
                   <X className="h-4 w-4 mr-2" /> Cancelar
                 </Button>
@@ -433,125 +558,161 @@ export function AdministradoresTab({
           </form>
         </CardContent>
       </Card>
+    )
+  }
 
-      <Card
-        className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} h-full shadow-lg hover:shadow-xl transition-shadow duration-300`}
-      >
-        <CardHeader className={`${headerGradient} text-white rounded-t-lg`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <UserCog className="mr-2 h-6 w-6" />
-              <CardTitle className="text-xl font-bold">Lista de Administradores</CardTitle>
-            </div>
-            <Badge className={`${isDarkMode ? "bg-[#2a7a45]" : "bg-[#800040]"} hover:bg-opacity-80 transition-all`}>
+  return (
+    <Card className={`${isDarkMode ? "bg-[#2a2a2a]" : "bg-white"} shadow-lg`}>
+      <CardHeader className={`${headerGradient} text-white rounded-t-lg`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <UserCog className="mr-2 h-6 w-6" />
+            <CardTitle className="text-xl font-bold">Lista de Administradores</CardTitle>
+            <Badge className="ml-3 bg-white/20 hover:bg-white/30 transition-all">
               {administradores.length} {administradores.length === 1 ? "administrador" : "administradores"}
             </Badge>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <div className="relative flex-1">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Search className="h-4 w-4 text-white" />
-              </div>
-              <Input
-                placeholder="Buscar administradores..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-9 bg-white/10 border-white/20 placeholder:text-white/70 text-white w-full"
-              />
+          <Button
+            onClick={() => setVistaActual("menu")}
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/20"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Volver al Menú
+          </Button>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Search className="h-4 w-4 text-white" />
             </div>
-            <Button
-              onClick={() => cargarAdministradores()}
-              variant="outline"
-              size="icon"
-              className="border-white/20 text-white hover:bg-white/10"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+            <Input
+              placeholder="Buscar administradores..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-9 bg-white/10 border-white/20 placeholder:text-white/70 text-white w-full"
+            />
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {cargando ? (
-            <div className={`flex flex-col items-center justify-center py-12 ${textColor}`}>
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 mb-4 border-primary"></div>
-              <p>Cargando administradores...</p>
-            </div>
-          ) : administradoresFiltrados.length === 0 ? (
-            <div className={`flex flex-col items-center justify-center py-12 ${descriptionColor}`}>
-              {busqueda ? (
-                <>
-                  <Search className="h-12 w-12 mb-4 opacity-30" />
-                  <p className="text-center">No se encontraron administradores que coincidan con "{busqueda}"</p>
-                  <Button
-                    onClick={() => setBusqueda("")}
-                    variant="link"
-                    className={`mt-2 ${isDarkMode ? "text-[#2a7a45]" : "text-[#800040]"}`}
+          <Button
+            onClick={() => cargarAdministradores()}
+            variant="outline"
+            size="icon"
+            className="border-white/20 text-white hover:bg-white/10"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {cargando ? (
+          <div className={`flex flex-col items-center justify-center py-12 ${textColor}`}>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 mb-4 border-primary"></div>
+            <p>Cargando administradores...</p>
+          </div>
+        ) : administradoresFiltrados.length === 0 ? (
+          <div className={`flex flex-col items-center justify-center py-12 ${descriptionColor}`}>
+            {busqueda ? (
+              <>
+                <Search className="h-12 w-12 mb-4 opacity-30" />
+                <p className="text-center">No se encontraron administradores que coincidan con "{busqueda}"</p>
+                <Button
+                  onClick={() => setBusqueda("")}
+                  variant="link"
+                  className={`mt-2 ${isDarkMode ? "text-[#2a7a45]" : "text-[#952952]"}`}
+                >
+                  Mostrar todos los administradores
+                </Button>
+              </>
+            ) : (
+              <>
+                <UserCog className="h-12 w-12 mb-4 opacity-30" />
+                <p className="text-center">No hay administradores registrados</p>
+                <p className="text-center text-sm opacity-70 mt-1">Agrega un administrador usando el formulario</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-auto max-h-[500px] rounded-b-lg">
+            {seleccionados.length > 0 && (
+              <div className="sticky top-0 z-20 bg-white dark:bg-gray-800 p-3 border-b flex items-center justify-between mb-4">
+                <span className={`text-sm font-medium ${textColor}`}>
+                  {seleccionados.length} administrador(es) seleccionado(s)
+                </span>
+                <Button onClick={eliminarSeleccionados} size="sm" variant="destructive" className="gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar seleccionados
+                </Button>
+              </div>
+            )}
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-opacity-90 backdrop-blur-sm bg-inherit">
+                <TableRow>
+                  <TableHead className={`${textColor} font-semibold`}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        seleccionados.length === administradoresFiltrados.length && administradoresFiltrados.length > 0
+                      }
+                      onChange={toggleSeleccionarTodos}
+                      className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                    />
+                  </TableHead>
+                  <TableHead className={`${textColor} font-semibold`}>Matrícula</TableHead>
+                  <TableHead className={`${textColor} font-semibold`}>Nombre Completo</TableHead>
+                  <TableHead className={`${textColor} font-semibold`}>Email</TableHead>
+                  <TableHead className={`${textColor} font-semibold`}>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {administradoresFiltrados.map((administrador) => (
+                  <TableRow
+                    key={administrador.Matricula}
+                    className={`group transition-colors ${isDarkMode ? "hover:bg-[#1d5631]/10" : "hover:bg-[#952952]/5"}`}
                   >
-                    Mostrar todos los administradores
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <UserCog className="h-12 w-12 mb-4 opacity-30" />
-                  <p className="text-center">No hay administradores registrados</p>
-                  <p className="text-center text-sm opacity-70 mt-1">Agrega un administrador usando el formulario</p>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-auto max-h-[500px] rounded-b-lg">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-opacity-90 backdrop-blur-sm bg-inherit">
-                  <TableRow>
-                    <TableHead className={`${textColor} font-semibold`}>Matrícula</TableHead>
-                    <TableHead className={`${textColor} font-semibold`}>Nombre Completo</TableHead>
-                    <TableHead className={`${textColor} font-semibold`}>Email</TableHead>
-                    <TableHead className={`${textColor} font-semibold`}>Acciones</TableHead>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        checked={seleccionados.includes(administrador.Matricula)}
+                        onChange={() => toggleSeleccionarAdministrador(administrador.Matricula)}
+                        className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                      />
+                    </TableCell>
+                    <TableCell className={`${descriptionColor} font-medium`}>{administrador.Matricula}</TableCell>
+                    <TableCell className={descriptionColor}>
+                      {`${administrador.Nombre} ${administrador.Apellido}`}
+                    </TableCell>
+                    <TableCell className={descriptionColor}>{administrador.Email}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end space-x-2 opacity-70 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          onClick={() => modificarAdministrador(administrador)}
+                          size="sm"
+                          variant="outline"
+                          className={`h-8 px-2 py-0 transform transition-all hover:scale-105 border-blue-500 text-blue-500 hover:bg-blue-50 ${
+                            isDarkMode ? "hover:bg-blue-900/20 hover:text-blue-400" : ""
+                          }`}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
+                          <span className="text-xs">Editar</span>
+                        </Button>
+                        <Button
+                          onClick={() => eliminarAdministrador(administrador.Matricula)}
+                          size="sm"
+                          className="h-8 px-2 py-0 transform transition-all hover:scale-105 bg-red-500 hover:bg-red-600 text-white"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          <span className="text-xs">Eliminar</span>
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {administradoresFiltrados.map((administrador) => (
-                    <TableRow
-                      key={administrador.Matricula}
-                      className={`group transition-colors ${
-                        isDarkMode ? "hover:bg-[#1d5631]/10" : "hover:bg-[#800040]/5"
-                      }`}
-                    >
-                      <TableCell className={`${descriptionColor} font-medium`}>{administrador.Matricula}</TableCell>
-                      <TableCell className={descriptionColor}>
-                        {`${administrador.Nombre} ${administrador.Apellido}`}
-                      </TableCell>
-                      <TableCell className={descriptionColor}>{administrador.Email}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end space-x-2 opacity-70 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            onClick={() => modificarAdministrador(administrador)}
-                            size="sm"
-                            variant="outline"
-                            className={`h-8 px-2 py-0 transform transition-all hover:scale-105 border-blue-500 text-blue-500 hover:bg-blue-50 ${
-                              isDarkMode ? "hover:bg-blue-900/20 hover:text-blue-400" : ""
-                            }`}
-                          >
-                            <Pencil className="h-3.5 w-3.5 mr-1" />
-                            <span className="text-xs">Editar</span>
-                          </Button>
-                          <Button
-                            onClick={() => eliminarAdministrador(administrador.Matricula)}
-                            size="sm"
-                            className="h-8 px-2 py-0 transform transition-all hover:scale-105 bg-red-500 hover:bg-red-600 text-white"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
-                            <span className="text-xs">Eliminar</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -12,6 +12,8 @@ import {
   updateDoc,
   doc,
   type Timestamp,
+  getDoc, // Agregar imports necesarios
+  setDoc, // Agregar imports necesarios
 } from "firebase/firestore"
 import { Sidebar } from "../components/sidebarAdmin"
 import { StatsCards } from "../components/StatsCards"
@@ -23,9 +25,9 @@ import { AdministradoresTab } from "../components/AdministradoresTab"
 import { firebaseConfig } from "../lib/constants"
 import { motion, AnimatePresence } from "framer-motion"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import Swal from "sweetalert2"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -35,7 +37,26 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 
 // Importar los iconos necesarios de Lucide React
-import { Moon, Sun, Bell, AlertTriangle, UserPlus, Settings, CheckCircle, Clock, Users, Laptop, Award, Shield, Activity, AlertCircle, Info, Zap, Wrench, CheckCircle2 } from 'lucide-react'
+import {
+  Moon,
+  Sun,
+  Bell,
+  AlertTriangle,
+  UserPlus,
+  Settings,
+  CheckCircle,
+  Clock,
+  Users,
+  Laptop,
+  Award,
+  Shield,
+  Activity,
+  AlertCircle,
+  Info,
+  Wrench,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react" // Agregar imports necesarios
 
 // Añadir la definición de colores del index.tsx
 const colors = {
@@ -232,6 +253,11 @@ export default function AdminPanel() {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [isLoading, setIsLoading] = useState(true)
 
+  const [claseActivaRegular, setClaseActivaRegular] = useState(false)
+  const [claseActivaInvitado, setClaseActivaInvitado] = useState(false)
+  const [dialogoFinalizarClase, setDialogoFinalizarClase] = useState(false)
+  const [tipoClaseAFinalizar, setTipoClaseAFinalizar] = useState<"regular" | "invitado">("regular")
+
   const currentColors = theme === "dark" ? colors.dark : colors.light
 
   const router = useRouter()
@@ -254,17 +280,40 @@ export default function AdminPanel() {
   }
 
   useEffect(() => {
-    applyTheme(theme)
-    setupRealTimeListeners()
-    setupNotificacionesListeners()
+    const currentTheme = getTheme()
+    setThemeState(currentTheme) // Use setThemeState to update state
+    applyTheme(currentTheme)
+
+    const unsubscribeRealTime = setupRealTimeListeners()
+    const unsubscribeNotificaciones = setupNotificacionesListeners()
+
+    const unsubscribeClases = setupClasesListeners()
 
     // Simulate loading time
     const timer = setTimeout(() => {
       setIsLoading(false)
     }, 1500)
 
-    return () => clearTimeout(timer)
-  }, [theme])
+    return () => {
+      clearTimeout(timer)
+      if (unsubscribeRealTime) unsubscribeRealTime()
+      if (unsubscribeNotificaciones) unsubscribeNotificaciones()
+      unsubscribeClases()
+    }
+  }, [theme]) // Depend on theme state
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [])
 
   // Actualizar tiempo cada minuto
   useEffect(() => {
@@ -285,17 +334,47 @@ export default function AdminPanel() {
 
   const setupRealTimeListeners = () => {
     const collections = ["Alumnos", "Docentes", "Materias", "Laboratoristas", "Administrador"]
+    const unsubscribers: (() => void)[] = []
 
     collections.forEach((collectionName) => {
       const collectionRef = collection(db, collectionName)
-      onSnapshot(query(collectionRef), (snapshot) => {
+      const unsubscribe = onSnapshot(query(collectionRef), (snapshot) => {
         setStats((prevStats) => ({
           ...prevStats,
           // Usar "totalAdministradores" cuando collectionName es "Administrador"
           [collectionName === "Administrador" ? "totalAdministradores" : `total${collectionName}`]: snapshot.size,
         }))
       })
+      unsubscribers.push(unsubscribe)
     })
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
+  }
+
+  const setupClasesListeners = () => {
+    // Listener para clase regular
+    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data()
+        setClaseActivaRegular(data.iniciada === true)
+      } else {
+        setClaseActivaRegular(false)
+      }
+    })
+
+    // Listener para clase de maestro invitado
+    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", "estado"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data()
+        setClaseActivaInvitado(data.iniciada === true)
+      } else {
+        setClaseActivaInvitado(false)
+      }
+    })
+
+    return () => {
+      unsubscribeClaseRegular()
+      unsubscribeClaseInvitado()
+    }
   }
 
   // Configurar listeners para notificaciones
@@ -429,6 +508,47 @@ export default function AdminPanel() {
       unsubscribeEquipos()
       unsubscribeMaestroInvitado()
     }
+  }
+
+  const finalizarClaseEmergencia = async () => {
+    try {
+      if (tipoClaseAFinalizar === "regular") {
+        const estadoRef = doc(db, "EstadoClase", "actual")
+        const estadoClaseDoc = await getDoc(estadoRef)
+
+        if (estadoClaseDoc.exists()) {
+          const horaFin = new Date().toLocaleTimeString()
+          await setDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+        }
+      } else {
+        const estadoRef = doc(db, "EstadoClaseInvitado", "estado")
+        const horaFin = new Date().toLocaleTimeString()
+        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+      }
+
+      setDialogoFinalizarClase(false)
+
+      Swal.fire({
+        title: "¡Clase finalizada!",
+        text: "La clase ha sido cerrada correctamente y el maestro ha sido desconectado",
+        icon: "success",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+        timer: 3000,
+      })
+    } catch (error) {
+      console.error("Error al finalizar clase:", error)
+      Swal.fire({
+        title: "Error",
+        text: "No se pudo finalizar la clase",
+        icon: "error",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+      })
+    }
+  }
+
+  const abrirDialogoFinalizarClase = (tipo: "regular" | "invitado") => {
+    setTipoClaseAFinalizar(tipo)
+    setDialogoFinalizarClase(true)
   }
 
   const marcarComoLeida = async (notificacionId: string) => {
@@ -1067,9 +1187,41 @@ export default function AdminPanel() {
   }
 
   return (
-    <div
-      className={`min-h-screen ${theme === "dark" ? "dark bg-[#0c1f1a]" : "bg-[#f0fff4]"} transition-colors duration-300`}
-    >
+    <div className={`min-h-screen ${theme === "dark" ? colors.dark.background : colors.light.background}`}>
+      {(claseActivaRegular || claseActivaInvitado) && (
+        <div
+          onClick={() => abrirDialogoFinalizarClase(claseActivaRegular ? "regular" : "invitado")}
+          className={`fixed bottom-8 right-8 z-40 cursor-pointer group`}
+          title="Finalizar clase activa de emergencia"
+        >
+          <div
+            className={`relative flex items-center space-x-3 px-5 py-3 rounded-full transition-all duration-300 shadow-2xl ${
+              theme === "dark"
+                ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
+                : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+            } transform hover:scale-105`}
+          >
+            {/* Ícono pulsante */}
+            <div className="relative">
+              <XCircle size={24} className="text-white animate-pulse" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+            </div>
+
+            {/* Texto descriptivo */}
+            <span className="text-white font-semibold text-sm whitespace-nowrap">Finalizar Clase</span>
+          </div>
+
+          {/* Tooltip expandido */}
+          <div
+            className={`absolute bottom-full right-0 mb-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
+              theme === "dark" ? "bg-gray-800 text-white" : "bg-gray-900 text-white"
+            }`}
+          >
+            Cerrar clase activa y desconectar maestro
+          </div>
+        </div>
+      )}
+
       <header
         className={`${theme === "dark" ? colors.dark.headerBackground : colors.light.headerBackground} shadow-md p-4`}
       >
@@ -1255,6 +1407,46 @@ export default function AdminPanel() {
       </div>
 
       <NotificacionPreview />
+
+      <Dialog open={dialogoFinalizarClase} onOpenChange={setDialogoFinalizarClase}>
+        <DialogContent className={theme === "dark" ? "bg-[#2a2a2a] text-white" : "bg-white"}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <span className="text-lg">Finalizar Clase de Emergencia</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className={theme === "dark" ? "text-gray-300" : "text-gray-700"}>
+              ¿Estás seguro de que deseas finalizar la clase{" "}
+              {tipoClaseAFinalizar === "regular" ? "regular" : "de maestro invitado"} activa?
+            </p>
+
+            <div
+              className={`p-4 rounded-lg ${theme === "dark" ? "bg-red-900/20 border border-red-800" : "bg-red-50 border border-red-200"}`}
+            >
+              <p className="text-sm text-red-500 font-semibold mb-2">⚠️ Esta acción realizará lo siguiente:</p>
+              <ul className="text-sm text-red-600 space-y-1 ml-4">
+                <li>• Cerrará la clase inmediatamente</li>
+                <li>• Cerrará la sesión del maestro</li>
+                <li>• No se podrán registrar más asistencias</li>
+                <li>• El maestro será redirigido al inicio</li>
+              </ul>
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <Button onClick={() => setDialogoFinalizarClase(false)} variant="outline" className="flex-1">
+                Cancelar
+              </Button>
+              <Button onClick={finalizarClaseEmergencia} className="flex-1 bg-red-500 hover:bg-red-600 text-white">
+                <XCircle className="h-4 w-4 mr-2" />
+                Finalizar Clase
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
