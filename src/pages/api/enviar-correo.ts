@@ -1,4 +1,4 @@
-"use server"
+import type { NextApiRequest, NextApiResponse } from "next"
 
 interface DatosCorreoEquipo {
   equipoId: string
@@ -7,8 +7,14 @@ interface DatosCorreoEquipo {
   laboratorista: string
 }
 
-export async function enviarCorreoEquipoDeshabilitado(datos: DatosCorreoEquipo) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ message: "Método no permitido" })
+  }
+
   try {
+    const datos: DatosCorreoEquipo = req.body
+
     const mensaje = `
 REPORTE AUTOMÁTICO DE EQUIPO DESHABILITADO
 
@@ -51,13 +57,12 @@ Generado el: ${new Date().toLocaleString("es-MX")}
     const datosParaScript = {
       asunto: `REPORTE URGENTE - Equipo ${datos.equipoId} Fuera de Servicio`,
       mensaje: mensaje,
-      //correoDestino: "diana.lc@puertopenasco.tecnm.mx",
-      correoDestino: "manuelgaona800@gmail.com",
+      correoDestino: "l21303162@puertopenasco.tecnm.mx",
     }
 
-    const googleScriptURL = "https://script.google.com/macros/s/AKfycbw6cyTLzTDQdbLh5obzkZuHbFD90cZcoe6gXo9_H4FNtXE7biAbr_6FgoKRCDK6X1U/exec"
+    const googleScriptURL = "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"
 
-    const response = await fetch(googleScriptURL, {
+    await fetch(googleScriptURL, {
       method: "POST",
       mode: "no-cors",
       headers: {
@@ -68,15 +73,15 @@ Generado el: ${new Date().toLocaleString("es-MX")}
 
     console.log("[v0] Reporte enviado exitosamente al departamento de sistemas")
 
-    return {
+    return res.status(200).json({
       success: true,
       message: "Correo enviado exitosamente a l21303162@puertopenasco.tecnm.mx",
-    }
+    })
   } catch (error) {
     console.error("[v0] Error al enviar correo:", error)
-    return {
+    return res.status(500).json({
       success: false,
       message: "Error al enviar el correo. Por favor, contacta a sistemas manualmente.",
-    }
+    })
   }
 }

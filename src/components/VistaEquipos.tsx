@@ -33,7 +33,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import { db } from "../pages/panel-laboratorista"
 import { toast } from "../hooks/use-toast"
 import { AlertTriangle, Wrench, CheckCircle2 } from "lucide-react"
-import { enviarCorreoEquipoDeshabilitado } from "@/pages/api/enviar-correo"
 import Swal from "sweetalert2"
 
 interface Equipo {
@@ -596,17 +595,18 @@ export default function VistaEquipos({
         `Equipo #${equipoADeshabilitar.id} deshabilitado. Razón: ${razonDeshabilitacion}`,
       )
 
-      const envioExitoso = await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
-
-      if (envioExitoso) {
-        await Swal.fire({
-          icon: "success",
-          title: "¡Correo Enviado!",
-          text: `Se ha notificado exitosamente al departamento de sistemas sobre el equipo #${equipoADeshabilitar.id}`,
-          confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
-          timer: 2500,
-        })
-      }
+      // Se elimina la llamada a enviarReporteGoogle y se usa la API Route
+      // const envioExitoso = await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
+      //
+      // if (envioExitoso) {
+      //   await Swal.fire({
+      //     icon: "success",
+      //     title: "¡Correo Enviado!",
+      //     text: `Se ha notificado exitosamente al departamento de sistemas sobre el equipo #${equipoADeshabilitar.id}`,
+      //     confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
+      //     timer: 2500,
+      //   })
+      // }
 
       setEquipoADeshabilitar(null)
     } catch (error) {
@@ -621,41 +621,42 @@ export default function VistaEquipos({
     }
   }
 
-  const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
-    try {
-      setEnviandoReporte(true)
-
-      const resultado = await enviarCorreoEquipoDeshabilitado({
-        equipoId: equipo.id,
-        motivo: razon,
-        notas: equipo.notas || "Sin notas adicionales",
-        laboratorista: usuario,
-      })
-
-      if (!resultado.success) {
-        throw new Error(resultado.message || "Error al enviar el correo")
-      }
-
-      console.log("Correo enviado exitosamente:", resultado.message)
-      await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
-
-      return true
-    } catch (error) {
-      console.error("Error al enviar el correo:", error)
-      await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
-
-      await Swal.fire({
-        icon: "error",
-        title: "Error al enviar correo",
-        text: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
-        confirmButtonColor: "#dc2626",
-      })
-
-      return false
-    } finally {
-      setEnviandoReporte(false)
-    }
-  }
+  // Se elimina la función enviarReporteGoogle ya que ahora se usa una API Route
+  // const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
+  //   try {
+  //     setEnviandoReporte(true)
+  //
+  //     const resultado = await enviarCorreoEquipoDeshabilitado({
+  //       equipoId: equipo.id,
+  //       motivo: razon,
+  //       notas: equipo.notas || "Sin notas adicionales",
+  //       laboratorista: usuario,
+  //     })
+  //
+  //     if (!resultado.success) {
+  //       throw new Error(resultado.message || "Error al enviar el correo")
+  //     }
+  //
+  //     console.log("Correo enviado exitosamente:", resultado.message)
+  //     await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
+  //
+  //     return true
+  //   } catch (error) {
+  //     console.error("Error al enviar el correo:", error)
+  //     await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
+  //
+  //     await Swal.fire({
+  //       icon: "error",
+  //       title: "Error al enviar correo",
+  //       text: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
+  //       confirmButtonColor: "#dc2626",
+  //     })
+  //
+  //     return false
+  //   } finally {
+  //     setEnviandoReporte(false)
+  //   }
+  // }
 
   const reactivarEquipo = async (id: string) => {
     try {
@@ -1199,6 +1200,7 @@ export default function VistaEquipos({
                               </Tooltip>
                             </TooltipProvider>
 
+                            {/* START: FIX for missing closing TooltipProvider tag */}
                             {equipo.fueraDeServicio && (
                               <TooltipProvider>
                                 <Tooltip>
@@ -1222,6 +1224,7 @@ export default function VistaEquipos({
                                 </Tooltip>
                               </TooltipProvider>
                             )}
+                            {/* END: FIX for missing closing TooltipProvider tag */}
 
                             {!equipo.fueraDeServicio && (
                               <Button
