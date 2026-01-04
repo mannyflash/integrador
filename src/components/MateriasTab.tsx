@@ -82,7 +82,6 @@ export function MateriasTab({
   const [añoFilter, setAñoFilter] = useState("todos")
   const [periodoFilter, setPeriodoFilter] = useState("todos")
 
-  // Función para generar los dos ciclos escolares del año actual
   const generarCiclosEscolares = (): CicloEscolar[] => {
     const fechaActual = new Date()
     const añoActual = fechaActual.getFullYear()
@@ -90,22 +89,46 @@ export function MateriasTab({
 
     const ciclos: CicloEscolar[] = []
 
-    // Primer Semestre: Agosto-Diciembre del año escolar actual
-    const añoEscolarInicio = mesActual >= 8 ? añoActual : añoActual - 1
-    const añoEscolarFin = añoEscolarInicio + 1
+    // Determinar el año escolar actual
+    const añoEscolarActual = mesActual >= 8 ? añoActual : añoActual - 1
 
-    ciclos.push({
-      valor: `${añoEscolarInicio}-${añoEscolarFin}-1`,
-      etiqueta: `Ciclo escolar ${añoEscolarInicio}-${añoEscolarFin} (agosto-diciembre)`,
-      activo: mesActual >= 8 && mesActual <= 12,
-    })
+    // Generar ciclos para el año actual y 3 años futuros
+    for (let i = 0; i <= 3; i++) {
+      const añoInicio = añoEscolarActual + i
+      const añoFin = añoInicio + 1
 
-    // Segundo Semestre: Enero-Julio del año escolar actual
-    ciclos.push({
-      valor: `${añoEscolarInicio}-${añoEscolarFin}-2`,
-      etiqueta: `Ciclo escolar ${añoEscolarInicio}-${añoEscolarFin} (enero-julio)`,
-      activo: mesActual >= 1 && mesActual <= 7,
-    })
+      // Si estamos en el año actual, solo mostrar ciclos que no hayan terminado
+      if (i === 0) {
+        // Primer semestre (agosto-diciembre) - solo mostrar si no ha terminado
+        if (mesActual <= 12 && mesActual >= 8) {
+          ciclos.push({
+            valor: `${añoInicio}-${añoFin}-1`,
+            etiqueta: `${añoInicio}-${añoFin} (Ago-Dic)`,
+            activo: true,
+          })
+        }
+        // Segundo semestre (enero-julio) - solo mostrar si no ha terminado
+        if (mesActual <= 7) {
+          ciclos.push({
+            valor: `${añoInicio}-${añoFin}-2`,
+            etiqueta: `${añoInicio}-${añoFin} (Ene-Jul)`,
+            activo: mesActual >= 1 && mesActual <= 7,
+          })
+        }
+      } else {
+        // Años futuros - mostrar ambos semestres
+        ciclos.push({
+          valor: `${añoInicio}-${añoFin}-1`,
+          etiqueta: `${añoInicio}-${añoFin} (Ago-Dic)`,
+          activo: false,
+        })
+        ciclos.push({
+          valor: `${añoInicio}-${añoFin}-2`,
+          etiqueta: `${añoInicio}-${añoFin} (Ene-Jul)`,
+          activo: false,
+        })
+      }
+    }
 
     return ciclos
   }
