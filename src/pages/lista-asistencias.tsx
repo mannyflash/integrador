@@ -41,7 +41,7 @@ import {
 } from "lucide-react"
 import swal from "sweetalert"
 import jsPDF from "jspdf"
-import "jspdf-autotable"
+import autoTable from "jspdf-autotable"
 import { motion, AnimatePresence } from "framer-motion"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
 import { AppSidebar } from "../components/AppSidebar"
@@ -50,12 +50,6 @@ import { logAction } from "../lib/logging"
 import * as XLSX from "xlsx"
 import { verificarYLimpiarAsistenciasHuerfanas } from "../lib/cleanup"
 import Swal from "sweetalert2" // Importar SweetAlert2
-
-declare module "jspdf" {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF
-  }
-}
 
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
@@ -924,123 +918,116 @@ export default function ListaAsistencias() {
   const closeModal = () => {
     setShowModal(false)
   }
-  const exportarPDF = async () => {
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.width
-    const pageHeight = doc.internal.pageSize.height
-    const margin = 10
+ const exportarPDF = async () => {
+  if (typeof window === "undefined") return
 
-    // Add ITSPP logo in the upper left corner
-    doc.addImage("/FondoItspp.png", "PNG", margin, margin, 25, 25)
+  const doc = new jsPDF("p", "mm", "letter")
 
-    // Add header text centered
-    doc.setFontSize(16)
-    doc.setTextColor(0, 0, 0) // Black text color
-    doc.text("TALLER DE PROGRAMACION", pageWidth / 2, margin + 10, { align: "center" })
-    doc.setFontSize(14)
-    doc.text("HOJA DE REGISTRO", pageWidth / 2, margin + 20, { align: "center" })
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const margin = 10
 
-    // Form fields
-    doc.setFontSize(10)
-    const leftColX = margin
-    const rightColX = pageWidth / 2 + margin
-    let currentY = margin + 35
+  // Logo
+  doc.addImage("/FondoItspp.png", "PNG", margin, margin, 25, 25)
 
-    // Left column
-    doc.text(`FECHA: ${new Date().toLocaleDateString()}`, leftColX, currentY)
-    doc.text(`GRUPO: ${asistencias[0]?.Grupo || ""}`, leftColX, currentY + 10)
-    doc.text(`HORA: ${horaInicio || new Date().toLocaleTimeString()}`, leftColX, currentY + 20)
-    doc.text(`MATERIA: ${materias.find((m) => m.id === selectedMateriaId)?.nombre || ""}`, leftColX, currentY + 30)
-    doc.text(`DOCENTE: ${maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : ""}`, leftColX, currentY + 40)
+  // Títulos
+  doc.setFontSize(16)
+  doc.setTextColor(0, 0, 0)
+  doc.text("TALLER DE PROGRAMACIÓN", pageWidth / 2, margin + 10, { align: "center" })
+  doc.setFontSize(14)
+  doc.text("HOJA DE REGISTRO", pageWidth / 2, margin + 18, { align: "center" })
 
-    // Right column
-    doc.text(`CARRERA: ${asistencias[0]?.Carrera || ""}`, rightColX, currentY)
-    doc.text(`TURNO: ${asistencias[0]?.Turno || ""}`, rightColX, currentY + 10)
-    doc.text(`PRACTICA: ${selectedPractica?.Titulo || ""}`, rightColX, currentY + 20)
-    doc.text(`SEMESTRE: ${asistencias[0]?.Semestre || ""}`, rightColX, currentY + 30)
+  // Información general
+  doc.setFontSize(10)
+  let currentY = margin + 35
 
-    currentY += 60
+  const leftX = margin
+  const rightX = pageWidth / 2 + 5
 
-    // Table
-    const tableHeaders = ["#", "NOMBRE ALUMNO", "NUM. PC"]
-    const tableData = asistencias.map((asistencia, index) => [
-      (index + 1).toString(),
-      `${asistencia.Nombre} ${asistencia.Apellido}`,
-      asistencia.Equipo,
-    ])
+  doc.text(`FECHA: ${new Date().toLocaleDateString()}`, leftX, currentY)
+  doc.text(`GRUPO: ${asistencias[0]?.Grupo || ""}`, leftX, currentY + 7)
+  doc.text(`HORA: ${horaInicio || ""}`, leftX, currentY + 14)
+  doc.text(
+    `MATERIA: ${materias.find((m) => m.id === selectedMateriaId)?.nombre || ""}`,
+    leftX,
+    currentY + 21,
+  )
+  doc.text(
+    `DOCENTE: ${maestroInfo ? `${maestroInfo.Nombre} ${maestroInfo.Apellido}` : ""}`,
+    leftX,
+    currentY + 28,
+  )
 
-    // Pad the table to have at least 25 rows
-    const minRows = 25
-    while (tableData.length < minRows) {
-      tableData.push([(tableData.length + 1).toString(), "", ""])
-    }
+  doc.text(`CARRERA: ${asistencias[0]?.Carrera || ""}`, rightX, currentY)
+  doc.text(`TURNO: ${asistencias[0]?.Turno || ""}`, rightX, currentY + 7)
+  doc.text(`PRÁCTICA: ${selectedPractica?.Titulo || ""}`, rightX, currentY + 14)
+  doc.text(`SEMESTRE: ${asistencias[0]?.Semestre || ""}`, rightX, currentY + 21)
 
-    let finalY = currentY
-    doc.autoTable({
-      head: [tableHeaders],
-      body: tableData,
-      startY: currentY,
-      theme: "grid",
-      styles: {
-        fontSize: 12,
-        cellPadding: 2,
-        textColor: [0, 0, 0],
-        lineWidth: 0.3,
-        lineColor: [100, 100, 100],
-        halign: "center",
-        valign: "middle",
-      },
-      headStyles: {
-        fillColor: [149, 41, 82], // Color borgoña para encabezado
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 13,
-        halign: "center",
-        cellPadding: 3,
-      },
-      columnStyles: {
-        0: { cellWidth: 15, halign: "center", fontStyle: "bold" },
-        1: { cellWidth: "auto", halign: "center" },
-        2: { cellWidth: 25, halign: "center" },
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245], // Filas alternadas en gris claro
-      },
-      didDrawPage: (data: {
-        cursor: { y: number }
-        pageNumber: number
-        pageCount: number
-        settings: {
-          margin: { top: number; right: number; bottom: number; left: number }
-          startY: number
-          pageBreak: string
-        }
-        table: {
-          widths: number[]
-          heights: number[]
-          body: any[][]
-        }
-      }) => {
-        finalY = data.cursor.y
-      },
-    })
+  currentY += 40
 
-    const signatureY = finalY + 20
+  // Encabezados de tabla
+  const headers = ["#", "NOMBRE DEL ALUMNO", "NÚM. PC"]
 
-    // Signature lines
-    // Draw signature lines
-    doc.line(margin, signatureY, margin + 70, signatureY)
-    doc.text("FIRMA DOCENTE", margin + 35, signatureY + 5, { align: "center" })
+  const body = asistencias.map((a, i) => [
+    i + 1,
+    `${a.Nombre} ${a.Apellido}`,
+    a.Equipo,
+  ])
 
-    doc.line(pageWidth - margin - 70, signatureY, pageWidth - margin, signatureY)
-    doc.text("FIRMA ENCARGADO LABORATORIO", pageWidth - margin - 35, signatureY + 5, { align: "center" })
-
-    doc.save("lista_asistencias.pdf")
-    await logAction(
-      "Exportar PDF",
-      `PDF de asistencias exportado para ${selectedPractica?.Titulo || "práctica no seleccionada"}`,
-    )
+  // Mínimo 25 filas
+  while (body.length < 25) {
+    body.push([body.length + 1, "", ""])
   }
+
+  // TABLA (FORMA CORRECTA EN NEXT.JS)
+  autoTable(doc, {
+    head: [headers],
+    body,
+    startY: currentY,
+    theme: "grid",
+    styles: {
+      fontSize: 11,
+      halign: "center",
+      valign: "middle",
+      textColor: [0, 0, 0],
+      lineColor: [120, 120, 120],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [149, 41, 82],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+    },
+    columnStyles: {
+      0: { cellWidth: 15, fontStyle: "bold" },
+      1: { cellWidth: "auto" },
+      2: { cellWidth: 25 },
+    },
+    alternateRowStyles: {
+      fillColor: [245, 245, 245],
+    },
+  })
+
+  const finalY = (doc as any).lastAutoTable.finalY || currentY + 80
+
+  // Firmas
+  const firmaY = finalY + 20
+
+  doc.line(margin, firmaY, margin + 70, firmaY)
+  doc.text("FIRMA DOCENTE", margin + 35, firmaY + 5, { align: "center" })
+
+  doc.line(pageWidth - margin - 70, firmaY, pageWidth - margin, firmaY)
+  doc.text("FIRMA ENCARGADO LAB.", pageWidth - margin - 35, firmaY + 5, {
+    align: "center",
+  })
+
+  doc.save("lista_asistencias.pdf")
+
+  await logAction(
+    "Exportar PDF",
+    `Se exportó PDF de asistencias (${selectedPractica?.Titulo || "sin práctica"})`,
+  )
+}
+
   const exportarAExcel = async () => {
     const workbook = XLSX.utils.book_new()
 
