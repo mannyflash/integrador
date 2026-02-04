@@ -29,8 +29,8 @@ import {
   ClipboardList,
 } from "lucide-react"
 import * as XLSX from "xlsx"
-import { jsPDF } from "jspdf"
-import "jspdf-autotable"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { format } from "date-fns"
 import { motion, AnimatePresence } from "framer-motion"
 import { Badge } from "@/components/ui/badge"
@@ -299,7 +299,7 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
     doc.text(`DOCENTE: ${practica.maestroNombre} ${practica.maestroApellido}`, 14, 100)
 
     // Table of students
-    doc.autoTable({
+    autoTable(doc, {
       startY: 110,
       head: [["#", "NOMBRE ALUMNO", "NUM. PC"]],
       body: practica.estudiantes.map((estudiante, index) => [
@@ -309,8 +309,8 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
+        fillColor: [149, 41, 82],
+        textColor: [255, 255, 255],
         fontStyle: "bold",
         lineWidth: 0.5,
       },
@@ -1411,4 +1411,3 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
     </div>
   )
 }
-

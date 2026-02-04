@@ -301,6 +301,88 @@ export default function VistaEquipos({
     }
   }, [])
 
+  // Funcion para enviar reporte a Google Apps Script
+  const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
+    try {
+      setEnviandoReporte(true)
+
+      const mensaje = `
+REPORTE AUTOMATICO DE EQUIPO DESHABILITADO
+
+═══════════════════════════════════════════════════════════════
+INFORMACION DEL EQUIPO
+═══════════════════════════════════════════════════════════════
+• Equipo ID: ${equipo.id}
+• Fecha y hora: ${new Date().toLocaleString("es-MX")}
+• Usuario responsable: ${usuario}
+• Estado anterior: En servicio
+• Estado nuevo: Fuera de servicio
+
+═══════════════════════════════════════════════════════════════
+RAZON DE LA DESHABILITACION
+═══════════════════════════════════════════════════════════════
+${razon}
+
+═══════════════════════════════════════════════════════════════
+NOTAS ADICIONALES DEL EQUIPO
+═══════════════════════════════════════════════════════════════
+${equipo.notas || "Sin notas adicionales"}
+
+═══════════════════════════════════════════════════════════════
+ACCIONES REQUERIDAS
+═══════════════════════════════════════════════════════════════
+1. Revisar fisicamente el equipo ${equipo.id}
+2. Diagnosticar el problema reportado: "${razon}"
+3. Realizar las reparaciones necesarias
+4. Notificar al laboratorio cuando este listo para reactivacion
+5. Actualizar el estado en el sistema una vez reparado
+
+ATENCION: Este equipo NO debe ser utilizado hasta completar la revision tecnica.
+
+═══════════════════════════════════════════════════════════════
+Sistema de Gestion de Laboratorio - Reporte Automatico
+Generado el: ${new Date().toLocaleString("es-MX")}
+═══════════════════════════════════════════════════════════════
+      `
+
+      const datosParaScript = {
+        asunto: `REPORTE URGENTE - Equipo ${equipo.id} Fuera de Servicio`,
+        mensaje: mensaje,
+        correoDestino: "l21303162@puertopenasco.tecnm.mx",
+      }
+
+      const googleScriptURL = "https://script.google.com/macros/s/AKfycbw6cyTLzTDQdbLh5obzkZuHbFD90cZcoe6gXo9_H4FNtXE7biAbr_6FgoKRCDK6X1U/exec"
+
+      const response = await fetch(googleScriptURL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(datosParaScript),
+      })
+
+      console.log("Reporte enviado a Google Apps Script")
+      await logAction("Envio de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
+
+      return true
+    } catch (error) {
+      console.error("Error al enviar el correo:", error)
+      await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
+
+      await Swal.fire({
+        icon: "error",
+        title: "Error al enviar correo",
+        text: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardo correctamente.",
+        confirmButtonColor: "#dc2626",
+      })
+
+      return false
+    } finally {
+      setEnviandoReporte(false)
+    }
+  }
+
   useEffect(() => {
     aplicarFiltros()
   }, [equipos, filtro, busqueda, activeTab])
@@ -595,18 +677,18 @@ export default function VistaEquipos({
         `Equipo #${equipoADeshabilitar.id} deshabilitado. Razón: ${razonDeshabilitacion}`,
       )
 
-      // Se elimina la llamada a enviarReporteGoogle y se usa la API Route
-      // const envioExitoso = await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
-      //
-      // if (envioExitoso) {
-      //   await Swal.fire({
-      //     icon: "success",
-      //     title: "¡Correo Enviado!",
-      //     text: `Se ha notificado exitosamente al departamento de sistemas sobre el equipo #${equipoADeshabilitar.id}`,
-      //     confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
-      //     timer: 2500,
-      //   })
-      // }
+      // Enviar correo al departamento de sistemas
+      const envioExitoso = await enviarReporteGoogle(equipoADeshabilitar, razonDeshabilitacion)
+      
+      if (envioExitoso) {
+        await Swal.fire({
+          icon: "success",
+          title: "Correo Enviado",
+          text: `Se ha notificado al departamento de sistemas sobre el equipo #${equipoADeshabilitar.id}`,
+          confirmButtonColor: esModoOscuro ? "#1d5631" : "#800040",
+          timer: 2500,
+        })
+      }
 
       setEquipoADeshabilitar(null)
     } catch (error) {
@@ -620,43 +702,6 @@ export default function VistaEquipos({
       await logAction("Error", `Error al deshabilitar el equipo #${equipoADeshabilitar?.id}: ${error}`)
     }
   }
-
-  // Se elimina la función enviarReporteGoogle ya que ahora se usa una API Route
-  // const enviarReporteGoogle = async (equipo: Equipo, razon: string, usuario = "Laboratorista") => {
-  //   try {
-  //     setEnviandoReporte(true)
-  //
-  //     const resultado = await enviarCorreoEquipoDeshabilitado({
-  //       equipoId: equipo.id,
-  //       motivo: razon,
-  //       notas: equipo.notas || "Sin notas adicionales",
-  //       laboratorista: usuario,
-  //     })
-  //
-  //     if (!resultado.success) {
-  //       throw new Error(resultado.message || "Error al enviar el correo")
-  //     }
-  //
-  //     console.log("Correo enviado exitosamente:", resultado.message)
-  //     await logAction("Envío de Correo", `Correo de equipo ${equipo.id} deshabilitado enviado exitosamente a sistemas`)
-  //
-  //     return true
-  //   } catch (error) {
-  //     console.error("Error al enviar el correo:", error)
-  //     await logAction("Error de Correo", `Error al enviar correo de equipo ${equipo.id}: ${error}`)
-  //
-  //     await Swal.fire({
-  //       icon: "error",
-  //       title: "Error al enviar correo",
-  //       text: "No se pudo enviar el correo al departamento de sistemas. El cambio se guardó correctamente.",
-  //       confirmButtonColor: "#dc2626",
-  //     })
-  //
-  //     return false
-  //   } finally {
-  //     setEnviandoReporte(false)
-  //   }
-  // }
 
   const reactivarEquipo = async (id: string) => {
     try {

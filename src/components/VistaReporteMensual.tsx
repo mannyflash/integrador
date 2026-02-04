@@ -35,8 +35,8 @@ import { es } from "date-fns/locale"
 import { collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore"
 import { db } from "../pages/panel-laboratorista"
 import { utils, writeFile } from "xlsx"
-import { jsPDF } from "jspdf"
-import "jspdf-autotable"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface Alumno {
   id: string
@@ -599,7 +599,7 @@ export default function VistaReporteMensual({
       ])
 
       // Configurar la tabla
-      doc.autoTable({
+      autoTable(doc, {
         head: [tableColumn],
         body: tableData,
         startY: 60,
@@ -607,10 +607,13 @@ export default function VistaReporteMensual({
         styles: {
           fontSize: 8,
           cellPadding: 3,
+          textColor: [0, 0, 0],
+          lineColor: [120, 120, 120],
+          lineWidth: 0.3,
         },
         headStyles: {
-          fillColor: [255, 255, 255], // Cambiar a blanco
-          textColor: [0, 0, 0], // Cambiar a negro
+          fillColor: [149, 41, 82],
+          textColor: [255, 255, 255],
           fontStyle: "bold",
           halign: "center",
         },
@@ -623,7 +626,7 @@ export default function VistaReporteMensual({
           5: { cellWidth: 20, halign: "center" }, // Num. de Alumnos
         },
         alternateRowStyles: {
-          fillColor: [255, 255, 255], // Cambiar a blanco
+          fillColor: [245, 245, 245],
         },
       })
 
@@ -972,7 +975,7 @@ export default function VistaReporteMensual({
 
                 {/* Botones de acción */}
                 <div className="flex flex-col gap-2 pt-4">
-                  <Button variant="outline" onClick={limpiarFiltros} className="w-full">
+                  <Button variant="outline" onClick={limpiarFiltros} className="w-full bg-transparent">
                     Limpiar filtros
                   </Button>
                   <div className="grid grid-cols-2 gap-2">

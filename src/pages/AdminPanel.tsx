@@ -518,12 +518,12 @@ export default function AdminPanel() {
 
         if (estadoClaseDoc.exists()) {
           const horaFin = new Date().toLocaleTimeString()
-          await setDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+          await setDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
         }
       } else {
-        const estadoRef = doc(db, "EstadoClaseInvitado", "estado")
+        const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
         const horaFin = new Date().toLocaleTimeString()
-        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
       }
 
       setDialogoFinalizarClase(false)

@@ -33,8 +33,8 @@ import {
 import { format, parse, isValid } from "date-fns"
 import { es } from "date-fns/locale"
 import * as XLSX from "xlsx"
-import { jsPDF } from "jspdf"
-import "jspdf-autotable"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { motion, AnimatePresence } from "framer-motion"
 import type { JSX } from "react/jsx-runtime"
 
@@ -257,7 +257,7 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
     doc.text(`DOCENTE: ${practica.maestroNombre} ${practica.maestroApellido}`, 14, 100)
 
     // Table of students
-    doc.autoTable({
+    autoTable(doc, {
       startY: 110,
       head: [["#", "NOMBRE ALUMNO", "NUM. PC"]],
       body: practica.alumnos.map((alumno, index) => [
@@ -267,8 +267,8 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
       ]),
       theme: "grid",
       headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
+        fillColor: [149, 41, 82],
+        textColor: [255, 255, 255],
         fontStyle: "bold",
         lineWidth: 0.5,
       },
@@ -280,8 +280,11 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
       styles: {
         cellPadding: 2,
         fontSize: 10,
-        lineColor: [0, 0, 0],
-        lineWidth: 0.1,
+        lineColor: [120, 120, 120],
+        lineWidth: 0.3,
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
       },
     })
 
@@ -1353,4 +1356,3 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
     </div>
   )
 }
-

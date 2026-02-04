@@ -38,16 +38,11 @@ import {
 } from "lucide-react"
 import swal from "sweetalert"
 import jsPDF from "jspdf"
-import "jspdf-autotable"
+import autoTable from "jspdf-autotable"
 import { motion, AnimatePresence } from "framer-motion"
 import { getTheme, toggleTheme, applyTheme, type Theme } from "../lib/theme"
 import { logAction } from "../lib/logging"
 import * as XLSX from "xlsx"
-declare module "jspdf" {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF
-  }
-}
 const firebaseConfig = {
   apiKey: "AIzaSyCX5WX8tTkWRsIikpV3-pTXIsYUXfF5Eqk",
   authDomain: "integrador-7b39d.firebaseapp.com",
@@ -688,7 +683,7 @@ export default function ListaAsistenciasInvitado() {
     }
 
     let finalY = currentY
-    doc.autoTable({
+    autoTable(doc, {
       head: [tableHeaders],
       body: tableData,
       startY: currentY,
@@ -697,11 +692,12 @@ export default function ListaAsistenciasInvitado() {
         fontSize: 8,
         cellPadding: 2,
         textColor: [0, 0, 0],
-        lineWidth: 0.1,
+        lineColor: [120, 120, 120],
+        lineWidth: 0.3,
       },
       headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
+        fillColor: [149, 41, 82],
+        textColor: [255, 255, 255],
         fontStyle: "bold",
       },
       columnStyles: {
@@ -710,21 +706,10 @@ export default function ListaAsistenciasInvitado() {
         2: { cellWidth: 20 },
         3: { cellWidth: 30 },
       },
-      didDrawPage: (data: {
-        cursor: { y: number }
-        pageNumber: number
-        pageCount: number
-        settings: {
-          margin: { top: number; right: number; bottom: number; left: number }
-          startY: number
-          pageBreak: string
-        }
-        table: {
-          widths: number[]
-          heights: number[]
-          body: any[][]
-        }
-      }) => {
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      didDrawPage: (data: any) => {
         finalY = data.cursor.y
       },
     })

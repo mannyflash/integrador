@@ -565,7 +565,7 @@ export default function PanelLaboratorista() {
           maestroId = data.maestroId // Obtener el ID del maestro antes de finalizar
 
           const horaFin = new Date().toLocaleTimeString()
-          await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
 
           await logAction(
             "Finalizar Clase de Emergencia",
@@ -573,9 +573,9 @@ export default function PanelLaboratorista() {
           )
         }
       } else {
-        const estadoRef = doc(db, "EstadoClaseInvitado", "estado")
+        const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
         const horaFin = new Date().toLocaleTimeString()
-        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin })
+        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
 
         await logAction(
           "Finalizar Clase de Emergencia",

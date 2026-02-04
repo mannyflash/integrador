@@ -2,8 +2,8 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { jsPDF } from "jspdf"
-import "jspdf-autotable"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -229,7 +229,7 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
     const dividerIndex = HORAS_MATUTINO.length
     datosTabla.splice(dividerIndex, 0, ["TURNO VESPERTINO", "", "", "", "", ""])
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 60,
       head: [["HORA", ...DIAS]],
       body: datosTabla,
@@ -239,11 +239,16 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
         fontSize: 8,
         valign: "middle",
         halign: "center",
+        lineColor: [120, 120, 120],
+        lineWidth: 0.3,
       },
       headStyles: {
-        fillColor: [128, 0, 64], // Color guinda/vino
+        fillColor: [149, 41, 82],
         textColor: [255, 255, 255],
         fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
       },
       didParseCell: (data: { row: { index: number }; cell: { styles: any } }) => {
         if (data.row.index === dividerIndex) {

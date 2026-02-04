@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { initializeApp } from "firebase/app"
 import {
@@ -213,6 +213,7 @@ export default function ListaAsistencias() {
   const [horaInicio, setHoraInicio] = useState<string | null>(null)
   const [horaFin, setHoraFin] = useState<string | null>(null)
   const [alumnos, setAlumnos] = useState<Asistencia[]>([]) // Estado para almacenar todos los alumnos
+  const cierrePropio = useRef(false) // Ref para rastrear si el maestro cierra la clase él mismo
 
   // useEffect para cargar todos los alumnos desde Firebase
   useEffect(() => {
@@ -323,8 +324,9 @@ export default function ListaAsistencias() {
           const data = snapshot.data()
 
           // Si la clase fue finalizada externamente (por admin o laboratorista)
-          if (data.iniciada === false && claseIniciada) {
-            console.log("[v0] Clase finalizada externamente, cerrando sesión del maestro...")
+          // Solo reaccionar si tiene la bandera cerradaPorExterno Y no es un cierre propio
+          if (data.iniciada === false && data.cerradaPorExterno === true && claseIniciada && !cierrePropio.current) {
+            console.log("[v0] Clase finalizada externamente por admin/laboratorista, cerrando sesión del maestro...")
 
             // Mostrar notificación al maestro
             await Swal.fire({
@@ -651,7 +653,9 @@ export default function ListaAsistencias() {
       const estadoRef = doc(db, "EstadoClase", "actual")
 
       if (nuevoEstado) {
-        // Iniciar clase - Guardar toda la información en el documento "actual"
+        // Iniciar clase - Resetear la bandera de cierre propio
+        cierrePropio.current = false
+        // Guardar toda la información en el documento "actual"
         await setDoc(estadoRef, {
           iniciada: true,
           practica: selectedPractica.id,
@@ -699,7 +703,8 @@ export default function ListaAsistencias() {
         })
         await logAction("Iniciar Clase", `Clase iniciada para ${selectedPractica.Titulo} a las ${horaActual}`)
       } else {
-        // Finalizar clase
+        // Finalizar clase - Marcar como cierre propio para evitar que el listener reaccione
+        cierrePropio.current = true
         setHoraFin(horaActual)
 
         // Obtener los datos actuales antes de borrarlos
