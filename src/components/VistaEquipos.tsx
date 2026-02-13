@@ -137,6 +137,7 @@ const crearNotificacionAdmin = async (
 ) => {
   try {
     // Construir el objeto base de la notificación
+    const labNotif = typeof window !== "undefined" ? localStorage.getItem("laboratorio") || "programacion" : "programacion"
     const notificacionBase: any = {
       tipo,
       titulo,
@@ -145,6 +146,7 @@ const crearNotificacionAdmin = async (
       leida: false,
       prioridad,
       datos: datos || null,
+      laboratorio: labNotif,
     }
 
     // Solo agregar estadoEquipo si es una notificación de equipo deshabilitado
@@ -248,7 +250,7 @@ export default function VistaEquipos({
     setCargando(true)
     try {
       const unsubscribe = onSnapshot(
-        doc(db, "Numero de equipos", "equipos"),
+        doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"),
         (equiposDoc) => {
           if (equiposDoc.exists()) {
             const data = equiposDoc.data()
@@ -447,7 +449,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
         notas: `Equipo agregado el ${new Date().toLocaleString("es-MX")}`,
       }))
 
-      await setDoc(doc(db, "Numero de equipos", "equipos"), { Equipos: nuevosEquipos })
+      await setDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), { Equipos: nuevosEquipos })
       setEquipos(nuevosEquipos)
       setCantidadEquipos("")
       setDialogoAbierto(false)
@@ -511,7 +513,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
           : equipo,
       )
 
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+      await updateDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), {
         Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
@@ -620,7 +622,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
           : equipo,
       )
 
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+      await updateDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), {
         Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
@@ -652,7 +654,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
             : equipo,
         )
 
-        await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+        await updateDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), {
           Equipos: equiposConNotificacion.map(limpiarEquipo),
         })
 
@@ -723,7 +725,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
           : equipo,
       )
 
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+      await updateDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), {
         Equipos: equiposActualizados.map(limpiarEquipo),
       })
 
@@ -808,7 +810,7 @@ Generado el: ${new Date().toLocaleString("es-MX")}
       // Limpiar todos los equipos para eliminar campos undefined
       const equiposLimpios = equiposActualizados.map(limpiarEquipo)
 
-      await updateDoc(doc(db, "Numero de equipos", "equipos"), {
+      await updateDoc(doc(db, "Numero de equipos", localStorage.getItem("laboratorio") || "programacion"), {
         Equipos: equiposLimpios,
       })
 

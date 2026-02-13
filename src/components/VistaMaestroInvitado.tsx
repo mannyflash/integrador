@@ -71,12 +71,13 @@ interface Maestro {
   Departamento: string
 }
 
-interface Materia {
+  interface Materia {
   id: string
   NombreMateria: string
   MaestroID: string
   Semestre: string
-}
+  Laboratorio?: string
+  }
 
 // Actualizar la interfaz VistaMaestroInvitadoProps
 interface VistaMaestroInvitadoProps {
@@ -236,15 +237,21 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
 
       setCargandoMaterias(true)
       try {
+        const labActual = localStorage.getItem("laboratorio") || "programacion"
         const materiasQuery = query(collection(db, "Materias"), where("MaestroID", "==", maestroSeleccionado))
         const querySnapshot = await getDocs(materiasQuery)
-        const materiasData = querySnapshot.docs.map(
-          (doc) =>
-            ({
-              id: doc.id,
-              ...doc.data(),
-            }) as Materia,
-        )
+        const materiasData = querySnapshot.docs
+          .filter((doc) => {
+            const labMateria = doc.data().Laboratorio || ""
+            return !labMateria || labMateria === labActual || labMateria === "ambos"
+          })
+          .map(
+            (doc) =>
+              ({
+                id: doc.id,
+                ...doc.data(),
+              }) as Materia,
+          )
         setMaterias(materiasData)
 
         const maestroSeleccionadoData = maestros.find((m) => m.id === maestroSeleccionado)
@@ -271,15 +278,18 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
     const cargarEventos = async () => {
       setCargandoEventos(true)
       try {
+        const labEventos = localStorage.getItem("laboratorio") || "programacion"
         const eventosQuery = query(collection(db, "EventosLaboratorio"), orderBy("createdAt", "desc"))
         const querySnapshot = await getDocs(eventosQuery)
-        const eventosData = querySnapshot.docs.map(
-          (doc) =>
-            ({
-              id: doc.id,
-              ...doc.data(),
-            }) as Evento,
-        )
+        const eventosData = querySnapshot.docs
+          .map(
+            (doc) =>
+              ({
+                id: doc.id,
+                ...doc.data(),
+              }) as Evento,
+          )
+          .filter((e: any) => !e.laboratorio || e.laboratorio === labEventos)
         setEventos(eventosData)
         await logAction("Cargar Eventos", `Se cargaron ${eventosData.length} eventos del laboratorio`)
       } catch (error) {
@@ -306,6 +316,7 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
     }
 
     try {
+      const labClassInfo = localStorage.getItem("laboratorio") || "programacion"
       const docRef = await addDoc(collection(db, "ClassInformation"), {
         maestroNombre: nombreMaestroSeleccionado,
         maestroId: maestroSeleccionado,
@@ -314,18 +325,21 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
         practica,
         grupo,
         fecha: new Date().toLocaleDateString(),
+        laboratorio: labClassInfo,
         horaInicio: new Date().toLocaleTimeString(),
         totalAsistencias: 0,
         alumnos: [],
       })
 
-      await setDoc(doc(db, "EstadoClaseInvitado", "actual"), {
+      const labClaseInv = localStorage.getItem("laboratorio") || "programacion"
+      await setDoc(doc(db, "EstadoClaseInvitado", labClaseInv), {
         iniciada: true,
         MaestroInvitado: nombreMaestroSeleccionado,
         Materia: materia,
         Practica: practica,
         Departamento: departamento,
         HoraInicio: new Date().toLocaleTimeString(),
+        laboratorio: labClaseInv,
       })
 
       const nombreCompletoDocente = nombreMaestroSeleccionado
@@ -395,6 +409,7 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
     }
 
     try {
+      const labEvento = localStorage.getItem("laboratorio") || "programacion"
       await addDoc(collection(db, "EventosLaboratorio"), {
         nombre: nombreEvento,
         tipo: tipoEvento,
@@ -405,6 +420,7 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
         duracion: duracionEvento,
         descripcion: descripcionEvento,
         resultados: resultadosEvento,
+        laboratorio: labEvento,
         createdAt: serverTimestamp(),
       })
 
@@ -446,15 +462,18 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
       await logAction("Registrar Evento", `Evento "${nombreEvento}" registrado por ${organizadorEvento}`)
 
       // Recargar la lista de eventos
+      const labRecarga = localStorage.getItem("laboratorio") || "programacion"
       const eventosQuery = query(collection(db, "EventosLaboratorio"), orderBy("createdAt", "desc"))
       const querySnapshot = await getDocs(eventosQuery)
-      const eventosData = querySnapshot.docs.map(
-        (doc) =>
-          ({
-            id: doc.id,
-            ...doc.data(),
-          }) as Evento,
-      )
+      const eventosData = querySnapshot.docs
+        .map(
+          (doc) =>
+            ({
+              id: doc.id,
+              ...doc.data(),
+            }) as Evento,
+        )
+        .filter((e: any) => !e.laboratorio || e.laboratorio === labRecarga)
       setEventos(eventosData)
     } catch (error) {
       console.error("Error al registrar el evento:", error)

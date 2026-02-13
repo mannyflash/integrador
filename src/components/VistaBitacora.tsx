@@ -117,23 +117,25 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
       const logsRef = collection(db, "logs")
       const q = query(logsRef, orderBy("timestamp", "desc"), limit(100))
       const querySnapshot = await getDocs(q)
+      const labFiltro = localStorage.getItem("laboratorio") || "programacion"
       const logs = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LogEntry[]
-      setLogEntries(logs)
+      const logsFiltrados = logs.filter((l: any) => !l.laboratorio || l.laboratorio === labFiltro)
+      setLogEntries(logsFiltrados)
 
-      // Extraer acciones y usuarios únicos para los filtros
-      const actions = [...new Set(logs.map((log) => log.action))]
-      const users = [...new Set(logs.map((log) => log.user))]
+      // Extraer acciones y usuarios unicos para los filtros
+      const actions = [...new Set(logsFiltrados.map((log) => log.action))]
+      const users = [...new Set(logsFiltrados.map((log) => log.user))]
       setUniqueActions(actions)
       setUniqueUsers(users)
 
-      // Registrar la acción de visualización de bitácora
+      // Registrar la accion de visualizacion de bitacora
       if (usuarioActual) {
         await logAction(
-          "Visualización de Bitácora",
-          `${usuarioActual.nombre} (${usuarioActual.ocupacion}) consultó la bitácora del sistema`,
+          "Visualizacion de Bitacora",
+          `${usuarioActual.nombre} (${usuarioActual.ocupacion}) consulto la bitacora del sistema`,
         )
       }
     } catch (error) {
@@ -148,14 +150,12 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
     try {
       const logsRef = collection(db, "logs")
 
-      // Crear límites para el día actual (desde las 00:00:00 hasta las 23:59:59)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
 
-      // Consulta con filtro por fecha actual
       const q = query(
         logsRef,
         where("timestamp", ">=", today),
@@ -163,13 +163,15 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
         orderBy("timestamp", "desc"),
       )
 
+      const labFiltro2 = localStorage.getItem("laboratorio") || "programacion"
       const querySnapshot = await getDocs(q)
       const logs = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LogEntry[]
+      const logsFiltrados = logs.filter((l: any) => !l.laboratorio || l.laboratorio === labFiltro2)
 
-      setLogEntries(logs)
+      setLogEntries(logsFiltrados)
 
       // Extraer acciones y usuarios únicos para los filtros
       const actions = [...new Set(logs.map((log) => log.action))]
@@ -212,12 +214,14 @@ const VistaBitacora: React.FC<VistaBitacoraProps> = ({ esModoOscuro, logAction, 
         q = query(q, where("user", "==", userFilter))
       }
 
+      const labFiltro3 = localStorage.getItem("laboratorio") || "programacion"
       const querySnapshot = await getDocs(q)
       const logs = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as LogEntry[]
-      setLogEntries(logs)
+      const logsFiltrados = logs.filter((l: any) => !l.laboratorio || l.laboratorio === labFiltro3)
+      setLogEntries(logsFiltrados)
 
       // Registrar la acción de filtrado
       if (usuarioActual) {

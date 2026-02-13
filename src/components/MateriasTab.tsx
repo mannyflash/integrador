@@ -22,6 +22,8 @@ import {
   Calendar,
   ArrowLeft,
   List,
+  Monitor,
+  Wifi,
 } from "lucide-react"
 import {
   collection,
@@ -37,14 +39,15 @@ import {
 import Swal from "sweetalert2"
 import type React from "react"
 
-interface Materia {
+  interface Materia {
   ID: string
   NombreMateria: string
   MaestroID: string
   Semestre: string
   CicloEscolar: string
+  Laboratorio: string
   [key: string]: any
-}
+  }
 
 interface DocenteSimple {
   ID: string
@@ -74,6 +77,7 @@ export function MateriasTab({
     MaestroID: "",
     Semestre: "",
     CicloEscolar: "",
+    Laboratorio: "",
   })
   const [editando, setEditando] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -182,6 +186,7 @@ export function MateriasTab({
         MaestroID: doc.data().MaestroID || "",
         Semestre: doc.data().Semestre || "",
         CicloEscolar: doc.data().CicloEscolar || "",
+        Laboratorio: doc.data().Laboratorio || "",
         ...doc.data(),
       })) as Materia[]
       setMaterias(materiasData)
@@ -256,9 +261,9 @@ export function MateriasTab({
         })
         setEditando(false)
       }
-      setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual })
+      setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual, Laboratorio: "" })
       cargarMaterias()
-      // Redirigir a la lista después de guardar
+      // Redirigir a la lista despues de guardar
       setVistaActual("lista")
     } catch (error) {
       console.error("Error al agregar/actualizar materia:", error)
@@ -301,7 +306,7 @@ export function MateriasTab({
   }
 
   const cancelarEdicion = () => {
-    setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual })
+    setDatosMateria({ ID: "", NombreMateria: "", MaestroID: "", Semestre: "", CicloEscolar: cicloActual, Laboratorio: "" })
     setEditando(false)
   }
 
@@ -607,6 +612,49 @@ export function MateriasTab({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="laboratorioMateria"
+                  className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}
+                >
+                  <Monitor className="h-4 w-4" /> Laboratorio
+                </Label>
+                <Select
+                  value={datosMateria.Laboratorio}
+                  onValueChange={(value) => setDatosMateria({ ...datosMateria, Laboratorio: value })}
+                >
+                  <SelectTrigger
+                    id="laboratorioMateria"
+                    className={`${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"} pl-10`}
+                  >
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <Monitor className="h-4 w-4 text-gray-500" />
+                    </div>
+                    <SelectValue placeholder="Selecciona un laboratorio" />
+                  </SelectTrigger>
+                  <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
+                    <SelectItem value="programacion">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        Laboratorio de Programacion
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="redes">
+                      <div className="flex items-center gap-2">
+                        <Wifi className="h-4 w-4" />
+                        Laboratorio de Redes
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ambos">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4" />
+                        Ambos laboratorios
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <Button
                   type="submit"
@@ -775,6 +823,7 @@ export function MateriasTab({
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Maestro</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Semestre</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Ciclo Escolar</TableHead>
+                    <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Laboratorio</TableHead>
                     <TableHead className={isDarkMode ? "text-white" : "text-gray-700"}>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -817,6 +866,30 @@ export function MateriasTab({
                             <span className="text-xs text-green-500 font-medium">Actual</span>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            materia.Laboratorio === "programacion"
+                              ? isDarkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"
+                              : materia.Laboratorio === "redes"
+                                ? isDarkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"
+                                : materia.Laboratorio === "ambos"
+                                  ? isDarkMode ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"
+                                  : isDarkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {materia.Laboratorio === "programacion" && <Monitor className="h-3 w-3" />}
+                          {materia.Laboratorio === "redes" && <Wifi className="h-3 w-3" />}
+                          {materia.Laboratorio === "ambos" && <Monitor className="h-3 w-3" />}
+                          {materia.Laboratorio === "programacion"
+                            ? "Programacion"
+                            : materia.Laboratorio === "redes"
+                              ? "Redes"
+                              : materia.Laboratorio === "ambos"
+                                ? "Ambos"
+                                : "Sin asignar"}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2 opacity-70 group-hover:opacity-100 transition-opacity">

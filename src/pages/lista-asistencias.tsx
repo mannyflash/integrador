@@ -73,6 +73,7 @@ const crearNotificacionAdmin = async (
   datos?: any,
 ) => {
   try {
+    const labNotif = localStorage.getItem("laboratorio") || "programacion"
     await addDoc(collection(db, "NotificacionesAdmin"), {
       tipo,
       titulo,
@@ -81,8 +82,9 @@ const crearNotificacionAdmin = async (
       leida: false,
       prioridad,
       datos: datos || null,
+      laboratorio: labNotif,
     })
-    console.log("Notificación creada para el administrador:", titulo)
+    console.log("Notificacion creada para el administrador:", titulo)
   } catch (error) {
     console.error("Error al crear notificación:", error)
   }
@@ -214,6 +216,7 @@ export default function ListaAsistencias() {
   const [horaFin, setHoraFin] = useState<string | null>(null)
   const [alumnos, setAlumnos] = useState<Asistencia[]>([]) // Estado para almacenar todos los alumnos
   const cierrePropio = useRef(false) // Ref para rastrear si el maestro cierra la clase él mismo
+  const claseIniciadaRef = useRef(false) // Ref para rastrear el estado de la clase en el listener
 
   // useEffect para cargar todos los alumnos desde Firebase
   useEffect(() => {
@@ -237,7 +240,8 @@ export default function ListaAsistencias() {
   // Función para verificar si hay una clase activa y recuperar su información
   const verificarClaseActiva = useCallback(async () => {
     try {
-      const estadoRef = doc(db, "EstadoClase", "actual")
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClase", lab)
       const estadoDoc = await getDoc(estadoRef)
 
       if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
@@ -308,24 +312,28 @@ export default function ListaAsistencias() {
 
       fetchMaterias(storedMaestroId)
       fetchMaestroInfo(storedMaestroId)
+      const lab = localStorage.getItem("laboratorio") || "programacion"
       const unsubscribeAsistencias = onSnapshot(query(collection(db, "Asistencias")), (snapshot) => {
-        const nuevosEstudiantes = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Asistencia[]
+        const nuevosEstudiantes = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((a: any) => !a.laboratorio || a.laboratorio === lab) as Asistencia[]
         setAsistencias(nuevosEstudiantes)
         console.log("Asistencias actualizadas:", nuevosEstudiantes)
         setContador(nuevosEstudiantes.length)
       })
 
-      const estadoRef = doc(db, "EstadoClase", "actual")
+      const estadoRef = doc(db, "EstadoClase", lab)
       const unsubscribeEstadoClase = onSnapshot(estadoRef, async (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data()
 
           // Si la clase fue finalizada externamente (por admin o laboratorista)
           // Solo reaccionar si tiene la bandera cerradaPorExterno Y no es un cierre propio
-          if (data.iniciada === false && data.cerradaPorExterno === true && claseIniciada && !cierrePropio.current) {
+          // Usar refs para evitar problemas con closures
+          if (data.iniciada === false && data.cerradaPorExterno === true && claseIniciadaRef.current && !cierrePropio.current) {
             console.log("[v0] Clase finalizada externamente por admin/laboratorista, cerrando sesión del maestro...")
 
             // Mostrar notificación al maestro
@@ -386,12 +394,13 @@ export default function ListaAsistencias() {
         const horaActual = new Date().toLocaleTimeString()
 
         try {
-          const estadoRef = doc(db, "EstadoClase", "actual")
+          const labAuto = localStorage.getItem("laboratorio") || "programacion"
+          const estadoRef = doc(db, "EstadoClase", labAuto)
 
           // Guardar en historial
           const historicalRef = collection(db, "HistoricalAttendance")
           await addDoc(historicalRef, {
-            practica: practicaActual?.Titulo || "Clase finalizada automáticamente",
+            practica: practicaActual?.Titulo || "Clase finalizada automaticamente",
             materia: materiasActuales.find((m) => m.id === materiaActual)?.nombre || "No especificada",
             fecha: serverTimestamp(),
             horaInicio: horaInicioActual,
@@ -400,20 +409,21 @@ export default function ListaAsistencias() {
             maestroNombre: maestroInfoActual?.Nombre || "",
             maestroApellido: maestroInfoActual?.Apellido || "",
             finalizadaAutomaticamente: true,
+            laboratorio: labAuto,
           })
 
-          // Limpiar el documento "actual"
+          // Limpiar el documento del laboratorio
           await setDoc(estadoRef, {
             iniciada: false,
             horaFin: horaActual,
             finalizadaAutomaticamente: true,
           })
 
-          // Guardar información de la clase
+          // Guardar informacion de la clase
           const classInfoRef = collection(db, "ClassInformation")
           await addDoc(classInfoRef, {
             materia: materiasActuales.find((m) => m.id === materiaActual)?.nombre || "No especificada",
-            practica: practicaActual?.Titulo || "Clase finalizada automáticamente",
+            practica: practicaActual?.Titulo || "Clase finalizada automaticamente",
             fecha: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }),
             totalAsistencias: asistenciasActuales.length,
             maestroId: maestroActual,
@@ -422,6 +432,7 @@ export default function ListaAsistencias() {
             horaInicio: horaInicioActual,
             horaFin: horaActual,
             finalizadaAutomaticamente: true,
+            laboratorio: labAuto,
             alumnos: asistenciasActuales.map((a) => ({
               id: a.AlumnoId,
               nombre: a.Nombre,
@@ -434,31 +445,35 @@ export default function ListaAsistencias() {
             })),
           })
 
-          // Eliminar todas las asistencias
+          // Eliminar asistencias del laboratorio actual
           try {
             const asistenciasSnapshot = await getDocs(collection(db, "Asistencias"))
+            const asistDelLabAuto = asistenciasSnapshot.docs.filter((d) => {
+              const data = d.data()
+              return !data.laboratorio || data.laboratorio === labAuto
+            })
 
-            if (!asistenciasSnapshot.empty) {
+            if (asistDelLabAuto.length > 0) {
               const batch = writeBatch(db)
 
-              asistenciasSnapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref)
+              asistDelLabAuto.forEach((d) => {
+                batch.delete(d.ref)
               })
 
               await batch.commit()
-              console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`)
+              console.log(`Se eliminaron ${asistDelLabAuto.length} registros de asistencias automaticamente del lab ${labAuto}`)
               await logAction(
-                "Finalizar Clase Automáticamente",
-                `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`,
+                "Finalizar Clase Automaticamente",
+                `Se eliminaron ${asistDelLabAuto.length} registros de asistencias automaticamente del lab ${labAuto}`,
               )
             }
           } catch (error) {
-            console.error("Error al eliminar asistencias automáticamente:", error)
-            await logAction("Error", `Error al eliminar asistencias automáticamente: ${error}`)
+            console.error("Error al eliminar asistencias automaticamente:", error)
+            await logAction("Error", `Error al eliminar asistencias automaticamente: ${error}`)
           }
 
           // Resetear el estado "enUso" de todos los equipos
-          const equipoRef = doc(db, "Numero de equipos", "equipos")
+          const equipoRef = doc(db, "Numero de equipos", labAuto)
           const equipoDoc = await getDoc(equipoRef)
 
           if (equipoDoc.exists()) {
@@ -527,13 +542,20 @@ export default function ListaAsistencias() {
   }, [theme])
   const fetchMaterias = async (maestroId: string) => {
     try {
+      const labActual = localStorage.getItem("laboratorio") || "programacion"
       const materiasSnapshot = await getDocs(query(collection(db, "Materias"), where("MaestroID", "==", maestroId)))
-      const materiasData = materiasSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        nombre: doc.data().NombreMateria,
-        semestre: doc.data().Semestre, // Añadir semestre
-        turno: doc.data().Turno, // Añadir turno
-      }))
+      const materiasData = materiasSnapshot.docs
+        .filter((doc) => {
+          const labMateria = doc.data().Laboratorio || ""
+          // Mostrar si la materia es del laboratorio actual, o es de "ambos", o no tiene laboratorio asignado
+          return !labMateria || labMateria === labActual || labMateria === "ambos"
+        })
+        .map((doc) => ({
+          id: doc.id,
+          nombre: doc.data().NombreMateria,
+          semestre: doc.data().Semestre,
+          turno: doc.data().Turno,
+        }))
       setMaterias(materiasData)
     } catch (error) {
       await swal({
@@ -618,7 +640,8 @@ export default function ListaAsistencias() {
   // Función para resetear el estado "enUso" de todos los equipos
   const resetEquiposEnUso = async () => {
     try {
-      const equipoRef = doc(db, "Numero de equipos", "equipos")
+      const labReset = localStorage.getItem("laboratorio") || "programacion"
+      const equipoRef = doc(db, "Numero de equipos", labReset)
       const equipoDoc = await getDoc(equipoRef)
 
       if (equipoDoc.exists()) {
@@ -650,12 +673,14 @@ export default function ListaAsistencias() {
     const nuevoEstado = !claseIniciada
     const horaActual = new Date().toLocaleTimeString()
     try {
-      const estadoRef = doc(db, "EstadoClase", "actual")
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClase", lab)
 
       if (nuevoEstado) {
         // Iniciar clase - Resetear la bandera de cierre propio
         cierrePropio.current = false
-        // Guardar toda la información en el documento "actual"
+        claseIniciadaRef.current = true
+        // Guardar toda la informacion en el documento del laboratorio
         await setDoc(estadoRef, {
           iniciada: true,
           practica: selectedPractica.id,
@@ -670,6 +695,7 @@ export default function ListaAsistencias() {
           maestroApellido: maestroInfo?.Apellido || "",
           horaInicio: horaActual,
           horaFin: null,
+          laboratorio: lab,
         })
 
         setHoraInicio(horaActual)
@@ -691,7 +717,8 @@ export default function ListaAsistencias() {
             horaInicio: horaActual,
             fecha: new Date().toLocaleDateString("es-MX"),
             estado: "Iniciada",
-            ubicacion: "Laboratorio de Cómputo",
+            ubicacion: lab === "programacion" ? "Laboratorio de Programacion" : "Laboratorio de Redes",
+            laboratorio: lab,
             accion: "iniciar_clase",
           },
         )
@@ -705,6 +732,7 @@ export default function ListaAsistencias() {
       } else {
         // Finalizar clase - Marcar como cierre propio para evitar que el listener reaccione
         cierrePropio.current = true
+        claseIniciadaRef.current = false
         setHoraFin(horaActual)
 
         // Obtener los datos actuales antes de borrarlos
@@ -722,6 +750,7 @@ export default function ListaAsistencias() {
           asistencias: asistencias,
           maestroNombre: maestroInfo?.Nombre || "",
           maestroApellido: maestroInfo?.Apellido || "",
+          laboratorio: lab,
         })
 
         // Limpiar el documento "actual" (establecer iniciada: false y borrar todos los demás campos)
@@ -730,30 +759,31 @@ export default function ListaAsistencias() {
           horaFin: horaActual,
         })
 
-        // Eliminar todas las asistencias de la colección "Asistencias"
+        // Eliminar las asistencias del laboratorio actual
         try {
-          // Primero, obtener todas las asistencias actuales
           const asistenciasSnapshot = await getDocs(collection(db, "Asistencias"))
+          // Solo eliminar asistencias de este laboratorio
+          const asistDelLab = asistenciasSnapshot.docs.filter((d) => {
+            const data = d.data()
+            return !data.laboratorio || data.laboratorio === lab
+          })
 
-          if (!asistenciasSnapshot.empty) {
+          if (asistDelLab.length > 0) {
             const batch = writeBatch(db)
 
-            // Añadir cada documento al batch para eliminación
-            asistenciasSnapshot.docs.forEach((doc) => {
-              const asistenciaRef = doc.ref
-              batch.delete(asistenciaRef)
+            asistDelLab.forEach((d) => {
+              batch.delete(d.ref)
             })
 
-            // Ejecutar el batch
             await batch.commit()
-            console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias`)
+            console.log(`Se eliminaron ${asistDelLab.length} registros de asistencias del lab ${lab}`)
             await logAction(
               "Finalizar Clase",
-              `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias`,
+              `Se eliminaron ${asistDelLab.length} registros de asistencias del lab ${lab}`,
             )
           } else {
-            console.log("No hay asistencias para eliminar")
-            await logAction("Finalizar Clase", "No había asistencias para eliminar")
+            console.log("No hay asistencias para eliminar en este laboratorio")
+            await logAction("Finalizar Clase", "No habia asistencias para eliminar")
           }
         } catch (error) {
           console.error("Error al eliminar las asistencias:", error)
@@ -783,6 +813,7 @@ export default function ListaAsistencias() {
           maestroApellido: maestroInfo?.Apellido,
           horaInicio: horaInicio,
           horaFin: horaActual,
+          laboratorio: lab,
           alumnos: asistencias.map((a) => ({
             id: a.AlumnoId,
             nombre: a.Nombre,
@@ -822,6 +853,7 @@ export default function ListaAsistencias() {
             estado: "Finalizada",
             equiposLiberados: true,
             historialGuardado: true,
+            laboratorio: lab,
             accion: "finalizar_clase",
           },
         )
@@ -887,7 +919,8 @@ export default function ListaAsistencias() {
 
           // Si no es equipo personal, liberar el equipo (marcar como no en uso)
           if (equipoId !== "personal") {
-            const equipoRef = doc(db, "Numero de equipos", "equipos")
+            const labElim = localStorage.getItem("laboratorio") || "programacion"
+            const equipoRef = doc(db, "Numero de equipos", labElim)
             const equipoDoc = await getDoc(equipoRef)
 
             if (equipoDoc.exists()) {

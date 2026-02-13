@@ -272,10 +272,13 @@ export default function PanelLaboratorista() {
     const unsubscribeNotificaciones = onSnapshot(
       query(collection(db, "NotificacionesAdmin"), where("tipo", "==", "equipo"), orderBy("fecha", "desc"), limit(20)),
       (snapshot) => {
-        const notificacionesData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Notificacion[]
+        const labNotif = localStorage.getItem("laboratorio") || "programacion"
+        const notificacionesData = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((n: any) => !n.laboratorio || n.laboratorio === labNotif) as Notificacion[]
 
         setNotificacionesEquipos(notificacionesData)
 
@@ -292,8 +295,9 @@ export default function PanelLaboratorista() {
   }
 
   const setupClasesListeners = () => {
+    const lab = localStorage.getItem("laboratorio") || "programacion"
     // Listener para clase regular
-    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
+    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", lab), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         setClaseActivaRegular(data.iniciada === true)
@@ -303,7 +307,7 @@ export default function PanelLaboratorista() {
     })
 
     // Listener para clase de maestro invitado
-    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", "estado"), (doc) => {
+    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", lab), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         setClaseActivaInvitado(data.iniciada === true)
@@ -326,11 +330,13 @@ export default function PanelLaboratorista() {
 
   const logAction = async (action: string, details: string) => {
     try {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
       await addDoc(collection(db, "logs"), {
         timestamp: serverTimestamp(),
         action,
         user: "Laboratorista",
         details,
+        laboratorio: lab,
       })
     } catch (error) {
       console.error("Error logging action:", error)
@@ -554,18 +560,19 @@ export default function PanelLaboratorista() {
 
   const finalizarClaseEmergencia = async () => {
     try {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
       let maestroId = null
 
       if (tipoClaseAFinalizar === "regular") {
-        const estadoRef = doc(db, "EstadoClase", "actual")
+        const estadoRef = doc(db, "EstadoClase", lab)
         const estadoClaseDoc = await getDoc(estadoRef)
 
         if (estadoClaseDoc.exists()) {
           const data = estadoClaseDoc.data()
-          maestroId = data.maestroId // Obtener el ID del maestro antes de finalizar
+          maestroId = data.maestroId
 
           const horaFin = new Date().toLocaleTimeString()
-await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
+          await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
 
           await logAction(
             "Finalizar Clase de Emergencia",
@@ -573,7 +580,7 @@ await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExtern
           )
         }
       } else {
-        const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
+        const estadoRef = doc(db, "EstadoClaseInvitado", lab)
         const horaFin = new Date().toLocaleTimeString()
         await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
 

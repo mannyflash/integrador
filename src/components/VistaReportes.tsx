@@ -159,10 +159,16 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
       )
 
       // Usar onSnapshot para actualizaciones en tiempo real
+      const lab = localStorage.getItem("laboratorio") || "programacion"
       const unsubscribe = onSnapshot(
         consultaInfoClase,
         (snapshot) => {
-          const practicasDelDia = snapshot.docs.map((doc) => {
+          const practicasDelDia = snapshot.docs
+            .filter((doc) => {
+              const data = doc.data()
+              return !data.laboratorio || data.laboratorio === lab
+            })
+            .map((doc) => {
             const data = doc.data()
             return {
               id: doc.id,

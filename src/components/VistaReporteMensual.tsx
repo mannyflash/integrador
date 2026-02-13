@@ -177,7 +177,10 @@ export default function VistaReporteMensual({
   const [nombreResponsable, setNombreResponsable] = useState("B.P.")
   const [division, setDivision] = useState("DIVISIÓN DE INGENIERÍA EN SISTEMAS COMPUTACIONALES")
   const [subdireccion, setSubdireccion] = useState("SUBDIRECCIÓN ACADÉMICA")
-  const [laboratorio, setLaboratorio] = useState("LABORATORIO DE REDES")
+  const [laboratorio, setLaboratorio] = useState(() => {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") : "programacion"
+    return lab === "redes" ? "LABORATORIO DE REDES" : "LABORATORIO DE PROGRAMACION"
+  })
   const [showConfiguracion, setShowConfiguracion] = useState(false)
 
   // Lista de docentes y materias para filtros
@@ -203,7 +206,13 @@ export default function VistaReporteMensual({
       const consultaInfoClase = query(refInfoClase, orderBy("fecha", "desc"))
       const snapshotInfoClase = await getDocs(consultaInfoClase)
 
-      const datosInfoClase = snapshotInfoClase.docs.map((doc) => {
+      const labActual = localStorage.getItem("laboratorio") || "programacion"
+      const datosInfoClase = snapshotInfoClase.docs
+        .filter((doc) => {
+          const data = doc.data()
+          return !data.laboratorio || data.laboratorio === labActual
+        })
+        .map((doc) => {
         const data = doc.data()
         let fecha: Date
         if (data.fecha instanceof Timestamp) {

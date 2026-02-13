@@ -1,17 +1,17 @@
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase'; // Adjust this import based on your Firebase setup
+import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore"
 
-export const logAction = async (action: string, details: string) => {
+const db = getFirestore()
+
+export async function logAction(action: string, details: string) {
   try {
-    await addDoc(collection(db, 'logs'), {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") || "programacion" : "programacion"
+    await addDoc(collection(db, "logs"), {
       timestamp: serverTimestamp(),
       action,
       details,
-      user: 'Sistema' // You might want to pass the user information as a parameter
-    });
-    console.log(`Action logged: ${action}`);
+      laboratorio: lab,
+    })
   } catch (error) {
-    console.error('Error logging action:', error);
+    console.error("Error al registrar log:", error)
   }
-};
-
+}

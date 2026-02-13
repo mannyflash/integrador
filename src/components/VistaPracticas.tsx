@@ -161,7 +161,13 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
       const refInfoClase = collection(db, "ClassInformation")
       const consultaInfoClase = query(refInfoClase, orderBy("fecha", "desc"))
       const snapshotInfoClase = await getDocs(consultaInfoClase)
-      const datosInfoClase = snapshotInfoClase.docs.map((doc) => {
+      const labActual = localStorage.getItem("laboratorio") || "programacion"
+      const datosInfoClase = snapshotInfoClase.docs
+        .filter((doc) => {
+          const data = doc.data()
+          return !data.laboratorio || data.laboratorio === labActual
+        })
+        .map((doc) => {
         const data = doc.data()
         let fecha: Date
         if (data.fecha instanceof Timestamp) {

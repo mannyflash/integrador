@@ -3,10 +3,10 @@
 import * as React from "react"
 import { FileText, Plus, Edit, Trash2, FileDown, RefreshCw, Menu, X } from "lucide-react"
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { db } from "../pages/panel-laboratorista"
 import Swal from "sweetalert2"
 import jsPDF from "jspdf"
-import "jspdf-autotable"
+import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import "sweetalert2/dist/sweetalert2.css"
 
@@ -109,10 +109,12 @@ export function AppSidebar({
         q = query(q, where("grupo", "==", groupFilter))
       }
 
+      const labSidebar = typeof window !== "undefined" ? localStorage.getItem("laboratorio") || "programacion" : "programacion"
       const querySnapshot = await getDocs(q)
       const classInfoData: ClassInfo[] = []
       querySnapshot.forEach((doc) => {
         const data = doc.data()
+        if (data.laboratorio && data.laboratorio !== labSidebar) return
         classInfoData.push({
           id: doc.id,
           materia: data.materia,
@@ -373,7 +375,7 @@ export function AppSidebar({
     }
 
     let finalY = currentY
-    doc.autoTable({
+    autoTable(doc, {
       head: [tableHeaders],
       body: tableData,
       startY: currentY,
@@ -382,11 +384,12 @@ export function AppSidebar({
         fontSize: 8,
         cellPadding: 2,
         textColor: [0, 0, 0],
-        lineWidth: 0.1,
+        lineColor: [120, 120, 120],
+        lineWidth: 0.3,
       },
       headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
+        fillColor: [149, 41, 82],
+        textColor: [255, 255, 255],
         fontStyle: "bold",
       },
       columnStyles: {
@@ -394,21 +397,10 @@ export function AppSidebar({
         1: { cellWidth: "auto" },
         2: { cellWidth: 20 },
       },
-      didDrawPage: (data: {
-        cursor: { y: number }
-        pageNumber: number
-        pageCount: number
-        settings: {
-          margin: { top: number; right: number; bottom: number; left: number }
-          startY: number
-          pageBreak: string
-        }
-        table: {
-          widths: number[]
-          heights: number[]
-          body: any[][]
-        }
-      }) => {
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      didDrawPage: (data: any) => {
         finalY = data.cursor.y
       },
     })

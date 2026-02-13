@@ -171,26 +171,22 @@ export default function ListaAsistenciasInvitado() {
   const [horaFin, setHoraFin] = useState<string | null>(null)
   const [claseInfo, setClaseInfo] = useState<any>(null)
 
-  // Función para verificar si hay una clase activa y recuperar su información
+  // Funcion para verificar si hay una clase activa y recuperar su informacion
   const verificarClaseActiva = useCallback(async () => {
     try {
-      const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
-      const estadoDoc = await getDoc(estadoRef)
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClaseInvitado", lab)
+      const estadoSnap = await getDoc(estadoRef)
 
-      if (estadoDoc.exists() && estadoDoc.data().iniciada === true) {
-        // Hay una clase activa, recuperar la información
-        const estadoData = estadoDoc.data()
-
-        // Actualizar el estado de clase iniciada
+      if (estadoSnap.exists() && estadoSnap.data().iniciada === true) {
+        const estadoData = estadoSnap.data()
         setClaseIniciada(true)
         setHoraInicio(estadoData.HoraInicio || null)
 
-        // Si hay información de clase almacenada, usarla
         const storedClaseInfo = localStorage.getItem("claseInfo")
         if (storedClaseInfo) {
           setClaseInfo(JSON.parse(storedClaseInfo))
         } else {
-          // Si no hay información almacenada, crear un objeto con la información disponible
           setClaseInfo({
             nombreCompletoDocente: estadoData.MaestroInvitado || "Docente Invitado",
             materia: estadoData.Materia || "No especificada",
@@ -198,8 +194,6 @@ export default function ListaAsistenciasInvitado() {
             departamento: estadoData.Departamento || "No especificado",
           })
         }
-
-        console.log("Se recuperó la información de la clase invitada activa")
         return true
       }
       return false
@@ -209,180 +203,99 @@ export default function ListaAsistenciasInvitado() {
     }
   }, [])
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const storedClaseInfo = localStorage.getItem("claseInfo")
+  // Funcion para finalizar la clase automaticamente al cerrar el navegador
+  const finalizarClaseAutomaticamente = useCallback(async () => {
+    try {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClaseInvitado", lab)
 
-      if (!storedClaseInfo) {
-        await swal({
-          title: "Información de clase faltante",
-          text: "Por favor, inicie una clase nuevamente.",
-          icon: "warning",
+      const historicalRef = collection(db, "HistoricalAttendance")
+      await addDoc(historicalRef, {
+        practica: claseInfo?.practica || "Clase finalizada automaticamente",
+        materia: claseInfo?.materia || "No especificada",
+        departamento: claseInfo?.departamento || "No especificado",
+        fecha: serverTimestamp(),
+        horaInicio: horaInicio,
+        horaFin: new Date().toLocaleTimeString(),
+        asistencias: asistencias,
+        maestroNombre: claseInfo?.nombreCompletoDocente || "Docente Invitado",
+        tipoClase: "invitado",
+        finalizadaAutomaticamente: true,
+        laboratorio: lab,
+      })
+
+      await setDoc(estadoRef, {
+        iniciada: false,
+        horaFin: new Date().toLocaleTimeString(),
+        finalizadaAutomaticamente: true,
+      })
+
+      const classInfoRef = collection(db, "ClassInformation")
+      await addDoc(classInfoRef, {
+        materia: claseInfo?.materia || "No especificada",
+        practica: claseInfo?.practica || "Clase finalizada automaticamente",
+        departamento: claseInfo?.departamento || "No especificado",
+        fecha: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        totalAsistencias: asistencias.length,
+        maestroNombre: claseInfo?.nombreCompletoDocente || "Docente Invitado",
+        horaInicio: horaInicio,
+        horaFin: new Date().toLocaleTimeString(),
+        tipoClase: "invitado",
+        finalizadaAutomaticamente: true,
+        laboratorio: lab,
+        alumnos: asistencias.map((a) => ({
+          id: a.AlumnoId,
+          nombre: a.Nombre,
+          apellido: a.Apellido,
+          equipo: a.Equipo,
+          carrera: a.Carrera || "Externo",
+          grupo: a.Grupo || "Externo",
+          semestre: a.Semestre || "Externo",
+          turno: a.Turno || "Externo",
+        })),
+      })
+
+      try {
+        const asistenciasSnapshot = await getDocs(collection(db, "AsistenciasInvitado"))
+        const asistDelLab = asistenciasSnapshot.docs.filter((d) => {
+          const data = d.data()
+          return !data.laboratorio || data.laboratorio === lab
         })
-        router.push("/panel-laboratorista")
-        return
-      }
-
-      const parsedClaseInfo = JSON.parse(storedClaseInfo)
-      setClaseInfo(parsedClaseInfo)
-
-      setMaestroInfo({
-        Nombre: parsedClaseInfo.nombreCompletoDocente.split(" ")[0],
-        Apellido: parsedClaseInfo.nombreCompletoDocente.split(" ")[1] || "",
-      })
-
-      // Verificar si hay una clase activa
-      await verificarClaseActiva()
-
-      // Update the query to only get relevant attendance records
-      const unsubscribeAsistencias = onSnapshot(collection(db, "AsistenciasInvitado"), (snapshot) => {
-        const nuevosEstudiantes = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          collection: "AsistenciasInvitado",
-        })) as Asistencia[]
-
-        // Sort students by their names
-        const sortedEstudiantes = nuevosEstudiantes.sort((a, b) =>
-          `${a.Apellido} ${a.Nombre}`.localeCompare(`${b.Apellido} ${b.Nombre}`),
-        )
-
-        setAsistencias(sortedEstudiantes)
-        console.log("Asistencias actualizadas:", sortedEstudiantes)
-        setContador(sortedEstudiantes.length)
-      })
-
-      const timer = setTimeout(() => {
-        setIsLoading(false)
-      }, 1500)
-
-      return () => {
-        unsubscribeAsistencias()
-        clearTimeout(timer)
-      }
-    }
-
-    checkAuth()
-  }, [router, verificarClaseActiva])
-
-  // Añadir este efecto para manejar el cierre de la ventana o navegación
-  useEffect(() => {
-    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
-      // Si hay una clase iniciada, finalizarla automáticamente
-      if (claseIniciada) {
-        // Guardar la información de la clase para usarla en el cierre
-        const claseInfoActual = claseInfo
-        const horaInicioActual = horaInicio
-        const asistenciasActuales = asistencias
-
-        // Finalizar la clase automáticamente
-        const horaActual = new Date().toLocaleTimeString()
-
-        try {
-          const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
-
-          // Guardar en historial
-          const historicalRef = collection(db, "HistoricalAttendance")
-          await addDoc(historicalRef, {
-            practica: claseInfoActual?.practica || "Clase finalizada automáticamente",
-            materia: claseInfoActual?.materia || "No especificada",
-            departamento: claseInfoActual?.departamento || "No especificado",
-            fecha: serverTimestamp(),
-            horaInicio: horaInicioActual,
-            horaFin: horaActual,
-            asistencias: asistenciasActuales,
-            maestroNombre: claseInfoActual?.nombreCompletoDocente || "Docente Invitado",
-            tipoClase: "invitado",
-            finalizadaAutomaticamente: true,
+        if (asistDelLab.length > 0) {
+          const batch = writeBatch(db)
+          asistDelLab.forEach((docSnap) => {
+            batch.delete(docSnap.ref)
           })
-
-          // Limpiar el documento "actual"
-          await setDoc(estadoRef, {
-            iniciada: false,
-            horaFin: horaActual,
-            finalizadaAutomaticamente: true,
-          })
-
-          // Guardar información de la clase
-          const classInfoRef = collection(db, "ClassInformation")
-          await addDoc(classInfoRef, {
-            materia: claseInfoActual?.materia || "No especificada",
-            practica: claseInfoActual?.practica || "Clase finalizada automáticamente",
-            departamento: claseInfoActual?.departamento || "No especificado",
-            fecha: new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" }),
-            totalAsistencias: asistenciasActuales.length,
-            maestroNombre: claseInfoActual?.nombreCompletoDocente || "Docente Invitado",
-            horaInicio: horaInicioActual,
-            horaFin: horaActual,
-            tipoClase: "invitado",
-            finalizadaAutomaticamente: true,
-            alumnos: asistenciasActuales.map((a) => ({
-              id: a.AlumnoId,
-              nombre: a.Nombre,
-              apellido: a.Apellido,
-              equipo: a.Equipo,
-              carrera: a.Carrera || "Externo",
-              grupo: a.Grupo || "Externo",
-              semestre: a.Semestre || "Externo",
-              turno: a.Turno || "Externo",
-            })),
-          })
-
-          // Eliminar todas las asistencias
-          try {
-            const asistenciasSnapshot = await getDocs(collection(db, "AsistenciasInvitado"))
-
-            if (!asistenciasSnapshot.empty) {
-              const batch = writeBatch(db)
-
-              asistenciasSnapshot.docs.forEach((doc) => {
-                batch.delete(doc.ref)
-              })
-
-              await batch.commit()
-              console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`)
-              await logAction(
-                "Finalizar Clase Invitado Automáticamente",
-                `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias automáticamente`,
-              )
-            }
-          } catch (error) {
-            console.error("Error al eliminar asistencias automáticamente:", error)
-            await logAction("Error", `Error al eliminar asistencias automáticamente: ${error}`)
-          }
-
-          // Resetear el estado de los equipos
-          await resetEquiposEnUso()
-
-          // Registrar la acción en el log
-          await logAction(
-            "Finalizar Clase Invitado Automáticamente",
-            `Clase invitada finalizada automáticamente para ${claseInfoActual?.practica || "No especificada"} a las ${horaActual} debido al cierre del navegador.`,
-          )
-
-          // Eliminar la información de clase del localStorage
-          localStorage.removeItem("claseInfo")
-        } catch (error) {
-          console.error("Error al finalizar la clase automáticamente:", error)
+          await batch.commit()
         }
+      } catch (error) {
+        console.error("Error al eliminar asistencias automaticamente:", error)
       }
-    }
 
-    // Registrar el evento beforeunload
-    window.addEventListener("beforeunload", handleBeforeUnload)
-
-    // Limpiar el evento cuando el componente se desmonte
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload)
+      await resetEquiposEnUso()
+      await logAction(
+        "Finalizar Clase Invitado Automaticamente",
+        `Clase invitada finalizada automaticamente para ${claseInfo?.practica || "No especificada"} a las ${new Date().toLocaleTimeString()} en lab ${lab}`,
+      )
+      localStorage.removeItem("claseInfo")
+    } catch (error) {
+      console.error("Error al finalizar la clase automaticamente:", error)
     }
-  }, [claseIniciada, claseInfo, horaInicio, asistencias])
+  }, [claseInfo, horaInicio, asistencias])
+
+  const handleBeforeUnload = useCallback(() => {
+    if (claseIniciada) {
+      finalizarClaseAutomaticamente()
+    }
+  }, [claseIniciada, finalizarClaseAutomaticamente])
 
   useEffect(() => {
     const checkClaseStatus = async () => {
-      const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
-      const estadoDoc = await getDoc(estadoRef)
-      if (estadoDoc.exists()) {
-        const estadoData = estadoDoc.data()
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClaseInvitado", lab)
+      const estadoSnap = await getDoc(estadoRef)
+      if (estadoSnap.exists()) {
+        const estadoData = estadoSnap.data()
         setClaseIniciada(estadoData.iniciada || false)
         if (estadoData.iniciada) {
           setHoraInicio(estadoData.HoraInicio || null)
@@ -397,6 +310,15 @@ export default function ListaAsistenciasInvitado() {
     applyTheme(theme)
   }, [theme])
 
+  useEffect(() => {
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Limpiar el evento cuando el componente se desmonte
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [handleBeforeUnload])
+
   const limpiarCampos = useCallback(() => {
     setAsistencias([])
     setContador(0)
@@ -408,7 +330,8 @@ export default function ListaAsistenciasInvitado() {
   // Función para resetear el estado "enUso" de todos los equipos
   const resetEquiposEnUso = async () => {
     try {
-      const equipoRef = doc(db, "Numero de equipos", "equipos")
+      const labReset = localStorage.getItem("laboratorio") || "programacion"
+      const equipoRef = doc(db, "Numero de equipos", labReset)
       const equipoDoc = await getDoc(equipoRef)
 
       if (equipoDoc.exists()) {
@@ -441,7 +364,8 @@ export default function ListaAsistenciasInvitado() {
     const nuevoEstado = !claseIniciada
     const horaActual = new Date().toLocaleTimeString()
     try {
-      const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      const estadoRef = doc(db, "EstadoClaseInvitado", lab)
 
       if (nuevoEstado) {
         // Iniciar clase
@@ -453,6 +377,7 @@ export default function ListaAsistenciasInvitado() {
           Departamento: claseInfo.departamento,
           HoraInicio: horaActual,
           HoraFin: null,
+          laboratorio: lab,
         })
 
         setHoraInicio(horaActual)
@@ -478,38 +403,39 @@ export default function ListaAsistenciasInvitado() {
           asistencias: asistencias,
           maestroNombre: claseInfo.nombreCompletoDocente,
           tipoClase: "invitado",
+          laboratorio: lab,
         })
 
-        // Limpiar el documento "actual"
+        // Limpiar el documento del laboratorio
         await setDoc(estadoRef, {
           iniciada: false,
           horaFin: horaActual,
         })
 
-        // Eliminar todas las asistencias de la colección "AsistenciasInvitado"
+        // Eliminar asistencias invitado del laboratorio actual
         try {
-          // Primero, obtener todas las asistencias actuales
           const asistenciasSnapshot = await getDocs(collection(db, "AsistenciasInvitado"))
+          const asistInvDelLab = asistenciasSnapshot.docs.filter((d) => {
+            const data = d.data()
+            return !data.laboratorio || data.laboratorio === lab
+          })
 
-          if (!asistenciasSnapshot.empty) {
+          if (asistInvDelLab.length > 0) {
             const batch = writeBatch(db)
 
-            // Añadir cada documento al batch para eliminación
-            asistenciasSnapshot.docs.forEach((doc) => {
-              const asistenciaRef = doc.ref
-              batch.delete(asistenciaRef)
+            asistInvDelLab.forEach((d) => {
+              batch.delete(d.ref)
             })
 
-            // Ejecutar el batch
             await batch.commit()
-            console.log(`Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias invitado`)
+            console.log(`Se eliminaron ${asistInvDelLab.length} registros de asistencias invitado del lab ${lab}`)
             await logAction(
               "Finalizar Clase Invitado",
-              `Se eliminaron ${asistenciasSnapshot.docs.length} registros de asistencias invitado`,
+              `Se eliminaron ${asistInvDelLab.length} registros de asistencias invitado del lab ${lab}`,
             )
           } else {
-            console.log("No hay asistencias invitado para eliminar")
-            await logAction("Finalizar Clase Invitado", "No había asistencias invitado para eliminar")
+            console.log("No hay asistencias invitado para eliminar en este laboratorio")
+            await logAction("Finalizar Clase Invitado", "No habia asistencias invitado para eliminar")
           }
         } catch (error) {
           console.error("Error al eliminar las asistencias invitado:", error)
@@ -540,6 +466,7 @@ export default function ListaAsistenciasInvitado() {
           horaInicio: horaInicio,
           horaFin: horaActual,
           tipoClase: "invitado",
+          laboratorio: lab,
           alumnos: asistencias.map((a) => ({
             id: a.AlumnoId,
             nombre: a.Nombre,
@@ -600,7 +527,8 @@ export default function ListaAsistenciasInvitado() {
 
           // Si no es equipo personal, liberar el equipo (marcar como no en uso)
           if (equipoId !== "personal") {
-            const equipoRef = doc(db, "Numero de equipos", "equipos")
+            const labEq = localStorage.getItem("laboratorio") || "programacion"
+            const equipoRef = doc(db, "Numero de equipos", labEq)
             const equipoDoc = await getDoc(equipoRef)
 
             if (equipoDoc.exists()) {

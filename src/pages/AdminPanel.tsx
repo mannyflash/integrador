@@ -351,8 +351,9 @@ export default function AdminPanel() {
   }
 
   const setupClasesListeners = () => {
+    const lab = localStorage.getItem("laboratorio") || "programacion"
     // Listener para clase regular
-    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", "actual"), (doc) => {
+    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", lab), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         setClaseActivaRegular(data.iniciada === true)
@@ -362,7 +363,7 @@ export default function AdminPanel() {
     })
 
     // Listener para clase de maestro invitado
-    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", "estado"), (doc) => {
+    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", lab), (doc) => {
       if (doc.exists()) {
         const data = doc.data()
         setClaseActivaInvitado(data.iniciada === true)
@@ -394,17 +395,20 @@ export default function AdminPanel() {
     const unsubscribeNotificaciones = onSnapshot(
       query(collection(db, "NotificacionesAdmin"), orderBy("fecha", "desc"), limit(50)),
       (snapshot) => {
+        const labAdmin = localStorage.getItem("laboratorio") || "programacion"
         const notificacionesData = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as Notificacion[]
 
-        const notificacionesFiltradas = notificacionesData.filter((n) => {
-          // Si es una notificación de equipo, mostrar solo las que no están resueltas
+        const notificacionesFiltradas = notificacionesData.filter((n: any) => {
+          // Filtrar por laboratorio
+          if (n.laboratorio && n.laboratorio !== labAdmin) return false
+          // Si es una notificacion de equipo, mostrar solo las que no estan resueltas
           if (n.tipo === "equipo") {
             return n.estadoEquipo !== "resuelto"
           }
-          // Para otros tipos de notificaciones, mostrar las del día actual o las no leídas
+          // Para otros tipos de notificaciones, mostrar las del dia actual o las no leidas
           return esDiaActual(n.fecha) || !n.leida
         })
 
@@ -478,29 +482,26 @@ export default function AdminPanel() {
       },
     )
 
-    // Listeners para generar notificaciones automáticas
-    const unsubscribeEquipos = onSnapshot(collection(db, "Numero de equipos"), (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "modified") {
-          const equipos = change.doc.data().Equipos || []
-          const equiposFueraServicio = equipos.filter((e: any) => e.fueraDeServicio)
+    // Listeners para generar notificaciones automaticas (filtradas por laboratorio)
+    const labAdmin = localStorage.getItem("laboratorio") || "programacion"
+    const unsubscribeEquipos = onSnapshot(doc(db, "Numero de equipos", labAdmin), (docSnap) => {
+      if (docSnap.exists()) {
+        const equipos = docSnap.data().Equipos || []
+        const equiposFueraServicio = equipos.filter((e: any) => e.fueraDeServicio)
 
-          if (equiposFueraServicio.length > 0) {
-            console.log("Equipos fuera de servicio detectados:", equiposFueraServicio.length)
-          }
+        if (equiposFueraServicio.length > 0) {
+          console.log("Equipos fuera de servicio detectados:", equiposFueraServicio.length)
         }
-      })
+      }
     })
 
-    const unsubscribeMaestroInvitado = onSnapshot(collection(db, "EstadoClaseInvitado"), (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "modified" || change.type === "added") {
-          const data = change.doc.data()
-          if (data.iniciada) {
-            console.log("Clase de maestro invitado iniciada:", data)
-          }
+    const unsubscribeMaestroInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", labAdmin), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        if (data.iniciada) {
+          console.log("Clase de maestro invitado iniciada:", data)
         }
-      })
+      }
     })
 
     return () => {
@@ -512,8 +513,9 @@ export default function AdminPanel() {
 
   const finalizarClaseEmergencia = async () => {
     try {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
       if (tipoClaseAFinalizar === "regular") {
-        const estadoRef = doc(db, "EstadoClase", "actual")
+        const estadoRef = doc(db, "EstadoClase", lab)
         const estadoClaseDoc = await getDoc(estadoRef)
 
         if (estadoClaseDoc.exists()) {
@@ -521,7 +523,7 @@ export default function AdminPanel() {
           await setDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
         }
       } else {
-        const estadoRef = doc(db, "EstadoClaseInvitado", "actual")
+        const estadoRef = doc(db, "EstadoClaseInvitado", lab)
         const horaFin = new Date().toLocaleTimeString()
         await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
       }
