@@ -820,13 +820,7 @@ Hora de inicio: ${data.HoraInicio}`,
     }
   }
 
-  const handleNumberInput = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    setter: React.Dispatch<React.SetStateAction<string>>,
-  ) => {
-    const value = e.target.value.replace(/\D/g, "")
-    setter(value)
-  }
+
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1453,7 +1447,6 @@ onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                               } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
                                 theme === "dark" ? colors.dark.inputText : colors.light.inputText
                               } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                              maxLength={8}
                               required
                             />
                           </div>
@@ -1634,14 +1627,13 @@ onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                           id="userMatricula"
                           type="text"
                           value={userMatricula}
-                          onChange={(e) => handleNumberInput(e, setUserMatricula)}
-                          placeholder={`Ingresa tu ${userType === "maestro" ? "número de empleado" : "ID de laboratorista"}`}
+                          onChange={(e) => setUserMatricula(e.target.value)}
+                          placeholder={`Ingresa tu ${userType === "maestro" ? "numero de empleado" : "ID de laboratorista"}`}
                           className={`${
                             theme === "dark" ? colors.dark.inputBackground : colors.light.inputBackground
                           } ${theme === "dark" ? colors.dark.inputBorder : colors.light.inputBorder} ${
                             theme === "dark" ? colors.dark.inputText : colors.light.inputText
                           } rounded-xl border-2 focus:ring-[#1BB827] focus:border-[#1BB827] transition-all duration-300`}
-                          maxLength={8}
                           required
                         />
                       </div>
