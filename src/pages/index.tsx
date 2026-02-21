@@ -239,6 +239,14 @@ export default function InterfazLaboratorio() {
     // Obtener el laboratorio actual (de localStorage o del estado)
     const lab = laboratorioSeleccionado || localStorage.getItem("laboratorio") || "programacion"
 
+    // Resetear estados al cambiar de laboratorio
+    setIsClassStarted(false)
+    setIsGuestClassStarted(false)
+    setClassInfo(null)
+    setGuestClassInfo(null)
+    setEquipo("")
+    setMatricula("")
+
     // Verificar si hay una clase normal iniciada en este laboratorio
     const unsubscribeClass = onSnapshot(doc(db, "EstadoClase", lab), (doc) => {
       if (doc.exists()) {
@@ -1411,14 +1419,14 @@ Hora de inicio: ${data.HoraInicio}`,
                                 <SelectValue placeholder="Selecciona un equipo" />
                               </SelectTrigger>
                               <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
-                                {equipmentList.map((equipment) => (
+                                {equipmentList.map((equipment, idx) => (
                                   <SelectItem
                                     key={equipment.id}
                                     value={equipment.id}
                                     disabled={equipment.fueraDeServicio || equipment.enUso}
                                     className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
                                   >
-                                    {equipment.id}
+                                    {equipment.id === "personal" ? "Equipo Personal" : `Equipo ${idx}`}
                                     {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
                                     {equipment.enUso ? " (En uso)" : ""}
                                   </SelectItem>
@@ -1434,7 +1442,7 @@ Hora de inicio: ${data.HoraInicio}`,
                                 theme === "dark" ? colors.dark.titleText : colors.light.titleText
                               }`}
                             >
-                              Matrícula
+                              Matricula
                             </Label>
                             <Input
                               id="matricula"
@@ -1475,14 +1483,14 @@ onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                                 <SelectValue placeholder="Selecciona un equipo" />
                               </SelectTrigger>
                               <SelectContent className={`${theme === "dark" ? "bg-[#1C4A3F] text-white" : "bg-white"}`}>
-                                {equipmentList.map((equipment) => (
+                                {equipmentList.map((equipment, idx) => (
                                   <SelectItem
                                     key={equipment.id}
                                     value={equipment.id}
                                     disabled={equipment.fueraDeServicio || equipment.enUso}
                                     className={`${equipment.fueraDeServicio || equipment.enUso ? "opacity-50" : ""}`}
                                   >
-                                    {equipment.id}
+                                    {equipment.id === "personal" ? "Equipo Personal" : `Equipo ${idx}`}
                                     {equipment.fueraDeServicio ? " (Fuera de servicio)" : ""}
                                     {equipment.enUso ? " (En uso)" : ""}
                                   </SelectItem>

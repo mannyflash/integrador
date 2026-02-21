@@ -253,10 +253,9 @@ export default function AdminPanel() {
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [isLoading, setIsLoading] = useState(true)
 
-  const [claseActivaRegular, setClaseActivaRegular] = useState(false)
-  const [claseActivaInvitado, setClaseActivaInvitado] = useState(false)
+  const [clasesActivas, setClasesActivas] = useState<{lab: string, tipo: "regular" | "invitado", datos: any}[]>([])
   const [dialogoFinalizarClase, setDialogoFinalizarClase] = useState(false)
-  const [tipoClaseAFinalizar, setTipoClaseAFinalizar] = useState<"regular" | "invitado">("regular")
+  const [claseSeleccionadaParaCerrar, setClaseSeleccionadaParaCerrar] = useState<{lab: string, tipo: "regular" | "invitado"} | null>(null)
 
   const currentColors = theme === "dark" ? colors.dark : colors.light
 
@@ -351,30 +350,37 @@ export default function AdminPanel() {
   }
 
   const setupClasesListeners = () => {
-    const lab = localStorage.getItem("laboratorio") || "programacion"
-    // Listener para clase regular
-    const unsubscribeClaseRegular = onSnapshot(doc(db, "EstadoClase", lab), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data()
-        setClaseActivaRegular(data.iniciada === true)
-      } else {
-        setClaseActivaRegular(false)
-      }
-    })
+    const labs = ["programacion", "redes"]
+    const unsubscribers: (() => void)[] = []
 
-    // Listener para clase de maestro invitado
-    const unsubscribeClaseInvitado = onSnapshot(doc(db, "EstadoClaseInvitado", lab), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data()
-        setClaseActivaInvitado(data.iniciada === true)
-      } else {
-        setClaseActivaInvitado(false)
-      }
+    labs.forEach((lab) => {
+      // Listener para clase regular de cada laboratorio
+      const unsub1 = onSnapshot(doc(db, "EstadoClase", lab), (docSnap) => {
+        setClasesActivas((prev) => {
+          const sinEsta = prev.filter((c) => !(c.lab === lab && c.tipo === "regular"))
+          if (docSnap.exists() && docSnap.data().iniciada === true) {
+            return [...sinEsta, { lab, tipo: "regular", datos: docSnap.data() }]
+          }
+          return sinEsta
+        })
+      })
+      unsubscribers.push(unsub1)
+
+      // Listener para clase invitado de cada laboratorio
+      const unsub2 = onSnapshot(doc(db, "EstadoClaseInvitado", lab), (docSnap) => {
+        setClasesActivas((prev) => {
+          const sinEsta = prev.filter((c) => !(c.lab === lab && c.tipo === "invitado"))
+          if (docSnap.exists() && docSnap.data().iniciada === true) {
+            return [...sinEsta, { lab, tipo: "invitado", datos: docSnap.data() }]
+          }
+          return sinEsta
+        })
+      })
+      unsubscribers.push(unsub2)
     })
 
     return () => {
-      unsubscribeClaseRegular()
-      unsubscribeClaseInvitado()
+      unsubscribers.forEach((u) => u())
     }
   }
 
@@ -512,27 +518,23 @@ export default function AdminPanel() {
   }
 
   const finalizarClaseEmergencia = async () => {
+    if (!claseSeleccionadaParaCerrar) return
     try {
-      const lab = localStorage.getItem("laboratorio") || "programacion"
-      if (tipoClaseAFinalizar === "regular") {
-        const estadoRef = doc(db, "EstadoClase", lab)
-        const estadoClaseDoc = await getDoc(estadoRef)
-
-        if (estadoClaseDoc.exists()) {
-          const horaFin = new Date().toLocaleTimeString()
-          await setDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
-        }
-      } else {
-        const estadoRef = doc(db, "EstadoClaseInvitado", lab)
-        const horaFin = new Date().toLocaleTimeString()
-        await updateDoc(estadoRef, { iniciada: false, horaFin: horaFin, cerradaPorExterno: true })
-      }
+      const { lab, tipo } = claseSeleccionadaParaCerrar
+      const coleccion = tipo === "regular" ? "EstadoClase" : "EstadoClaseInvitado"
+      const estadoRef = doc(db, coleccion, lab)
+      const horaFin = new Date().toLocaleTimeString()
+      await setDoc(estadoRef, { iniciada: false, horaFin, cerradaPorExterno: true })
 
       setDialogoFinalizarClase(false)
+      setClaseSeleccionadaParaCerrar(null)
+
+      const labNombre = lab === "programacion" ? "Programacion" : "Redes"
+      const tipoNombre = tipo === "regular" ? "regular" : "de maestro invitado"
 
       Swal.fire({
-        title: "¡Clase finalizada!",
-        text: "La clase ha sido cerrada correctamente y el maestro ha sido desconectado",
+        title: "Clase finalizada",
+        text: `La clase ${tipoNombre} del Lab. ${labNombre} ha sido cerrada correctamente`,
         icon: "success",
         confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
         timer: 3000,
@@ -546,11 +548,6 @@ export default function AdminPanel() {
         confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
       })
     }
-  }
-
-  const abrirDialogoFinalizarClase = (tipo: "regular" | "invitado") => {
-    setTipoClaseAFinalizar(tipo)
-    setDialogoFinalizarClase(true)
   }
 
   const marcarComoLeida = async (notificacionId: string) => {
@@ -1190,9 +1187,9 @@ export default function AdminPanel() {
 
   return (
     <div className={`min-h-screen ${theme === "dark" ? colors.dark.background : colors.light.background}`}>
-      {(claseActivaRegular || claseActivaInvitado) && (
+      {clasesActivas.length > 0 && (
         <div
-          onClick={() => abrirDialogoFinalizarClase(claseActivaRegular ? "regular" : "invitado")}
+          onClick={() => setDialogoFinalizarClase(true)}
           className={`fixed bottom-8 right-8 z-40 cursor-pointer group`}
           title="Finalizar clase activa de emergencia"
         >
@@ -1203,23 +1200,20 @@ export default function AdminPanel() {
                 : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
             } transform hover:scale-105`}
           >
-            {/* Ícono pulsante */}
             <div className="relative">
               <XCircle size={24} className="text-white animate-pulse" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+              {clasesActivas.length > 1 && (
+                <div className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center text-xs font-bold text-black">
+                  {clasesActivas.length}
+                </div>
+              )}
+              {clasesActivas.length === 1 && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-ping"></div>
+              )}
             </div>
-
-            {/* Texto descriptivo */}
-            <span className="text-white font-semibold text-sm whitespace-nowrap">Finalizar Clase</span>
-          </div>
-
-          {/* Tooltip expandido */}
-          <div
-            className={`absolute bottom-full right-0 mb-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${
-              theme === "dark" ? "bg-gray-800 text-white" : "bg-gray-900 text-white"
-            }`}
-          >
-            Cerrar clase activa y desconectar maestro
+            <span className="text-white font-semibold text-sm whitespace-nowrap">
+              {clasesActivas.length === 1 ? "Finalizar Clase" : `${clasesActivas.length} Clases Activas`}
+            </span>
           </div>
         </div>
       )}
@@ -1410,8 +1404,11 @@ export default function AdminPanel() {
 
       <NotificacionPreview />
 
-      <Dialog open={dialogoFinalizarClase} onOpenChange={setDialogoFinalizarClase}>
-        <DialogContent className={theme === "dark" ? "bg-[#2a2a2a] text-white" : "bg-white"}>
+      <Dialog open={dialogoFinalizarClase} onOpenChange={(open) => {
+        setDialogoFinalizarClase(open)
+        if (!open) setClaseSeleccionadaParaCerrar(null)
+      }}>
+        <DialogContent className={`max-w-lg ${theme === "dark" ? "bg-[#2a2a2a] text-white" : "bg-white"}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-6 w-6 text-red-500" />
@@ -1419,34 +1416,97 @@ export default function AdminPanel() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <p className={theme === "dark" ? "text-gray-300" : "text-gray-700"}>
-              ¿Estás seguro de que deseas finalizar la clase{" "}
-              {tipoClaseAFinalizar === "regular" ? "regular" : "de maestro invitado"} activa?
-            </p>
-
-            <div
-              className={`p-4 rounded-lg ${theme === "dark" ? "bg-red-900/20 border border-red-800" : "bg-red-50 border border-red-200"}`}
-            >
-              <p className="text-sm text-red-500 font-semibold mb-2">⚠️ Esta acción realizará lo siguiente:</p>
-              <ul className="text-sm text-red-600 space-y-1 ml-4">
-                <li>• Cerrará la clase inmediatamente</li>
-                <li>• Cerrará la sesión del maestro</li>
-                <li>• No se podrán registrar más asistencias</li>
-                <li>• El maestro será redirigido al inicio</li>
-              </ul>
+          {!claseSeleccionadaParaCerrar ? (
+            <div className="space-y-3">
+              <p className={theme === "dark" ? "text-gray-300" : "text-gray-700"}>
+                Selecciona la clase que deseas finalizar:
+              </p>
+              {clasesActivas.map((clase, idx) => {
+                const labNombre = clase.lab === "programacion" ? "Lab. Programacion" : "Lab. Redes"
+                const tipoNombre = clase.tipo === "regular" ? "Clase Regular" : "Clase Invitado"
+                const maestro = clase.datos?.maestroNombre || clase.datos?.MaestroInvitado || "Maestro desconocido"
+                const materia = clase.datos?.materia || clase.datos?.Materia || ""
+                const hora = clase.datos?.horaInicio || clase.datos?.HoraInicio || ""
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setClaseSeleccionadaParaCerrar({ lab: clase.lab, tipo: clase.tipo })}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                      theme === "dark"
+                        ? "bg-[#1a2e25] border-gray-700 hover:border-red-500 hover:bg-red-900/20"
+                        : "bg-white border-gray-200 hover:border-red-400 hover:bg-red-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                        {tipoNombre}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        clase.lab === "programacion"
+                          ? theme === "dark" ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"
+                          : theme === "dark" ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"
+                      }`}>
+                        {labNombre}
+                      </span>
+                    </div>
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                      Maestro: {maestro}
+                    </p>
+                    {materia && (
+                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+                        Materia: {materia}
+                      </p>
+                    )}
+                    {hora && (
+                      <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                        Inicio: {hora}
+                      </p>
+                    )}
+                  </button>
+                )
+              })}
+              {clasesActivas.length === 0 && (
+                <p className={`text-center py-4 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                  No hay clases activas en este momento
+                </p>
+              )}
             </div>
+          ) : (
+            <div className="space-y-4">
+              <p className={theme === "dark" ? "text-gray-300" : "text-gray-700"}>
+                {'Estas seguro de finalizar esta clase?'}
+              </p>
 
-            <div className="flex space-x-2 pt-2">
-              <Button onClick={() => setDialogoFinalizarClase(false)} variant="outline" className="flex-1">
-                Cancelar
-              </Button>
-              <Button onClick={finalizarClaseEmergencia} className="flex-1 bg-red-500 hover:bg-red-600 text-white">
-                <XCircle className="h-4 w-4 mr-2" />
-                Finalizar Clase
-              </Button>
+              <div className={`p-4 rounded-lg ${
+                theme === "dark" ? "bg-red-900/20 border border-red-800" : "bg-red-50 border border-red-200"
+              }`}>
+                <p className="text-sm text-red-500 font-semibold mb-2">Esta accion realizara lo siguiente:</p>
+                <ul className="text-sm text-red-600 space-y-1 ml-4">
+                  <li>{'- Cerrara la clase inmediatamente'}</li>
+                  <li>{'- Cerrara la sesion del maestro'}</li>
+                  <li>{'- No se podran registrar mas asistencias'}</li>
+                  <li>{'- El maestro sera redirigido al inicio'}</li>
+                </ul>
+              </div>
+
+              <div className="flex space-x-2 pt-2">
+                <Button
+                  onClick={() => setClaseSeleccionadaParaCerrar(null)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Regresar
+                </Button>
+                <Button
+                  onClick={finalizarClaseEmergencia}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Finalizar Clase
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
