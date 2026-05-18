@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react" // Import useRef
 import { useRouter } from "next/navigation"
-import { User, UserCog, Computer, Moon, Sun, ChevronRight, Monitor, Wifi, ArrowLeft } from "lucide-react"
+import { User, UserCog, Computer, Moon, Sun, ChevronRight, Monitor, Wifi, ArrowLeft, Building2, Server } from "lucide-react"
 import { initializeApp } from "firebase/app"
 import {
   getFirestore,
@@ -547,13 +547,74 @@ Hora de inicio: ${data.HoraInicio}`,
           try {
             const labVerif = laboratorioSeleccionado || localStorage.getItem("laboratorio") || "programacion"
             const asistenciasRef = collection(db, asistenciasCollection)
-            const matriculaQuery = query(asistenciasRef, where("AlumnoId", "==", matricula), where("laboratorio", "==", labVerif))
-            const matriculaSnapshot = await getDocs(matriculaQuery)
+            // Obtener información de la clase activa primero
+            const lab = laboratorioSeleccionado || localStorage.getItem("laboratorio") || "programacion"
+            const estadoRef = doc(db, "EstadoClase", lab)
+            const estadoSnap = await getDoc(estadoRef)
 
-            if (!matriculaSnapshot.empty) {
+            let materiaActualId = ""
+            let materiaNombre = ""
+            let maestroNombre = ""
+            let maestroApellido = ""
+
+            if (estadoSnap.exists()) {
+              materiaActualId = estadoSnap.data().materiaId || ""
+              materiaNombre = estadoSnap.data().materiaNombre || "Materia no especificada"
+              maestroNombre = estadoSnap.data().maestroNombre || ""
+              maestroApellido = estadoSnap.data().maestroApellido || ""
+            }
+
+            // Verificar si el alumno ya está registrado en alguna clase activa (cualquier laboratorio)
+            const laboratorios = ["programacion", "redes", "laboratorio_a", "laboratorio_c"]
+            let yaRegistradoEnOtraClase = false
+            let claseActivaInfo = { nombre: "", laboratorio: "" }
+            
+            for (const labCheck of laboratorios) {
+              const estadoLabRef = doc(db, "EstadoClase", labCheck)
+              const estadoLabSnap = await getDoc(estadoLabRef)
+              
+              if (estadoLabSnap.exists() && estadoLabSnap.data().iniciada) {
+                // Hay una clase activa en este laboratorio, verificar si el alumno está registrado
+                const asistenciasLabRef = collection(db, "Asistencias")
+                const asistenciaEnClaseQuery = query(
+                  asistenciasLabRef,
+                  where("AlumnoId", "==", matricula),
+                  where("laboratorio", "==", labCheck)
+                )
+                const asistenciaEnClaseSnap = await getDocs(asistenciaEnClaseQuery)
+                
+                if (!asistenciaEnClaseSnap.empty) {
+                  // El alumno está registrado en esta clase activa
+                  const labNombre = labCheck === "programacion" ? "Taller de Programación" :
+                                    labCheck === "redes" ? "Laboratorio de Redes" :
+                                    labCheck === "laboratorio_a" ? "Laboratorio A" : "Laboratorio C"
+                  
+                  // Si intenta registrarse en el mismo laboratorio donde ya está
+                  if (labCheck === labVerif) {
+                    await swal({
+                      title: "Ya registraste asistencia",
+                      text: `Ya estás registrado en esta clase.`,
+                      icon: "warning",
+                    })
+                    return
+                  }
+                  
+                  // Si está registrado en otro laboratorio diferente
+                  yaRegistradoEnOtraClase = true
+                  claseActivaInfo = {
+                    nombre: estadoLabSnap.data().materiaNombre || "una clase",
+                    laboratorio: labNombre
+                  }
+                  break
+                }
+              }
+            }
+            
+            // Si está registrado en otra clase activa, no puede registrarse aquí
+            if (yaRegistradoEnOtraClase) {
               await swal({
-                title: "Atencion",
-                text: "Ya has registrado tu asistencia en este laboratorio.",
+                title: "Ya estás en una clase",
+                text: `Ya estás registrado en "${claseActivaInfo.nombre}" en ${claseActivaInfo.laboratorio}. Debes esperar a que esa clase termine para registrarte en otra.`,
                 icon: "warning",
               })
               return
@@ -579,20 +640,68 @@ Hora de inicio: ${data.HoraInicio}`,
             if (alumnoSnap.exists()) {
               const alumnoData = alumnoSnap.data()
 
-              const lab = laboratorioSeleccionado || localStorage.getItem("laboratorio") || "programacion"
-              const estadoRef = doc(db, "EstadoClase", lab)
-              const estadoSnap = await getDoc(estadoRef)
-
               if (estadoSnap.exists()) {
-                const materiaActualId = estadoSnap.data().materiaId
                 const materiasAlumno = alumnoData.Materias || []
 
                 if (!materiasAlumno.includes(materiaActualId)) {
-                  await swal({
-                    title: "Error",
-                    text: "No estás inscrito en esta materia",
-                    icon: "error",
+                  // Mostrar opción de solicitar ingreso a clase
+                  const solicitar = await swal({
+                    title: "No estás inscrito en esta materia",
+                    text: "¿Deseas solicitar ingreso a esta clase? Tu solicitud será enviada al administrador.",
+                    icon: "warning",
+                    buttons: {
+                      cancel: {
+                        text: "Cancelar",
+                        value: false,
+                        visible: true,
+                      },
+                      confirm: {
+                        text: "Solicitar Ingreso",
+                        value: true,
+                      },
+                    },
                   })
+
+                  if (solicitar) {
+                    try {
+                      // Crear solicitud de ingreso
+                      const solicitudRef = doc(collection(db, "SolicitudesIngreso"))
+                      await setDoc(solicitudRef, {
+                        alumnoId: matricula,
+                        alumnoNombre: alumnoData.Nombre || "",
+                        alumnoApellido: alumnoData.Apellido || "",
+                        alumnoCarrera: alumnoData.Carrera || "",
+                        alumnoSemestre: alumnoData.Semestre || "",
+                        alumnoGrupo: alumnoData.Grupo || "",
+                        alumnoTurno: alumnoData.Turno || "",
+                        equipo: equipo,
+                        materiaId: materiaActualId,
+                        materiaNombre: materiaNombre,
+                        maestroNombre: `${maestroNombre} ${maestroApellido}`.trim(),
+                        laboratorio: lab,
+                        estado: "pendiente",
+                        fechaSolicitud: serverTimestamp(),
+                        leida: false,
+                      })
+
+                      await swal({
+                        title: "Solicitud Enviada",
+                        text: "Tu solicitud de ingreso ha sido enviada al administrador. Te notificaremos cuando sea procesada.",
+                        icon: "success",
+                      })
+                      
+                      // Limpiar campos después de enviar la solicitud
+                      setMatricula("")
+                      setEquipo("")
+                    } catch (error) {
+                      console.error("Error al enviar solicitud:", error)
+                      await swal({
+                        title: "Error",
+                        text: "No se pudo enviar la solicitud. Intenta de nuevo.",
+                        icon: "error",
+                      })
+                    }
+                  }
                   return
                 }
               }
@@ -1029,32 +1138,32 @@ Hora de inicio: ${data.HoraInicio}`,
                 setLaboratorioSeleccionado("programacion")
                 localStorage.setItem("laboratorio", "programacion")
               }}
-              className={`group relative overflow-hidden rounded-2xl p-6 sm:p-8 text-left transition-all duration-300 border-2 ${
+              className={`group relative overflow-hidden rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 border-2 ${
                 theme === "dark"
                   ? "bg-[#1a2e25] border-[#1d5631]/40 hover:border-[#1d5631] hover:bg-[#1d3a2c]"
                   : "bg-white border-[#800040]/20 hover:border-[#800040] hover:shadow-lg hover:shadow-[#800040]/10"
               }`}
             >
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors ${
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
                 theme === "dark"
                   ? "bg-[#1d5631]/30 group-hover:bg-[#1d5631]/50"
                   : "bg-[#800040]/10 group-hover:bg-[#800040]/20"
               }`}>
-                <Monitor className={`w-7 h-7 ${
+                <Monitor className={`w-6 h-6 ${
                   theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
                 }`} />
               </div>
-              <h2 className={`text-lg sm:text-xl font-bold mb-2 ${
+              <h2 className={`text-base sm:text-lg font-bold mb-1 ${
                 theme === "dark" ? "text-white" : "text-[#800040]"
               }`}>
-                Laboratorio de Programacion
+                Lab. Programacion
               </h2>
-              <p className={`text-sm ${
+              <p className={`text-xs ${
                 theme === "dark" ? "text-gray-400" : "text-[#74726f]"
               }`}>
-                Desarrollo de software, bases de datos y programacion
+                Desarrollo de software y bases de datos
               </p>
-              <ChevronRight className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
+              <ChevronRight className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
                 theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
               }`} />
             </motion.button>
@@ -1067,32 +1176,108 @@ Hora de inicio: ${data.HoraInicio}`,
                 setLaboratorioSeleccionado("redes")
                 localStorage.setItem("laboratorio", "redes")
               }}
-              className={`group relative overflow-hidden rounded-2xl p-6 sm:p-8 text-left transition-all duration-300 border-2 ${
+              className={`group relative overflow-hidden rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 border-2 ${
                 theme === "dark"
                   ? "bg-[#1a2e25] border-[#1d5631]/40 hover:border-[#1d5631] hover:bg-[#1d3a2c]"
                   : "bg-white border-[#800040]/20 hover:border-[#800040] hover:shadow-lg hover:shadow-[#800040]/10"
               }`}
             >
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center mb-4 transition-colors ${
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
                 theme === "dark"
                   ? "bg-[#1d5631]/30 group-hover:bg-[#1d5631]/50"
                   : "bg-[#800040]/10 group-hover:bg-[#800040]/20"
               }`}>
-                <Wifi className={`w-7 h-7 ${
+                <Wifi className={`w-6 h-6 ${
                   theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
                 }`} />
               </div>
-              <h2 className={`text-lg sm:text-xl font-bold mb-2 ${
+              <h2 className={`text-base sm:text-lg font-bold mb-1 ${
                 theme === "dark" ? "text-white" : "text-[#800040]"
               }`}>
-                Laboratorio de Redes
+                Lab. Redes
               </h2>
-              <p className={`text-sm ${
+              <p className={`text-xs ${
                 theme === "dark" ? "text-gray-400" : "text-[#74726f]"
               }`}>
-                Redes de computadoras, telecomunicaciones y conectividad
+                Redes y telecomunicaciones
               </p>
-              <ChevronRight className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
+              <ChevronRight className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
+                theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
+              }`} />
+            </motion.button>
+
+            {/* Laboratorio A */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                setLaboratorioSeleccionado("laboratorio_a")
+                localStorage.setItem("laboratorio", "laboratorio_a")
+              }}
+              className={`group relative overflow-hidden rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 border-2 ${
+                theme === "dark"
+                  ? "bg-[#1a2e25] border-[#1d5631]/40 hover:border-[#1d5631] hover:bg-[#1d3a2c]"
+                  : "bg-white border-[#800040]/20 hover:border-[#800040] hover:shadow-lg hover:shadow-[#800040]/10"
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
+                theme === "dark"
+                  ? "bg-[#1d5631]/30 group-hover:bg-[#1d5631]/50"
+                  : "bg-[#800040]/10 group-hover:bg-[#800040]/20"
+              }`}>
+                <Building2 className={`w-6 h-6 ${
+                  theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
+                }`} />
+              </div>
+              <h2 className={`text-base sm:text-lg font-bold mb-1 ${
+                theme === "dark" ? "text-white" : "text-[#800040]"
+              }`}>
+                Laboratorio A
+              </h2>
+              <p className={`text-xs ${
+                theme === "dark" ? "text-gray-400" : "text-[#74726f]"
+              }`}>
+                Laboratorio de computo A
+              </p>
+              <ChevronRight className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
+                theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
+              }`} />
+            </motion.button>
+
+            {/* Laboratorio C */}
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => {
+                setLaboratorioSeleccionado("laboratorio_c")
+                localStorage.setItem("laboratorio", "laboratorio_c")
+              }}
+              className={`group relative overflow-hidden rounded-2xl p-5 sm:p-6 text-left transition-all duration-300 border-2 ${
+                theme === "dark"
+                  ? "bg-[#1a2e25] border-[#1d5631]/40 hover:border-[#1d5631] hover:bg-[#1d3a2c]"
+                  : "bg-white border-[#800040]/20 hover:border-[#800040] hover:shadow-lg hover:shadow-[#800040]/10"
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
+                theme === "dark"
+                  ? "bg-[#1d5631]/30 group-hover:bg-[#1d5631]/50"
+                  : "bg-[#800040]/10 group-hover:bg-[#800040]/20"
+              }`}>
+                <Server className={`w-6 h-6 ${
+                  theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
+                }`} />
+              </div>
+              <h2 className={`text-base sm:text-lg font-bold mb-1 ${
+                theme === "dark" ? "text-white" : "text-[#800040]"
+              }`}>
+                Laboratorio C
+              </h2>
+              <p className={`text-xs ${
+                theme === "dark" ? "text-gray-400" : "text-[#74726f]"
+              }`}>
+                Laboratorio de computo C
+              </p>
+              <ChevronRight className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1 ${
                 theme === "dark" ? "text-[#2a7a45]" : "text-[#800040]"
               }`} />
             </motion.button>
@@ -1135,13 +1320,16 @@ Hora de inicio: ${data.HoraInicio}`,
         }`}
         title="Cambiar laboratorio"
       >
-        {laboratorioSeleccionado === "programacion" ? (
-          <Monitor size={16} />
-        ) : (
-          <Wifi size={16} />
-        )}
+        {laboratorioSeleccionado === "programacion" && <Monitor size={16} />}
+        {laboratorioSeleccionado === "redes" && <Wifi size={16} />}
+        {laboratorioSeleccionado === "laboratorio_a" && <Building2 size={16} />}
+        {laboratorioSeleccionado === "laboratorio_c" && <Server size={16} />}
         <span>
-          {laboratorioSeleccionado === "programacion" ? "Lab. Programacion" : "Lab. Redes"}
+          {laboratorioSeleccionado === "programacion" ? "Lab. Programacion" 
+            : laboratorioSeleccionado === "redes" ? "Lab. Redes"
+            : laboratorioSeleccionado === "laboratorio_a" ? "Lab. A"
+            : laboratorioSeleccionado === "laboratorio_c" ? "Lab. C"
+            : "Laboratorio"}
         </span>
         <ArrowLeft size={14} className="opacity-60" />
       </button>

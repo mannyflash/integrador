@@ -137,6 +137,18 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
   const [modalAbierto, setModalAbierto] = useState(false)
   const [activeTab, setActiveTab] = useState("detalles")
 
+  // Funcion para obtener el nombre del laboratorio
+  const obtenerNombreLaboratorio = () => {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") : "programacion"
+    switch (lab) {
+      case "programacion": return "TALLER DE PROGRAMACION"
+      case "redes": return "LABORATORIO DE REDES"
+      case "laboratorio_a": return "LABORATORIO A"
+      case "laboratorio_c": return "LABORATORIO C"
+      default: return "TALLER DE PROGRAMACION"
+    }
+  }
+
   useEffect(() => {
     const unsubscribe = obtenerPracticasHoy()
     return () => unsubscribe()
@@ -286,7 +298,7 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
 
     // Title
     doc.setFontSize(16)
-    doc.text("TALLER DE PROGRAMACION", doc.internal.pageSize.width / 2, 25, { align: "center" })
+    doc.text(obtenerNombreLaboratorio(), doc.internal.pageSize.width / 2, 25, { align: "center" })
     doc.text("HOJA DE REGISTRO", doc.internal.pageSize.width / 2, 35, { align: "center" })
 
     // Information fields in two columns
@@ -418,7 +430,7 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
     // HOJA 1: RESUMEN DE LA PRÁCTICA
     const resumenData = [
       ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"], // A1
-      ["TALLER DE PROGRAMACIÓN - HOJA DE REGISTRO"], // A2
+      [`${obtenerNombreLaboratorio()} - HOJA DE REGISTRO`], // A2
       [], // Fila vacía
       ["INFORMACIÓN DE LA PRÁCTICA"], // A4
       ["Materia:", practica.materia, "", "Fecha:", practica.fecha], // A5
@@ -491,7 +503,7 @@ export default function VistaReportes({ esModoOscuro, logAction }: VistaReportes
     // HOJA 2: LISTA DE ASISTENCIA
     const headerRow = ["#", "ID Alumno", "Nombre", "Apellido", "Carrera", "Grupo", "Semestre", "Turno", "Equipo"]
     const asistenciaData = [
-      ["LISTA DE ASISTENCIA - TALLER DE PROGRAMACIÓN"], // A1
+      [`LISTA DE ASISTENCIA - ${obtenerNombreLaboratorio()}`], // A1
       [`Materia: ${practica.materia} - Práctica: ${practica.practica} - Fecha: ${practica.fecha}`], // A2
       [], // Fila vacía
       headerRow, // A4

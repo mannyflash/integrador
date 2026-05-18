@@ -564,13 +564,25 @@ export default function ListaAsistenciasInvitado() {
     const pageHeight = doc.internal.pageSize.height
     const margin = 10
 
+    // Funcion para obtener el nombre del laboratorio
+    const obtenerNombreLaboratorio = () => {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      switch (lab) {
+        case "programacion": return "TALLER DE PROGRAMACION"
+        case "redes": return "LABORATORIO DE REDES"
+        case "laboratorio_a": return "LABORATORIO A"
+        case "laboratorio_c": return "LABORATORIO C"
+        default: return "TALLER DE PROGRAMACION"
+      }
+    }
+
     // Add ITSPP logo in the upper left corner
     doc.addImage("/FondoItspp.png", "PNG", margin, margin, 25, 25)
 
     // Add header text centered
     doc.setFontSize(16)
     doc.setTextColor(0, 0, 0) // Black text color
-    doc.text("TALLER DE PROGRAMACION", pageWidth / 2, margin + 10, { align: "center" })
+    doc.text(obtenerNombreLaboratorio(), pageWidth / 2, margin + 10, { align: "center" })
     doc.setFontSize(14)
     doc.text("HOJA DE REGISTRO - CLASE INVITADA", pageWidth / 2, margin + 20, { align: "center" })
 
@@ -661,10 +673,22 @@ export default function ListaAsistenciasInvitado() {
   const exportarAExcel = async () => {
     const workbook = XLSX.utils.book_new()
 
+    // Funcion para obtener el nombre del laboratorio
+    const obtenerNombreLab = () => {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      switch (lab) {
+        case "programacion": return "TALLER DE PROGRAMACION"
+        case "redes": return "LABORATORIO DE REDES"
+        case "laboratorio_a": return "LABORATORIO A"
+        case "laboratorio_c": return "LABORATORIO C"
+        default: return "TALLER DE PROGRAMACION"
+      }
+    }
+
     // Create header data with logo and title
     const headerData = [
       ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"],
-      ["CONTROL DE ASISTENCIA - TALLER DE PROGRAMACIÓN - CLASE INVITADA"],
+      [`CONTROL DE ASISTENCIA - ${obtenerNombreLab()} - CLASE INVITADA`],
       [""],
       ["Información de la Clase"],
       ["Fecha:", new Date().toLocaleDateString(), "", "Departamento:", claseInfo?.departamento || "N/A"],

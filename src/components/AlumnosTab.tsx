@@ -22,6 +22,7 @@ import {
   Save,
   Ban,
   ArrowLeft,
+  Layers,
   List,
 } from "lucide-react"
 import {
@@ -37,7 +38,7 @@ import {
 } from "firebase/firestore"
 import Swal from "sweetalert2"
 import type React from "react"
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Alumno {
   Matricula: string
@@ -79,18 +80,24 @@ export function AlumnosTab({
   const [semestreFilter, setSemestreFilter] = useState("todos")
   const [turnoFilter, setTurnoFilter] = useState("todos")
   const [actualizacionMasiva, setActualizacionMasiva] = useState(false)
+  const [tipoActualizacion, setTipoActualizacion] = useState("semestre")
 
-  // Estados para actualizacion masiva de semestres y grupos
+  // Estados para actualización masiva de semestres
   const [carreraSeleccionada, setCarreraSeleccionada] = useState("")
   const [semestreActual, setSemestreActual] = useState("")
   const [nuevoSemestre, setNuevoSemestre] = useState("")
+
+  // Estados para actualización masiva de grupos
+  const [carreraGrupo, setCarreraGrupo] = useState("")
+  const [semestreGrupo, setSemestreGrupo] = useState("")
+  const [grupoActual, setGrupoActual] = useState("")
+  const [nuevoGrupo, setNuevoGrupo] = useState("")
+
   const [actualizando, setActualizando] = useState(false)
 
   // Estados para materias
-  const [materiasDisponibles, setMateriasDisponibles] = useState<{ id: string; nombre: string; semestre: string }[]>([])
+  const [materiasDisponibles, setMateriasDisponibles] = useState<{ id: string; nombre: string }[]>([])
   const [materiasSeleccionadas, setMateriasSeleccionadas] = useState<string[]>([])
-  const [busquedaMateria, setBusquedaMateria] = useState("")
-  const [filtroSemestreMateria, setFiltroSemestreMateria] = useState("todos")
 
   useEffect(() => {
     cargarAlumnos()
@@ -103,8 +110,9 @@ export function AlumnosTab({
         const materiasData = materiasSnapshot.docs.map((doc) => ({
           id: doc.id,
           nombre: doc.data().NombreMateria,
-          semestre: doc.data().Semestre || "",
         }))
+        // Ordenar alfabéticamente por nombre
+        materiasData.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
         setMateriasDisponibles(materiasData)
       } catch (error) {
         console.error("Error al cargar materias:", error)
@@ -129,6 +137,12 @@ export function AlumnosTab({
         Materias: doc.data().Materias || [], // Asegurar que Materias exista
         ...doc.data(),
       })) as Alumno[]
+      // Ordenar alfabéticamente por Apellido, luego por Nombre
+      alumnosData.sort((a, b) => {
+        const apellidoCompare = a.Apellido.localeCompare(b.Apellido, 'es', { sensitivity: 'base' })
+        if (apellidoCompare !== 0) return apellidoCompare
+        return a.Nombre.localeCompare(b.Nombre, 'es', { sensitivity: 'base' })
+      })
       setAlumnos(alumnosData)
     } catch (error) {
       console.error("Error al cargar alumnos:", error)
@@ -144,16 +158,6 @@ export function AlumnosTab({
 
   const manejarEnvio = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-
-    if (materiasSeleccionadas.length === 0) {
-      await Swal.fire({
-        title: "Materias requeridas",
-        text: "Debes asignar al menos una materia al alumno antes de continuar.",
-        icon: "warning",
-      })
-      return
-    }
-
     try {
       const { Matricula, ...restoDatosAlumno } = datosAlumno
 
@@ -200,9 +204,7 @@ export function AlumnosTab({
         Grupo: "",
         Materias: [],
       })
-      setMateriasSeleccionadas([])
-      setBusquedaMateria("")
-      setFiltroSemestreMateria("todos")
+      setMateriasSeleccionadas([]) // Limpiar materias seleccionadas
       cargarAlumnos()
       setVistaActual("lista")
     } catch (error) {
@@ -293,7 +295,7 @@ export function AlumnosTab({
 
     const result = await Swal.fire({
       title: "¿Estás seguro?",
-      text: `¿Deseas cambiar a todos los alumnos de ${carreraSeleccionada}, del semestre ${semestreActual}º al semestre ${nuevoSemestre}º? Tambien se actualizara el numero del grupo automaticamente.`,
+      text: `¿Deseas cambiar a todos los alumnos de ${carreraSeleccionada}, del semestre ${semestreActual}º al semestre ${nuevoSemestre}º?`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#3085d6",
@@ -314,19 +316,10 @@ export function AlumnosTab({
         for (const docSnapshot of alumnosSnapshot.docs) {
           const alumnoData = docSnapshot.data()
           if (alumnoData.Carrera === carreraSeleccionada && alumnoData.Semestre === semestreActual) {
-            const datosActualizar: any = { Semestre: nuevoSemestre }
-
-            // Actualizar el numero del grupo: S8-U -> S9-U, I8-U -> I9-U
-            if (alumnoData.Grupo) {
-              const grupoActualizado = alumnoData.Grupo.replace(
-                /(\D*)(\d+)(.*)/,
-                (_match: string, prefijo: string, _num: string, sufijo: string) => `${prefijo}${nuevoSemestre}${sufijo}`
-              )
-              datosActualizar.Grupo = grupoActualizado
-            }
-
             actualizaciones.push(
-              updateDoc(doc(db, "Alumnos", docSnapshot.id), datosActualizar),
+              updateDoc(doc(db, "Alumnos", docSnapshot.id), {
+                Semestre: nuevoSemestre,
+              }),
             )
             contador++
           }
@@ -336,7 +329,7 @@ export function AlumnosTab({
 
         await Swal.fire({
           title: "¡Éxito!",
-          text: `Se actualizaron ${contador} alumnos del semestre ${semestreActual}º al semestre ${nuevoSemestre}º (semestre y grupo).`,
+          text: `Se actualizaron ${contador} alumnos del semestre ${semestreActual}º al semestre ${nuevoSemestre}º.`,
           icon: "success",
         })
 
@@ -358,15 +351,82 @@ export function AlumnosTab({
     }
   }
 
+  const actualizarGrupoMasivo = async () => {
+    if (!carreraGrupo || !semestreGrupo || !grupoActual || !nuevoGrupo) {
+      await Swal.fire({
+        title: "Error",
+        text: "Por favor, selecciona todos los campos requeridos.",
+        icon: "error",
+      })
+      return
+    }
+
+    const result = await Swal.fire({
+      title: "¿Estás seguro?",
+      text: `¿Deseas cambiar a todos los alumnos de ${carreraGrupo}, del semestre ${semestreGrupo}º, del grupo ${grupoActual} al grupo ${nuevoGrupo}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Sí, actualizar",
+      cancelButtonText: "Cancelar",
+    })
+
+    if (result.isConfirmed) {
+      try {
+        setActualizando(true)
+        const alumnosRef = collection(db, "Alumnos")
+        const alumnosSnapshot = await getDocs(query(alumnosRef))
+
+        const actualizaciones = []
+        let contador = 0
+
+        for (const docSnapshot of alumnosSnapshot.docs) {
+          const alumnoData = docSnapshot.data()
+          if (
+            alumnoData.Carrera === carreraGrupo &&
+            alumnoData.Semestre === semestreGrupo &&
+            alumnoData.Grupo === grupoActual
+          ) {
+            actualizaciones.push(
+              updateDoc(doc(db, "Alumnos", docSnapshot.id), {
+                Grupo: nuevoGrupo,
+              }),
+            )
+            contador++
+          }
+        }
+
+        await Promise.all(actualizaciones)
+
+        await Swal.fire({
+          title: "¡Éxito!",
+          text: `Se actualizaron ${contador} alumnos del grupo ${grupoActual} al grupo ${nuevoGrupo}.`,
+          icon: "success",
+        })
+
+        cargarAlumnos()
+        setCarreraGrupo("")
+        setSemestreGrupo("")
+        setGrupoActual("")
+        setNuevoGrupo("")
+        setActualizacionMasiva(false) // Close the massive update section
+      } catch (error) {
+        console.error("Error al actualizar grupos:", error)
+        await Swal.fire({
+          title: "Error",
+          text: "Ha ocurrido un error al actualizar los grupos. Por favor, intenta de nuevo.",
+          icon: "error",
+        })
+      } finally {
+        setActualizando(false)
+      }
+    }
+  }
+
   const modificarAlumno = (alumno: Alumno) => {
     setDatosAlumno(alumno)
-    // Si el alumno ya tiene materias asignadas, usarlas; si no, pre-seleccionar las de su semestre
-    const materiasAlumno = alumno.Materias && alumno.Materias.length > 0
-      ? alumno.Materias
-      : materiasDisponibles.filter((m) => m.semestre === alumno.Semestre).map((m) => m.id)
-    setMateriasSeleccionadas(materiasAlumno)
-    setFiltroSemestreMateria(alumno.Semestre || "todos")
-    setBusquedaMateria("")
+    setMateriasSeleccionadas(alumno.Materias || []) // Cargar materias del alumno
     setEditando(true)
     setVistaActual("agregar")
   }
@@ -383,9 +443,7 @@ export function AlumnosTab({
       Materias: [],
     })
     setEditando(false)
-    setMateriasSeleccionadas([])
-    setBusquedaMateria("")
-    setFiltroSemestreMateria("todos")
+    setMateriasSeleccionadas([]) // Limpiar materias seleccionadas
   }
 
   const toggleMateria = (materiaId: string) => {
@@ -642,15 +700,7 @@ export function AlumnosTab({
                 </Label>
                 <Select
                   value={datosAlumno.Semestre}
-                  onValueChange={(value) => {
-                    setDatosAlumno({ ...datosAlumno, Semestre: value })
-                    // Auto-seleccionar materias del semestre seleccionado
-                    const materiasDelSemestre = materiasDisponibles
-                      .filter((m) => m.semestre === value)
-                      .map((m) => m.id)
-                    setMateriasSeleccionadas(materiasDelSemestre)
-                    setFiltroSemestreMateria(value)
-                  }}
+                  onValueChange={(value) => setDatosAlumno({ ...datosAlumno, Semestre: value })}
                 >
                   <SelectTrigger
                     id="semestreAlumno"
@@ -721,106 +771,39 @@ export function AlumnosTab({
               <div className="space-y-2">
                 <Label className={`${isDarkMode ? "text-white" : "text-gray-700"} flex items-center gap-2`}>
                   <BookOpen className="h-4 w-4" /> Materias Inscritas
-                  <span className={`text-xs font-normal px-2 py-0.5 rounded-full ${
-                    materiasSeleccionadas.length > 0
-                      ? isDarkMode ? "bg-green-800 text-green-200" : "bg-green-100 text-green-700"
-                      : isDarkMode ? "bg-red-800 text-red-200" : "bg-red-100 text-red-700"
-                  }`}>
-                    {materiasSeleccionadas.length} seleccionada{materiasSeleccionadas.length !== 1 ? "s" : ""}
-                  </span>
                 </Label>
-
-                {/* Buscador y filtro */}
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      value={busquedaMateria}
-                      onChange={(e) => setBusquedaMateria(e.target.value)}
-                      placeholder="Buscar materia por nombre..."
-                      className={`pl-9 h-9 text-sm ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}
-                    />
-                  </div>
-                  <Select value={filtroSemestreMateria} onValueChange={setFiltroSemestreMateria}>
-                    <SelectTrigger className={`w-40 h-9 text-sm ${isDarkMode ? "bg-gray-700 text-white border-gray-600" : "bg-white text-gray-900 border-gray-300"}`}>
-                      <SelectValue placeholder="Semestre" />
-                    </SelectTrigger>
-                    <SelectContent className={isDarkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"}>
-                      <SelectItem value="todos">Todos los semestres</SelectItem>
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((s) => (
-                        <SelectItem key={s} value={s.toString()}>{s}° Semestre</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <div
-                  className={`border rounded-lg p-3 ${isDarkMode ? "border-gray-600 bg-gray-700" : "border-gray-300 bg-gray-50"} max-h-52 overflow-y-auto`}
+                  className={`border rounded-lg p-4 ${isDarkMode ? "border-gray-600 bg-gray-700" : "border-gray-300 bg-gray-50"} max-h-60 overflow-y-auto`}
                 >
                   {materiasDisponibles.length === 0 ? (
                     <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                       No hay materias disponibles
                     </p>
-                  ) : (() => {
-                    const materiasFiltradas = materiasDisponibles.filter((materia) => {
-                      const coincideNombre = materia.nombre.toLowerCase().includes(busquedaMateria.toLowerCase())
-                      const coincideSemestre = filtroSemestreMateria === "todos" || materia.semestre === filtroSemestreMateria
-                      return coincideNombre && coincideSemestre
-                    })
-                    if (materiasFiltradas.length === 0) {
-                      return (
-                        <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                          No se encontraron materias
-                        </p>
-                      )
-                    }
-                    return (
-                      <div className="space-y-1">
-                        {materiasFiltradas.map((materia) => (
-                          <div
-                            key={materia.id}
-                            onClick={() => toggleMateria(materia.id)}
-                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                              materiasSeleccionadas.includes(materia.id)
-                                ? isDarkMode ? "bg-green-900/40 border border-green-700" : "bg-green-50 border border-green-300"
-                                : isDarkMode ? "hover:bg-gray-600" : "hover:bg-gray-100"
-                            }`}
+                  ) : (
+                    <div className="space-y-2">
+                      {materiasDisponibles.map((materia) => (
+                        <div key={materia.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`materia-${materia.id}`}
+                            checked={materiasSeleccionadas.includes(materia.id)}
+                            onChange={() => toggleMateria(materia.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-[#952952] focus:ring-[#952952]"
+                          />
+                          <label
+                            htmlFor={`materia-${materia.id}`}
+                            className={`text-sm cursor-pointer ${isDarkMode ? "text-white" : "text-gray-700"}`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={materiasSeleccionadas.includes(materia.id)}
-                              onChange={() => toggleMateria(materia.id)}
-                              className="w-4 h-4 rounded border-gray-300 text-[#952952] focus:ring-[#952952] pointer-events-none"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium truncate ${isDarkMode ? "text-white" : "text-gray-800"}`}>
-                                {materia.nombre}
-                              </p>
-                            </div>
-                            {materia.semestre && (
-                              <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                                isDarkMode ? "bg-gray-600 text-gray-300" : "bg-gray-200 text-gray-600"
-                              }`}>
-                                {materia.semestre}° Sem
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })()}
+                            {materia.nombre}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {materiasSeleccionadas.length === 0 && (
-                  <p className={`text-xs font-medium ${isDarkMode ? "text-red-400" : "text-red-500"}`}>
-                    Debes asignar al menos una materia al alumno
-                  </p>
-                )}
-                {materiasSeleccionadas.length > 0 && (
-                  <p className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                    Al seleccionar un semestre se pre-seleccionan sus materias. Puedes agregar materias de otros semestres si el alumno las cursa.
-                  </p>
-                )}
+                <p className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  Selecciona las materias que el alumno está cursando
+                </p>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -943,133 +926,277 @@ export function AlumnosTab({
                 </SelectContent>
               </Select>
               <Button
-                onClick={() => setActualizacionMasiva(!actualizacionMasiva)}
+                onClick={() => {
+                  setActualizacionMasiva(!actualizacionMasiva)
+                  if (!actualizacionMasiva) {
+                    setTipoActualizacion("semestre")
+                  }
+                }}
                 size="sm"
                 className="bg-yellow-500/80 hover:bg-yellow-500 text-white"
               >
-                {actualizacionMasiva ? "Cancelar" : "Actualizar Semestres y Grupos"}
+                {actualizacionMasiva ? "Cancelar actualización" : "Actualización masiva"}
               </Button>
             </div>
           </div>
         </CardHeader>
         {actualizacionMasiva && (
           <div className="px-6 py-4 bg-black/5 border-t border-b border-gray-200 dark:border-gray-700">
-            <h3 className={`text-lg font-semibold mb-1 ${isDarkMode ? "text-white" : "text-gray-800"}`}>
-              Actualizar Semestres y Grupos
+            <h3 className={`text-lg font-semibold mb-3 ${isDarkMode ? "text-white" : "text-gray-800"}`}>
+              Actualización masiva
             </h3>
-            <p className={`text-sm mb-4 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-              Al cambiar el semestre, el numero del grupo se actualiza automaticamente (ej: S8-U pasa a S9-U)
-            </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  Carrera
-                </Label>
-                <Select value={carreraSeleccionada} onValueChange={setCarreraSeleccionada}>
-                  <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
-                  >
-                    <SelectValue placeholder="Seleccionar carrera" />
-                  </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-800 text-white border-gray-700"
-                        : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    {carreras.map((carrera) => (
-                      <SelectItem key={carrera} value={carrera}>
-                        {carrera}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  Semestre actual
-                </Label>
-                <Select value={semestreActual} onValueChange={setSemestreActual}>
-                  <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
-                  >
-                    <SelectValue placeholder="Seleccionar semestre" />
-                  </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-800 text-white border-gray-700"
-                        : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                      <SelectItem key={semestre} value={semestre.toString()}>
-                        {semestre}° Semestre
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  Nuevo semestre
-                </Label>
-                <Select value={nuevoSemestre} onValueChange={setNuevoSemestre}>
-                  <SelectTrigger
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-700 text-white border-gray-600"
-                        : "bg-white text-gray-900 border-gray-300"
-                    } rounded-md transition-all duration-200`}
-                  >
-                    <SelectValue placeholder="Seleccionar semestre" />
-                  </SelectTrigger>
-                  <SelectContent
-                    className={`${
-                      isDarkMode
-                        ? "bg-gray-800 text-white border-gray-700"
-                        : "bg-white text-gray-900 border-gray-200"
-                    }`}
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
-                      <SelectItem key={semestre} value={semestre.toString()}>
-                        {semestre}° Semestre
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button
-                  onClick={actualizarSemestreMasivo}
-                  disabled={actualizando || !carreraSeleccionada || !semestreActual || !nuevoSemestre}
-                  className={`w-full ${
-                    isDarkMode
-                      ? "bg-green-700 hover:bg-green-600 text-white"
-                      : "bg-red-800 hover:bg-red-700 text-white"
-                  } rounded-md transition-all duration-200`}
-                >
-                  {actualizando ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Actualizando...</span>
-                    </div>
-                  ) : (
-                    <span>Actualizar</span>
-                  )}
-                </Button>
-              </div>
-            </div>
+            <Tabs value={tipoActualizacion} onValueChange={setTipoActualizacion} className="w-full">
+              <TabsList className="grid grid-cols-2 mb-4">
+                <TabsTrigger value="semestre" className="text-sm">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Actualizar Semestres
+                </TabsTrigger>
+                <TabsTrigger value="grupo" className="text-sm">
+                  <Layers className="h-4 w-4 mr-2" />
+                  Actualizar Grupos
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="semestre">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Carrera
+                    </Label>
+                    <Select value={carreraSeleccionada} onValueChange={setCarreraSeleccionada}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar carrera" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {carreras.map((carrera) => (
+                          <SelectItem key={carrera} value={carrera}>
+                            {carrera}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Semestre actual
+                    </Label>
+                    <Select value={semestreActual} onValueChange={setSemestreActual}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Nuevo semestre
+                    </Label>
+                    <Select value={nuevoSemestre} onValueChange={setNuevoSemestre}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={actualizarSemestreMasivo}
+                      disabled={actualizando || !carreraSeleccionada || !semestreActual || !nuevoSemestre}
+                      className={`w-full ${
+                        isDarkMode
+                          ? "bg-green-700 hover:bg-green-600 text-white"
+                          : "bg-red-800 hover:bg-red-700 text-white"
+                      } rounded-md transition-all duration-200`}
+                    >
+                      {actualizando ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Actualizando...</span>
+                        </div>
+                      ) : (
+                        <span>Actualizar semestres</span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="grupo">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Carrera
+                    </Label>
+                    <Select value={carreraGrupo} onValueChange={setCarreraGrupo}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar carrera" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {carreras.map((carrera) => (
+                          <SelectItem key={carrera} value={carrera}>
+                            {carrera}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Semestre
+                    </Label>
+                    <Select value={semestreGrupo} onValueChange={setSemestreGrupo}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar semestre" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((semestre) => (
+                          <SelectItem key={semestre} value={semestre.toString()}>
+                            {semestre}º Semestre
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Grupo actual
+                    </Label>
+                    <Select value={grupoActual} onValueChange={setGrupoActual}>
+                      <SelectTrigger
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-700 text-white border-gray-600"
+                            : "bg-white text-gray-900 border-gray-300"
+                        } rounded-md transition-all duration-200`}
+                      >
+                        <SelectValue placeholder="Seleccionar grupo" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={`${
+                          isDarkMode
+                            ? "bg-gray-800 text-white border-gray-700"
+                            : "bg-white text-gray-900 border-gray-200"
+                        }`}
+                      >
+                        {grupos.map((grupo) => (
+                          <SelectItem key={grupo} value={grupo}>
+                            Grupo {grupo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className={`text-sm mb-1 block ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                      Nuevo grupo
+                    </Label>
+                    <Input
+                      value={nuevoGrupo}
+                      onChange={(e) => setNuevoGrupo(e.target.value)}
+                      placeholder="Ej. B"
+                      className={`${
+                        isDarkMode
+                          ? "bg-gray-700 text-white border-gray-600 focus:border-green-500"
+                          : "bg-white text-gray-900 border-gray-300 focus:border-red-500"
+                      } rounded-md transition-all duration-200`}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={actualizarGrupoMasivo}
+                      disabled={actualizando || !carreraGrupo || !semestreGrupo || !grupoActual || !nuevoGrupo}
+                      className={`w-full ${
+                        isDarkMode
+                          ? "bg-green-700 hover:bg-green-600 text-white"
+                          : "bg-red-800 hover:bg-red-700 text-white"
+                      } rounded-md transition-all duration-200`}
+                    >
+                      {actualizando ? (
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Actualizando...</span>
+                        </div>
+                      ) : (
+                        <span>Actualizar grupos</span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
         )}
         <CardContent className="p-0">

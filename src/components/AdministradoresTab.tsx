@@ -102,6 +102,12 @@ export function AdministradoresTab({
         Email: doc.data().Email || "",
         Contraseña: doc.data().Contraseña || "",
       })) as Administrador[]
+      // Ordenar alfabéticamente por Apellido, luego por Nombre
+      administradoresData.sort((a, b) => {
+        const apellidoCompare = a.Apellido.localeCompare(b.Apellido, 'es', { sensitivity: 'base' })
+        if (apellidoCompare !== 0) return apellidoCompare
+        return a.Nombre.localeCompare(b.Nombre, 'es', { sensitivity: 'base' })
+      })
       setAdministradores(administradoresData)
       setAdministradoresFiltrados(administradoresData)
     } catch (error) {

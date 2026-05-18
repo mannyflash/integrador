@@ -320,6 +320,12 @@ export default function ListaAsistencias() {
             ...doc.data(),
           }))
           .filter((a: any) => !a.laboratorio || a.laboratorio === lab) as Asistencia[]
+        // Ordenar alfabéticamente por Apellido, luego por Nombre
+        nuevosEstudiantes.sort((a, b) => {
+          const apellidoCompare = (a.Apellido || "").localeCompare(b.Apellido || "", 'es', { sensitivity: 'base' })
+          if (apellidoCompare !== 0) return apellidoCompare
+          return (a.Nombre || "").localeCompare(b.Nombre || "", 'es', { sensitivity: 'base' })
+        })
         setAsistencias(nuevosEstudiantes)
         console.log("Asistencias actualizadas:", nuevosEstudiantes)
         setContador(nuevosEstudiantes.length)
@@ -547,8 +553,8 @@ export default function ListaAsistencias() {
       const materiasData = materiasSnapshot.docs
         .filter((doc) => {
           const labMateria = doc.data().Laboratorio || ""
-          // Mostrar si la materia es del laboratorio actual, o es de "ambos", o no tiene laboratorio asignado
-          return !labMateria || labMateria === labActual || labMateria === "ambos"
+          // Mostrar si la materia es del laboratorio actual, o es de "todos", o no tiene laboratorio asignado
+          return !labMateria || labMateria === labActual || labMateria === "todos"
         })
         .map((doc) => ({
           id: doc.id,
@@ -717,7 +723,11 @@ export default function ListaAsistencias() {
             horaInicio: horaActual,
             fecha: new Date().toLocaleDateString("es-MX"),
             estado: "Iniciada",
-            ubicacion: lab === "programacion" ? "Laboratorio de Programacion" : "Laboratorio de Redes",
+            ubicacion: lab === "programacion" ? "Laboratorio de Programacion" 
+              : lab === "redes" ? "Laboratorio de Redes"
+              : lab === "laboratorio_a" ? "Laboratorio A"
+              : lab === "laboratorio_c" ? "Laboratorio C"
+              : "Laboratorio",
             laboratorio: lab,
             accion: "iniciar_clase",
           },
@@ -959,6 +969,18 @@ export default function ListaAsistencias() {
  const exportarPDF = async () => {
   if (typeof window === "undefined") return
 
+  // Funcion para obtener el nombre del laboratorio
+  const obtenerNombreLaboratorio = () => {
+    const lab = localStorage.getItem("laboratorio") || "programacion"
+    switch (lab) {
+      case "programacion": return "TALLER DE PROGRAMACION"
+      case "redes": return "LABORATORIO DE REDES"
+      case "laboratorio_a": return "LABORATORIO A"
+      case "laboratorio_c": return "LABORATORIO C"
+      default: return "TALLER DE PROGRAMACION"
+    }
+  }
+
   const doc = new jsPDF("p", "mm", "letter")
 
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -970,7 +992,7 @@ export default function ListaAsistencias() {
   // Títulos
   doc.setFontSize(16)
   doc.setTextColor(0, 0, 0)
-  doc.text("TALLER DE PROGRAMACIÓN", pageWidth / 2, margin + 10, { align: "center" })
+  doc.text(obtenerNombreLaboratorio(), pageWidth / 2, margin + 10, { align: "center" })
   doc.setFontSize(14)
   doc.text("HOJA DE REGISTRO", pageWidth / 2, margin + 18, { align: "center" })
 
@@ -1069,10 +1091,22 @@ export default function ListaAsistencias() {
   const exportarAExcel = async () => {
     const workbook = XLSX.utils.book_new()
 
+    // Funcion para obtener el nombre del laboratorio
+    const obtenerNombreLab = () => {
+      const lab = localStorage.getItem("laboratorio") || "programacion"
+      switch (lab) {
+        case "programacion": return "TALLER DE PROGRAMACION"
+        case "redes": return "LABORATORIO DE REDES"
+        case "laboratorio_a": return "LABORATORIO A"
+        case "laboratorio_c": return "LABORATORIO C"
+        default: return "TALLER DE PROGRAMACION"
+      }
+    }
+
     // Create header data with logo and title
     const headerData = [
       ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"],
-      ["CONTROL DE ASISTENCIA - TALLER DE PROGRAMACIÓN"],
+      [`CONTROL DE ASISTENCIA - ${obtenerNombreLab()}`],
       [""],
       ["Información de la Clase"],
       ["Fecha:", new Date().toLocaleDateString(), "", "Carrera:", asistencias[0]?.Carrera || "N/A"],

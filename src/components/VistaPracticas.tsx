@@ -147,6 +147,18 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
   const [activeTab, setActiveTab] = useState("detalles")
   const [estaCargando, setEstaCargando] = useState(true)
 
+  // Funcion para obtener el nombre del laboratorio
+  const obtenerNombreLaboratorio = () => {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") : "programacion"
+    switch (lab) {
+      case "programacion": return "TALLER DE PROGRAMACION"
+      case "redes": return "LABORATORIO DE REDES"
+      case "laboratorio_a": return "LABORATORIO A"
+      case "laboratorio_c": return "LABORATORIO C"
+      default: return "TALLER DE PROGRAMACION"
+    }
+  }
+
   useEffect(() => {
     obtenerTodasLasPracticas()
   }, [])
@@ -184,6 +196,12 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
           fecha,
           alumnos: data.alumnos || [],
         } as InfoClase
+      })
+      // Ordenar por fecha (más recientes primero) y luego por materia
+      datosInfoClase.sort((a, b) => {
+        const fechaCompare = new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime()
+        if (fechaCompare !== 0) return fechaCompare
+        return (a.materia || "").localeCompare(b.materia || "", 'es', { sensitivity: 'base' })
       })
       setTodasLasPracticas(datosInfoClase)
       setPracticasFiltradas(datosInfoClase)
@@ -245,7 +263,7 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
     doc.addImage("/FondoItspp.png", "PNG", 10, 10, 30, 30)
 
     doc.setFontSize(16)
-    doc.text("TALLER DE PROGRAMACION", doc.internal.pageSize.width / 2, 25, { align: "center" })
+    doc.text(obtenerNombreLaboratorio(), doc.internal.pageSize.width / 2, 25, { align: "center" })
     doc.text("HOJA DE REGISTRO", doc.internal.pageSize.width / 2, 35, { align: "center" })
 
     doc.setFontSize(12)
@@ -380,7 +398,7 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
     // HOJA 1: RESUMEN DE LA PRÁCTICA
     const resumenData = [
       ["INSTITUTO TECNOLÓGICO SUPERIOR DE PUERTO PEÑASCO"], // A1
-      ["TALLER DE PROGRAMACIÓN - HOJA DE REGISTRO"], // A2
+      [`${obtenerNombreLaboratorio()} - HOJA DE REGISTRO`], // A2
       [], // Fila vacía
       ["INFORMACIÓN DE LA PRÁCTICA"], // A4
       ["Materia:", practica.materia, "", "Fecha:", formatearFecha(practica.fecha)], // A5
@@ -453,7 +471,7 @@ export default function VistaPracticas({ esModoOscuro, logAction }: VistaPractic
     // HOJA 2: LISTA DE ASISTENCIA
     const headerRow = ["#", "ID Alumno", "Nombre", "Apellido", "Carrera", "Grupo", "Semestre", "Turno", "Equipo"]
     const asistenciaData = [
-      ["LISTA DE ASISTENCIA - TALLER DE PROGRAMACIÓN"], // A1
+      [`LISTA DE ASISTENCIA - ${obtenerNombreLaboratorio()}`], // A1
       [`Materia: ${practica.materia} - Práctica: ${practica.practica} - Fecha: ${formatearFecha(practica.fecha)}`], // A2
       [], // Fila vacía
       headerRow, // A4

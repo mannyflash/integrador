@@ -24,6 +24,8 @@ import {
   List,
   Monitor,
   Wifi,
+  Building2,
+  Server,
 } from "lucide-react"
 import {
   collection,
@@ -189,6 +191,8 @@ export function MateriasTab({
         Laboratorio: doc.data().Laboratorio || "",
         ...doc.data(),
       })) as Materia[]
+      // Ordenar alfabéticamente por NombreMateria
+      materiasData.sort((a, b) => a.NombreMateria.localeCompare(b.NombreMateria, 'es', { sensitivity: 'base' }))
       setMaterias(materiasData)
     } catch (error) {
       console.error("Error al cargar materias:", error)
@@ -210,6 +214,8 @@ export function MateriasTab({
         ID: doc.id,
         NombreCompleto: `${doc.data().Nombre} ${doc.data().Apellido}`,
       }))
+      // Ordenar alfabéticamente por NombreCompleto
+      docentesData.sort((a, b) => a.NombreCompleto.localeCompare(b.NombreCompleto, 'es', { sensitivity: 'base' }))
       setDocentes(docentesData)
     } catch (error) {
       console.error("Error al cargar docentes:", error)
@@ -636,19 +642,31 @@ export function MateriasTab({
                     <SelectItem value="programacion">
                       <div className="flex items-center gap-2">
                         <Monitor className="h-4 w-4" />
-                        Laboratorio de Programacion
+                        Lab. Programacion
                       </div>
                     </SelectItem>
                     <SelectItem value="redes">
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4" />
-                        Laboratorio de Redes
+                        Lab. Redes
                       </div>
                     </SelectItem>
-                    <SelectItem value="ambos">
+                    <SelectItem value="laboratorio_a">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Laboratorio A
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="laboratorio_c">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-4 w-4" />
+                        Laboratorio C
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="todos">
                       <div className="flex items-center gap-2">
                         <Monitor className="h-4 w-4" />
-                        Ambos laboratorios
+                        Todos los laboratorios
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -874,21 +892,31 @@ export function MateriasTab({
                               ? isDarkMode ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"
                               : materia.Laboratorio === "redes"
                                 ? isDarkMode ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"
-                                : materia.Laboratorio === "ambos"
+                                : materia.Laboratorio === "laboratorio_a"
                                   ? isDarkMode ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"
-                                  : isDarkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"
+                                  : materia.Laboratorio === "laboratorio_c"
+                                    ? isDarkMode ? "bg-orange-900/30 text-orange-400" : "bg-orange-100 text-orange-700"
+                                    : materia.Laboratorio === "todos"
+                                      ? isDarkMode ? "bg-cyan-900/30 text-cyan-400" : "bg-cyan-100 text-cyan-700"
+                                      : isDarkMode ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"
                           }`}
                         >
                           {materia.Laboratorio === "programacion" && <Monitor className="h-3 w-3" />}
                           {materia.Laboratorio === "redes" && <Wifi className="h-3 w-3" />}
-                          {materia.Laboratorio === "ambos" && <Monitor className="h-3 w-3" />}
+                          {materia.Laboratorio === "laboratorio_a" && <Building2 className="h-3 w-3" />}
+                          {materia.Laboratorio === "laboratorio_c" && <Server className="h-3 w-3" />}
+                          {materia.Laboratorio === "todos" && <Monitor className="h-3 w-3" />}
                           {materia.Laboratorio === "programacion"
                             ? "Programacion"
                             : materia.Laboratorio === "redes"
                               ? "Redes"
-                              : materia.Laboratorio === "ambos"
-                                ? "Ambos"
-                                : "Sin asignar"}
+                              : materia.Laboratorio === "laboratorio_a"
+                                ? "Lab. A"
+                                : materia.Laboratorio === "laboratorio_c"
+                                  ? "Lab. C"
+                                  : materia.Laboratorio === "todos"
+                                    ? "Todos"
+                                    : "Sin asignar"}
                         </span>
                       </TableCell>
                       <TableCell>

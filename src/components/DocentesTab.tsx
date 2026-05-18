@@ -88,6 +88,12 @@ export function DocentesTab({
         Departamento: doc.data().Departamento || "",
         ...doc.data(),
       })) as Docente[]
+      // Ordenar alfabéticamente por Apellido, luego por Nombre
+      docentesData.sort((a, b) => {
+        const apellidoCompare = a.Apellido.localeCompare(b.Apellido, 'es', { sensitivity: 'base' })
+        if (apellidoCompare !== 0) return apellidoCompare
+        return a.Nombre.localeCompare(b.Nombre, 'es', { sensitivity: 'base' })
+      })
       setDocentes(docentesData)
     } catch (error) {
       console.error("Error al cargar docentes:", error)

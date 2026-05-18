@@ -101,6 +101,12 @@ export function LaboratoristasTab({
         Contraseña: doc.data().Contraseña || "",
         ...doc.data(),
       })) as Laboratorista[]
+      // Ordenar alfabéticamente por Apellido, luego por Nombre
+      laboratoristasData.sort((a, b) => {
+        const apellidoCompare = a.Apellido.localeCompare(b.Apellido, 'es', { sensitivity: 'base' })
+        if (apellidoCompare !== 0) return apellidoCompare
+        return a.Nombre.localeCompare(b.Nombre, 'es', { sensitivity: 'base' })
+      })
       setLaboratoristas(laboratoristasData)
       setLaboratoristasFiltrados(laboratoristasData)
     } catch (error) {

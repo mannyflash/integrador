@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 
@@ -122,7 +122,7 @@ const db = getFirestore(app)
 // Interfaces para notificaciones
 interface Notificacion {
   id: string
-  tipo: "equipo" | "maestro_invitado" | "evento" | "asistencia" | "sistema" | "seguridad"
+  tipo: "equipo" | "maestro_invitado" | "evento" | "asistencia" | "sistema" | "seguridad" | "solicitud_ingreso"
   titulo: string
   mensaje: string
   fecha: Timestamp
@@ -133,6 +133,26 @@ interface Notificacion {
   estadoEquipo?: "reportado" | "en_proceso" | "resuelto"
   fechaActualizacionEstado?: Timestamp
   comentarioEstado?: string
+}
+
+// Interface para solicitudes de ingreso
+interface SolicitudIngreso {
+  id: string
+  alumnoId: string
+  alumnoNombre: string
+  alumnoApellido: string
+  alumnoCarrera: string
+  alumnoSemestre: string
+  alumnoGrupo: string
+  alumnoTurno: string
+  equipo: string
+  materiaId: string
+  materiaNombre: string
+  maestroNombre: string
+  laboratorio: string
+  estado: "pendiente" | "aprobado_temporal" | "aprobado_permanente" | "rechazado"
+  fechaSolicitud: Timestamp
+  leida: boolean
 }
 
 interface EstadisticasNotificaciones {
@@ -173,6 +193,11 @@ const tiposNotificacion = {
     icon: <Shield className="h-4 w-4" />,
     color: "bg-yellow-500",
     label: "Seguridad",
+  },
+  solicitud_ingreso: {
+    icon: <UserPlus className="h-4 w-4" />,
+    color: "bg-cyan-500",
+    label: "Solicitudes de Ingreso",
   },
 }
 
@@ -249,6 +274,12 @@ export default function AdminPanel() {
 
   const [notificacionSeleccionada, setNotificacionSeleccionada] = useState<Notificacion | null>(null)
   const [previewAbierto, setPreviewAbierto] = useState(false)
+
+  // Estados para solicitudes de ingreso
+  const [solicitudesIngreso, setSolicitudesIngreso] = useState<SolicitudIngreso[]>([])
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
+  const [dialogoSolicitudAbierto, setDialogoSolicitudAbierto] = useState(false)
+  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<SolicitudIngreso | null>(null)
 
   const [theme, setThemeState] = useState<Theme>(getTheme())
   const [isLoading, setIsLoading] = useState(true)
@@ -350,7 +381,7 @@ export default function AdminPanel() {
   }
 
   const setupClasesListeners = () => {
-    const labs = ["programacion", "redes"]
+    const labs = ["programacion", "redes", "laboratorio_a", "laboratorio_c"]
     const unsubscribers: (() => void)[] = []
 
     labs.forEach((lab) => {
@@ -510,10 +541,68 @@ export default function AdminPanel() {
       }
     })
 
+    // Listener para solicitudes de ingreso
+    const unsubscribeSolicitudes = onSnapshot(
+      query(collection(db, "SolicitudesIngreso"), orderBy("fechaSolicitud", "desc"), limit(50)),
+      (snapshot) => {
+        const solicitudesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as SolicitudIngreso[]
+
+        // Filtrar solo solicitudes pendientes del laboratorio actual
+        const solicitudesFiltradas = solicitudesData.filter(
+          (s) => s.laboratorio === labAdmin && s.estado === "pendiente"
+        )
+
+        setSolicitudesIngreso(solicitudesFiltradas)
+        setSolicitudesPendientes(solicitudesFiltradas.filter((s) => !s.leida).length)
+
+        // Mostrar alerta para nuevas solicitudes
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const nuevaSolicitud = {
+              id: change.doc.id,
+              ...change.doc.data(),
+            } as SolicitudIngreso
+
+            if (nuevaSolicitud.laboratorio === labAdmin && nuevaSolicitud.estado === "pendiente") {
+              const tiempoTranscurrido = Date.now() - nuevaSolicitud.fechaSolicitud?.toMillis()
+              if (tiempoTranscurrido < 5000) {
+                Swal.fire({
+                  title: "Nueva Solicitud de Ingreso",
+                  text: `${nuevaSolicitud.alumnoNombre} ${nuevaSolicitud.alumnoApellido} solicita ingresar a ${nuevaSolicitud.materiaNombre}`,
+                  icon: "info",
+                  confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+                  timer: 5000,
+                  timerProgressBar: true,
+                  position: "top-end",
+                  toast: true,
+                  showConfirmButton: false,
+                })
+              }
+            }
+          }
+        })
+      }
+    )
+
     return () => {
       unsubscribeNotificaciones()
       unsubscribeEquipos()
       unsubscribeMaestroInvitado()
+      unsubscribeSolicitudes()
+    }
+  }
+
+  // Funcion helper para obtener nombre de laboratorio
+  const obtenerNombreLab = (lab: string): string => {
+    switch (lab) {
+      case "programacion": return "Lab. Programacion"
+      case "redes": return "Lab. Redes"
+      case "laboratorio_a": return "Laboratorio A"
+      case "laboratorio_c": return "Laboratorio C"
+      default: return lab
     }
   }
 
@@ -529,12 +618,12 @@ export default function AdminPanel() {
       setDialogoFinalizarClase(false)
       setClaseSeleccionadaParaCerrar(null)
 
-      const labNombre = lab === "programacion" ? "Programacion" : "Redes"
+      const labNombre = obtenerNombreLab(lab)
       const tipoNombre = tipo === "regular" ? "regular" : "de maestro invitado"
 
       Swal.fire({
         title: "Clase finalizada",
-        text: `La clase ${tipoNombre} del Lab. ${labNombre} ha sido cerrada correctamente`,
+        text: `La clase ${tipoNombre} del ${labNombre} ha sido cerrada correctamente`,
         icon: "success",
         confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
         timer: 3000,
@@ -624,6 +713,167 @@ export default function AdminPanel() {
     setNotificacionSeleccionada(copiaNotificacion)
     setPreviewAbierto(true)
     // NO marcar como leída automáticamente
+  }
+
+  // Funciones para manejar solicitudes de ingreso
+  const abrirSolicitud = async (solicitud: SolicitudIngreso) => {
+    setSolicitudSeleccionada(solicitud)
+    setDialogoSolicitudAbierto(true)
+
+    // Marcar como leída
+    if (!solicitud.leida) {
+      try {
+        await updateDoc(doc(db, "SolicitudesIngreso", solicitud.id), {
+          leida: true,
+        })
+      } catch (error) {
+        console.error("Error al marcar solicitud como leída:", error)
+      }
+    }
+  }
+
+  const aprobarSolicitudTemporal = async (solicitud: SolicitudIngreso) => {
+    try {
+      // Actualizar el estado de la solicitud
+      await updateDoc(doc(db, "SolicitudesIngreso", solicitud.id), {
+        estado: "aprobado_temporal",
+      })
+
+      // Obtener datos del alumno
+      const alumnoRef = doc(db, "Alumnos", solicitud.alumnoId)
+      const alumnoSnap = await getDoc(alumnoRef)
+
+      if (alumnoSnap.exists()) {
+        const alumnoData = alumnoSnap.data()
+        const materiasActuales = alumnoData.Materias || []
+
+        // Siempre obtener el turno del documento del alumno ya que es el dato más actualizado
+        const turnoFinal = alumnoData.Turno || "N/A"
+        
+        // Para el equipo: usar el de la solicitud si existe y es válido, sino "personal"
+        // El equipo viene de lo que el alumno seleccionó al momento de hacer la solicitud
+        const equipoFinal = (solicitud.equipo && solicitud.equipo.trim() !== "" && solicitud.equipo !== "acceso_temporal") 
+          ? solicitud.equipo 
+          : "personal"
+
+        // Crear registro de asistencia con los datos del alumno
+        const asistenciaRef = doc(collection(db, "Asistencias"))
+        await setDoc(asistenciaRef, {
+          AlumnoId: solicitud.alumnoId,
+          Nombre: solicitud.alumnoNombre || alumnoData.Nombre || "",
+          Apellido: solicitud.alumnoApellido || alumnoData.Apellido || "",
+          Carrera: solicitud.alumnoCarrera || alumnoData.Carrera || "",
+          Grupo: solicitud.alumnoGrupo || alumnoData.Grupo || "",
+          Semestre: solicitud.alumnoSemestre || alumnoData.Semestre || "",
+          Turno: turnoFinal,
+          Equipo: equipoFinal,
+          Fecha: new Date(),
+          Materia: solicitud.materiaNombre,
+          MaestroNombre: solicitud.maestroNombre,
+          laboratorio: solicitud.laboratorio,
+        })
+      }
+
+      Swal.fire({
+        title: "Acceso Temporal Aprobado",
+        text: `Se ha aprobado el acceso temporal de ${solicitud.alumnoNombre} ${solicitud.alumnoApellido} a la clase de ${solicitud.materiaNombre}`,
+        icon: "success",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+      })
+
+      setDialogoSolicitudAbierto(false)
+      setSolicitudSeleccionada(null)
+    } catch (error) {
+      console.error("Error al aprobar solicitud temporal:", error)
+      Swal.fire({
+        title: "Error",
+        text: "No se pudo procesar la solicitud. Intenta de nuevo.",
+        icon: "error",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+      })
+    }
+  }
+
+  const aprobarSolicitudPermanente = async (solicitud: SolicitudIngreso) => {
+    try {
+      // Actualizar el estado de la solicitud
+      await updateDoc(doc(db, "SolicitudesIngreso", solicitud.id), {
+        estado: "aprobado_permanente",
+      })
+
+      // Obtener datos del alumno y agregar la materia
+      const alumnoRef = doc(db, "Alumnos", solicitud.alumnoId)
+      const alumnoSnap = await getDoc(alumnoRef)
+
+      if (alumnoSnap.exists()) {
+        const alumnoData = alumnoSnap.data()
+        const materiasActuales = alumnoData.Materias || []
+
+        // Agregar la materia si no la tiene
+        if (!materiasActuales.includes(solicitud.materiaId)) {
+          await updateDoc(alumnoRef, {
+            Materias: [...materiasActuales, solicitud.materiaId],
+          })
+        }
+      }
+
+      Swal.fire({
+        title: "Inscripcion Permanente Aprobada",
+        text: `${solicitud.alumnoNombre} ${solicitud.alumnoApellido} ha sido inscrito permanentemente en ${solicitud.materiaNombre}`,
+        icon: "success",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+      })
+
+      setDialogoSolicitudAbierto(false)
+      setSolicitudSeleccionada(null)
+    } catch (error) {
+      console.error("Error al aprobar solicitud permanente:", error)
+      Swal.fire({
+        title: "Error",
+        text: "No se pudo procesar la solicitud. Intenta de nuevo.",
+        icon: "error",
+        confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+      })
+    }
+  }
+
+  const rechazarSolicitud = async (solicitud: SolicitudIngreso) => {
+    const result = await Swal.fire({
+      title: "Rechazar Solicitud",
+      text: `¿Estás seguro de rechazar la solicitud de ${solicitud.alumnoNombre} ${solicitud.alumnoApellido}?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Sí, rechazar",
+      cancelButtonText: "Cancelar",
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await updateDoc(doc(db, "SolicitudesIngreso", solicitud.id), {
+          estado: "rechazado",
+        })
+
+        Swal.fire({
+          title: "Solicitud Rechazada",
+          text: "La solicitud ha sido rechazada.",
+          icon: "info",
+          confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+        })
+
+        setDialogoSolicitudAbierto(false)
+        setSolicitudSeleccionada(null)
+      } catch (error) {
+        console.error("Error al rechazar solicitud:", error)
+        Swal.fire({
+          title: "Error",
+          text: "No se pudo rechazar la solicitud. Intenta de nuevo.",
+          icon: "error",
+          confirmButtonColor: theme === "dark" ? "#1d5631" : "#800040",
+        })
+      }
+    }
   }
 
   const cerrarPreview = async () => {
@@ -1181,6 +1431,96 @@ export default function AdminPanel() {
     )
   }
 
+  // Renderizar diálogo de solicitud de ingreso
+  const renderDialogoSolicitud = () => {
+    if (!solicitudSeleccionada) return null
+
+    return (
+      <Dialog open={dialogoSolicitudAbierto} onOpenChange={setDialogoSolicitudAbierto}>
+        <DialogContent className={`max-w-md ${theme === "dark" ? "bg-[#2a2a2a] text-white" : "bg-white"}`}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <UserPlus className="h-5 w-5 text-cyan-500" />
+              <span>Solicitud de Ingreso</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* Datos del alumno */}
+            <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-[#3a3a3a]" : "bg-gray-50"}`}>
+              <h4 className={`font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                Datos del Alumno
+              </h4>
+              <div className="space-y-1 text-sm">
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Nombre:</span> {solicitudSeleccionada.alumnoNombre} {solicitudSeleccionada.alumnoApellido}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Matricula:</span> {solicitudSeleccionada.alumnoId}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Carrera:</span> {solicitudSeleccionada.alumnoCarrera}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Semestre:</span> {solicitudSeleccionada.alumnoSemestre}°</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Grupo:</span> {solicitudSeleccionada.alumnoGrupo}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Equipo:</span> {solicitudSeleccionada.equipo || "personal"}</p>
+              </div>
+            </div>
+
+            {/* Datos de la clase */}
+            <div className={`p-4 rounded-lg ${theme === "dark" ? "bg-[#3a3a3a]" : "bg-gray-50"}`}>
+              <h4 className={`font-semibold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                Clase Solicitada
+              </h4>
+              <div className="space-y-1 text-sm">
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Materia:</span> {solicitudSeleccionada.materiaNombre}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Maestro:</span> {solicitudSeleccionada.maestroNombre}</p>
+                <p><span className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>Laboratorio:</span> {obtenerNombreLab(solicitudSeleccionada.laboratorio)}</p>
+              </div>
+            </div>
+
+            {/* Opciones de aprobación */}
+            <div className="space-y-2">
+              <p className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
+                Selecciona una opcion:
+              </p>
+
+              <Button
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => aprobarSolicitudTemporal(solicitudSeleccionada)}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Aprobar Acceso Temporal (solo esta clase)
+              </Button>
+
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => aprobarSolicitudPermanente(solicitudSeleccionada)}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Inscribir Permanentemente en la Materia
+              </Button>
+
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={() => rechazarSolicitud(solicitudSeleccionada)}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Rechazar Solicitud
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full bg-transparent"
+                onClick={() => {
+                  setDialogoSolicitudAbierto(false)
+                  setSolicitudSeleccionada(null)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   if (isLoading) {
     return <Loader />
   }
@@ -1224,6 +1564,95 @@ export default function AdminPanel() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-white">Panel de Administrador</h1>
           <div className="flex items-center space-x-4">
+            {/* Botón de solicitudes de ingreso */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`relative ${theme === "dark" ? "bg-[#1d5631] border-[#2a7a45] text-white hover:bg-[#153d23]" : "bg-white border-[#800040] text-[#800040] hover:bg-[#fff0f5]"}`}
+                >
+                  <UserPlus className="h-5 w-5" />
+                  {solicitudesPendientes > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-cyan-500"
+                    >
+                      {solicitudesPendientes > 99 ? "99+" : solicitudesPendientes}
+                    </Badge>
+                  )}
+                  <span className="ml-2 hidden sm:inline">Solicitudes</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent 
+                side="right" 
+                className={`w-[400px] sm:w-[540px] ${theme === "dark" ? "bg-[#2a2a2a] text-white" : "bg-white"}`}
+              >
+                <SheetHeader>
+                  <SheetTitle className={`flex items-center space-x-2 ${theme === "dark" ? "text-white" : ""}`}>
+                    <UserPlus className="h-5 w-5" />
+                    <span>Solicitudes de Ingreso</span>
+                    {solicitudesPendientes > 0 && (
+                      <Badge variant="destructive">{solicitudesPendientes} pendientes</Badge>
+                    )}
+                  </SheetTitle>
+                  <SheetDescription className={theme === "dark" ? "text-gray-400" : ""}>
+                    Gestiona las solicitudes de alumnos que desean ingresar a clases
+                  </SheetDescription>
+                </SheetHeader>
+                <ScrollArea className="h-[calc(100vh-120px)] mt-4">
+                  {solicitudesIngreso.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <UserPlus className={`h-12 w-12 mb-4 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`} />
+                      <p className={theme === "dark" ? "text-gray-400" : "text-gray-500"}>
+                        No hay solicitudes pendientes
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pr-4">
+                      {solicitudesIngreso.map((solicitud) => (
+                        <Card
+                          key={solicitud.id}
+                          className={`cursor-pointer transition-all hover:shadow-md ${
+                            !solicitud.leida ? "border-l-4 border-l-cyan-500" : ""
+                          } ${theme === "dark" ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]" : "bg-white hover:bg-gray-50"}`}
+                          onClick={() => abrirSolicitud(solicitud)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <div className="bg-cyan-500 p-1.5 rounded-full">
+                                    <UserPlus className="h-3 w-3 text-white" />
+                                  </div>
+                                  <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                                    {solicitud.alumnoNombre} {solicitud.alumnoApellido}
+                                  </span>
+                                  {!solicitud.leida && (
+                                    <Badge variant="secondary" className="text-xs bg-cyan-100 text-cyan-800">
+                                      Nueva
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+                                  Solicita ingresar a: <strong>{solicitud.materiaNombre}</strong>
+                                </p>
+                                <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                                  {solicitud.alumnoCarrera} - {solicitud.alumnoSemestre}° Semestre - Grupo {solicitud.alumnoGrupo}
+                                </p>
+                                <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>
+                                  Maestro: {solicitud.maestroNombre}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+
             {/* Botón de notificaciones */}
             <Dialog open={dialogoNotificacionesAbierto} onOpenChange={setDialogoNotificacionesAbierto}>
               <DialogTrigger asChild>
@@ -1403,6 +1832,7 @@ export default function AdminPanel() {
       </div>
 
       <NotificacionPreview />
+      {renderDialogoSolicitud()}
 
       <Dialog open={dialogoFinalizarClase} onOpenChange={(open) => {
         setDialogoFinalizarClase(open)
@@ -1422,7 +1852,7 @@ export default function AdminPanel() {
                 Selecciona la clase que deseas finalizar:
               </p>
               {clasesActivas.map((clase, idx) => {
-                const labNombre = clase.lab === "programacion" ? "Lab. Programacion" : "Lab. Redes"
+                const labNombre = obtenerNombreLab(clase.lab)
                 const tipoNombre = clase.tipo === "regular" ? "Clase Regular" : "Clase Invitado"
                 const maestro = clase.datos?.maestroNombre || clase.datos?.MaestroInvitado || "Maestro desconocido"
                 const materia = clase.datos?.materia || clase.datos?.Materia || ""
@@ -1444,7 +1874,11 @@ export default function AdminPanel() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         clase.lab === "programacion"
                           ? theme === "dark" ? "bg-blue-900/30 text-blue-400" : "bg-blue-100 text-blue-700"
-                          : theme === "dark" ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"
+                          : clase.lab === "redes"
+                            ? theme === "dark" ? "bg-purple-900/30 text-purple-400" : "bg-purple-100 text-purple-700"
+                            : clase.lab === "laboratorio_a"
+                              ? theme === "dark" ? "bg-green-900/30 text-green-400" : "bg-green-100 text-green-700"
+                              : theme === "dark" ? "bg-orange-900/30 text-orange-400" : "bg-orange-100 text-orange-700"
                       }`}>
                         {labNombre}
                       </span>

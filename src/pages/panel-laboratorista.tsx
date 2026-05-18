@@ -232,6 +232,18 @@ export default function PanelLaboratorista() {
 
   const router = useRouter()
 
+  // Funcion para obtener el nombre del laboratorio
+  const obtenerNombreLaboratorio = () => {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") : "programacion"
+    switch (lab) {
+      case "programacion": return "Lab. Programacion"
+      case "redes": return "Lab. Redes"
+      case "laboratorio_a": return "Laboratorio A"
+      case "laboratorio_c": return "Laboratorio C"
+      default: return "Laboratorio"
+    }
+  }
+
   useEffect(() => {
     const currentTheme = getTheme()
     setThemeState(currentTheme)
@@ -846,7 +858,7 @@ export default function PanelLaboratorista() {
                 <AvatarFallback className="bg-green-100 text-green-800">IT</AvatarFallback>
               </Avatar>
               <div>
-                <h2 className="text-xl font-bold text-white">Laboratorio</h2>
+                <h2 className="text-xl font-bold text-white">{obtenerNombreLaboratorio()}</h2>
                 <p className="text-sm text-white/80">Panel de Control</p>
               </div>
             </div>
@@ -935,7 +947,7 @@ export default function PanelLaboratorista() {
                       <AvatarFallback className="bg-green-100 text-green-800">IT</AvatarFallback>
                     </Avatar>
                     <div>
-                      <h2 className="text-xl font-bold text-white">Laboratorio</h2>
+                      <h2 className="text-xl font-bold text-white">{obtenerNombreLaboratorio()}</h2>
                       <p className="text-sm text-white/80">Panel de Control</p>
                     </div>
                   </div>

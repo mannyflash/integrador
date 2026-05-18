@@ -121,6 +121,18 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
   const [docenteSeleccionado, setDocenteSeleccionado] = useState<string | null>(null)
   const { toast } = useToast()
 
+  // Funcion para obtener el nombre del laboratorio
+  const obtenerNombreLaboratorio = () => {
+    const lab = typeof window !== "undefined" ? localStorage.getItem("laboratorio") : "programacion"
+    switch (lab) {
+      case "programacion": return "TALLER DE PROGRAMACION"
+      case "redes": return "LABORATORIO DE REDES"
+      case "laboratorio_a": return "LABORATORIO A"
+      case "laboratorio_c": return "LABORATORIO C"
+      default: return "TALLER DE PROGRAMACION"
+    }
+  }
+
   useEffect(() => {
     const cargarDocentes = async () => {
       try {
@@ -155,10 +167,16 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
       const materiasQuery = query(materiasRef, where("MaestroID", "==", docenteId))
       const materiasSnapshot = await getDocs(materiasQuery)
 
-      const materiasData = materiasSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Materia[]
+      const labActual = localStorage.getItem("laboratorio") || "programacion"
+      const materiasData = materiasSnapshot.docs
+        .filter((doc) => {
+          const labMateria = doc.data().Laboratorio || ""
+          return !labMateria || labMateria === labActual || labMateria === "todos"
+        })
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Materia[]
 
       setMateriasPorDocente(materiasData)
     } catch (error) {
@@ -215,7 +233,7 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
     doc.setFontSize(14)
     doc.text("SUBDIRECCIÓN ACADÉMICA", pageWidth / 2, margin + 20, { align: "center" })
     doc.text(`PERIODO: ${periodo}`, pageWidth / 2, margin + 30, { align: "center" })
-    doc.text("LABORATORIO: TALLER DE PROGRAMACIÓN", pageWidth / 2, margin + 40, { align: "center" })
+    doc.text(`LABORATORIO: ${obtenerNombreLaboratorio()}`, pageWidth / 2, margin + 40, { align: "center" })
 
     const datosTabla = [...HORAS_MATUTINO, ...HORAS_VESPERTINO].map((hora) => {
       const fila = [hora]
@@ -405,7 +423,7 @@ const VistaHorario: React.FC<VistaHorarioProps> = ({ esModoOscuro, logAction }) 
                     </div>
                   </DialogContent>
                 </Dialog>
-                <p className="text-sm font-medium text-white">LABORATORIO: TALLER DE PROGRAMACIÓN</p>
+                <p className="text-sm font-medium text-white">LABORATORIO: {obtenerNombreLaboratorio()}</p>
               </div>
             </div>
           </CardHeader>

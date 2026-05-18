@@ -243,7 +243,7 @@ export default function VistaMaestroInvitado({ esModoOscuro, logAction }: VistaM
         const materiasData = querySnapshot.docs
           .filter((doc) => {
             const labMateria = doc.data().Laboratorio || ""
-            return !labMateria || labMateria === labActual || labMateria === "ambos"
+            return !labMateria || labMateria === labActual || labMateria === "todos"
           })
           .map(
             (doc) =>
