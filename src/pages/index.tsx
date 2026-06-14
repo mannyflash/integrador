@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react" // Import useRef
 import { useRouter } from "next/navigation"
-import { User, UserCog, Computer, Moon, Sun, ChevronRight, Monitor, Wifi, ArrowLeft, Building2, Server } from "lucide-react"
+import { User, UserCog, Computer, Moon, Sun, ChevronRight, Monitor, Wifi, ArrowLeft, Building2, Server, Loader2 } from "lucide-react"
 import { initializeApp } from "firebase/app"
 import {
   getFirestore,
@@ -199,6 +199,8 @@ export default function InterfazLaboratorio() {
   const [scannerMessage, setScannerMessage] = useState("")
   const [qrInput, setQrInput] = useState("") // Agregar estado para el input del escáner QR
   const qrInputRef = useRef<HTMLInputElement>(null) // Agregar ref para el input del escáner QR
+  const [isRegistrando, setIsRegistrando] = useState(false) // Estado para deshabilitar el botón mientras se registra
+  const registrandoRef = useRef(false) // Ref para bloquear reenvíos inmediatamente (evita registros duplicados con internet lento)
 
   const welcomeMessages = ['"Hombres y Mujeres Del Mar y Desierto', 'Unidos Por La Educación Tecnológica De Calidad."']
 
@@ -423,6 +425,12 @@ Hora de inicio: ${data.HoraInicio}`,
   }
 
   const registrarAsistenciaQR = async (matriculaEscaneada: string) => {
+    // Prevenir registros duplicados: si ya hay un registro en proceso, ignorar
+    if (registrandoRef.current) {
+      return
+    }
+    registrandoRef.current = true
+
     try {
       const isAnyClassStarted = isClassStarted || isGuestClassStarted
       if (!isAnyClassStarted) {
@@ -512,11 +520,22 @@ Hora de inicio: ${data.HoraInicio}`,
       console.error("Error al registrar asistencia por QR:", error)
       setScannerMessage("❌ Error al registrar asistencia")
       setTimeout(() => setScannerMessage(""), 3000)
+    } finally {
+      // Liberar el bloqueo para permitir nuevos registros
+      registrandoRef.current = false
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevenir registros duplicados: si ya hay un registro en proceso, ignorar el clic
+    if (registrandoRef.current) {
+      return
+    }
+    registrandoRef.current = true
+    setIsRegistrando(true)
+
     try {
       if (activeTab === "estudiante") {
         const isAnyClassStarted = isClassStarted || isGuestClassStarted
@@ -934,6 +953,10 @@ Hora de inicio: ${data.HoraInicio}`,
         text: `Ha ocurrido un error: ${error instanceof Error ? error.message : "Error desconocido"}`,
         icon: "error",
       })
+    } finally {
+      // Liberar el bloqueo para permitir nuevos registros
+      registrandoRef.current = false
+      setIsRegistrando(false)
     }
   }
 
@@ -1764,11 +1787,16 @@ onChange={(e) => setMatricula(e.target.value.toUpperCase())}
                         type="submit"
                         className={`w-full py-6 rounded-xl text-base sm:text-lg font-medium flex items-center justify-center gap-2 ${
                           theme === "dark" ? colors.dark.buttonPrimary : colors.light.buttonPrimary
-                        } transition-all duration-300 ${!(isClassStarted || isGuestClassStarted) ? "opacity-50 cursor-not-allowed" : ""}`}
-                        disabled={!(isClassStarted || isGuestClassStarted)}
+                        } transition-all duration-300 ${!(isClassStarted || isGuestClassStarted) || isRegistrando ? "opacity-50 cursor-not-allowed" : ""}`}
+                        disabled={!(isClassStarted || isGuestClassStarted) || isRegistrando}
                       >
                         {!(isClassStarted || isGuestClassStarted) ? (
                           "No hay clases iniciadas"
+                        ) : isRegistrando ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Registrando...
+                          </>
                         ) : (
                           <>
                             Registrar Asistencia
